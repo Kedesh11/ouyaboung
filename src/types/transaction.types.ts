@@ -21,6 +21,12 @@ export interface Transaction {
   total_amount: number;
   original_amount: number;
   savings: number;
+  // Fees breakdown (9%)
+  fees_airtel?: number; // 3%
+  fees_pvit?: number;   // 3%
+  fees_app?: number;    // 3%
+  fees_total?: number;  // Total 9%
+  original_base_amount?: number; // Amount before fees
   status: TransactionStatus;
   qr_code?: string;
   qr_code_data?: QRCodeData;

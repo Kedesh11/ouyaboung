@@ -1,0 +1,256 @@
+/**
+ * Edge Function: Initiate Payment
+ * 
+ * Processus:
+ * 1. Authentification utilisateur via JWT
+ * 2. Validation business logic
+ * 3. Calcul des frais (3% + 3% + 3%)
+ * 4. Appel API Q-Gabon
+ * 5. Création transaction en base
+ * 6. Notification temps réel
+ */
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+serve(async (req) => {
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders })
+    }
+
+    try {
+        // ===================================================================
+        // 1. AUTHENTIFICATION
+        // ===================================================================
+
+        const authHeader = req.headers.get('Authorization')
+        if (!authHeader) {
+            console.error('[Edge Function] Missing Authorization header')
+            return new Response(
+                JSON.stringify({ success: false, error: { message: 'Unauthorized', code: 'NO_AUTH_HEADER' } }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // Créer le client Supabase avec le token utilisateur
+        const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+            {
+                global: {
+                    headers: { Authorization: authHeader }
+                }
+            }
+        )
+
+        // Vérifier authentification
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+
+        if (authError || !user) {
+            console.error('[Edge Function] Authentication failed:', authError?.message)
+            return new Response(
+                JSON.stringify({ success: false, error: { message: 'Invalid token', code: 'AUTH_FAILED' } }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        console.log('[Edge Function] Authenticated user:', user.id)
+
+        // ===================================================================
+        // 2. PARSE ET VALIDATION DU PAYLOAD
+        // ===================================================================
+
+        const { phone, orderId, baseAmount } = await req.json()
+
+        if (!phone || !orderId || !baseAmount) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: { message: 'Missing required fields', code: 'INVALID_PAYLOAD' }
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        console.log('[Edge Function] Request:', { orderId, baseAmount, phone: phone.slice(0, 3) + '****' })
+
+        // ===================================================================
+        // 3. RÉCUPÉRATION DE LA COMMANDE
+        // ===================================================================
+
+        const { data: order, error: orderError } = await supabaseClient
+            .from('orders')
+            .select('id, merchant_id, user_id, status')
+            .eq('id', orderId)
+            .single()
+
+        if (orderError || !order) {
+            console.error('[Edge Function] Order not found:', orderId)
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' }
+                }),
+                { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // Vérifier que c'est bien la commande de l'utilisateur
+        if (order.user_id !== user.id) {
+            console.error('[Edge Function] Order ownership mismatch')
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: { message: 'Unauthorized access to order', code: 'ORDER_OWNERSHIP' }
+                }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // ===================================================================
+        // 4. CALCUL DES FRAIS (3% + 3% + 3% = 9%)
+        // ===================================================================
+
+        const calculateFees = (amount: number) => {
+            const airtelFees = Math.round(amount * 0.03)
+            const pvitFees = Math.round(amount * 0.03)
+            const appFees = Math.round(amount * 0.03)
+            return {
+                airtelFees,
+                pvitFees,
+                appFees,
+                totalAmount: amount + airtelFees + pvitFees + appFees
+            }
+        }
+
+        const fees = calculateFees(baseAmount)
+        console.log('[Edge Function] Fees calculated:', fees)
+
+        // ===================================================================
+        // 5. APPEL API Q-GABON
+        // ===================================================================
+
+        const qGabonPayload = {
+            phone: phone.replace(/\s+/g, ''),
+            accountCode: Deno.env.get('ACCOUNT_CODE'),
+            product: 'paiement',
+            amount: fees.totalAmount,  // Montant AVEC frais
+            agent: Deno.env.get('AGENT')
+        }
+
+        console.log('[Edge Function] Calling Q-Gabon API...')
+
+        const qGabonResponse = await fetch('https://payment.q-gabon.com/payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('BEAR_TOKEN')}`
+            },
+            body: JSON.stringify(qGabonPayload)
+        })
+
+        const qGabonData = await qGabonResponse.json()
+        console.log('[Edge Function] Q-Gabon response:', { success: qGabonData.success, status: qGabonData.data?.status })
+
+        // ===================================================================
+        // 6. INSERTION EN BASE (table transactions)
+        // ===================================================================
+
+        const { data: transaction, error: txError } = await supabaseClient
+            .from('transactions')
+            .insert({
+                order_id: orderId,
+                merchant_id: order.merchant_id,
+                user_id: user.id,
+                phone: phone,
+                amount: baseAmount,
+                account_code: qGabonPayload.accountCode,
+                product: 'paiement',
+                agent: qGabonPayload.agent,
+                airtel_fees: fees.airtelFees,
+                pvit_fees: fees.pvitFees,
+                app_fees: fees.appFees,
+                total_amount: fees.totalAmount,
+                q_gabon_response: qGabonData,
+                transaction_id: qGabonData.data?.transactionId,
+                merchant_reference_id: qGabonData.data?.merchant_reference_id || qGabonData.data?.merchantReferenceId,
+                reference: qGabonData.reference,
+                operator: qGabonData.data?.operator,
+                operator_fees: qGabonData.data?.operatorFees,
+                status: qGabonData.success ? 'PENDING' : 'FAILED',
+                status_code: String(qGabonData.data?.code || qGabonData.data?.status_code || ''),
+                charge_owner: qGabonData.data?.chargeOwner,
+                amount_credited: qGabonData.data?.amountCredited,
+                message: qGabonData.data?.message || (qGabonData.success ? 'Payment initiated' : 'Payment failed')
+            })
+            .select()
+            .single()
+
+        if (txError) {
+            console.error('[Edge Function] Transaction insert error:', txError)
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: { message: 'Failed to create transaction', code: 'DB_ERROR', details: txError }
+                }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        console.log('[Edge Function] Transaction created:', transaction.id)
+
+        // ===================================================================
+        // 7. NOTIFICATION TEMPS RÉEL (Supabase Realtime)
+        // ===================================================================
+
+        // Les inserts dans la table transactions déclenchent automatiquement
+        // les events Realtime si le client est abonné au channel
+
+        // ===================================================================
+        // 8. RETOUR DU RÉSULTAT
+        // ===================================================================
+
+        return new Response(
+            JSON.stringify({
+                success: qGabonData.success,
+                data: {
+                    transactionId: transaction.id,
+                    qGabonReference: qGabonData.reference,
+                    totalAmount: fees.totalAmount,
+                    fees: {
+                        airtel: fees.airtelFees,
+                        pvit: fees.pvitFees,
+                        app: fees.appFees,
+                        total: fees.airtelFees + fees.pvitFees + fees.appFees
+                    },
+                    status: transaction.status,
+                    message: transaction.message
+                }
+            }),
+            {
+                status: qGabonData.success ? 200 : 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+        )
+
+    } catch (error) {
+        console.error('[Edge Function] Unexpected error:', error)
+        return new Response(
+            JSON.stringify({
+                success: false,
+                error: {
+                    message: (error as Error).message || 'Internal server error',
+                    code: 'UNEXPECTED_ERROR',
+                    details: error
+                }
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+    }
+})

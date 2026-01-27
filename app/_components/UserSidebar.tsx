@@ -35,6 +35,7 @@ import {
     Search,
     ChevronLeft,
     ChevronRight,
+    Receipt,
 } from "lucide-react";
 
 const mainMenuItems = [
@@ -53,6 +54,11 @@ const mainMenuItems = [
         url: "/user/reservations",
         icon: ShoppingBag,
         isDynamicBadge: true, // Marker for dynamic badge
+    },
+    {
+        title: "Mes transactions",
+        url: "/user/transactions",
+        icon: Receipt,
     },
     {
         title: "Mes favoris",
