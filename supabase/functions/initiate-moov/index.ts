@@ -151,6 +151,18 @@ serve(async (req) => {
             throw new Error('Transaction recording failed')
         }
 
+        // 8. Update Order Status to prevents double payment
+        const { error: updateError } = await supabaseClient
+            .from('orders')
+            .update({ status: 'processing' })
+            .eq('id', orderId)
+
+        if (updateError) {
+            console.error('[Moov Function] Order Status Update Error:', updateError)
+        } else {
+             console.log('[Moov Function] Order status updated to processing')
+        }
+
         return new Response(
             JSON.stringify({
                 success: qGabonData.success,

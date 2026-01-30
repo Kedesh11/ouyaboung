@@ -28,6 +28,8 @@ const getStatusBadge = (status: string) => {
             return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">Confirmée</Badge>;
         case "pending":
             return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">En attente</Badge>;
+        case "processing":
+            return <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20">Paiement en cours</Badge>;
         case "ready":
             return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Prête</Badge>;
         case "completed":
@@ -46,6 +48,8 @@ const getStatusIcon = (status: string) => {
             return <AlertCircle className="h-5 w-5 text-blue-500" />;
         case "pending":
             return <Clock className="h-5 w-5 text-yellow-500" />;
+        case "processing":
+            return <Loader2 className="h-5 w-5 text-purple-500 animate-spin" />;
         case "ready":
             return <Package className="h-5 w-5 text-green-500" />;
         case "completed":
@@ -74,12 +78,11 @@ export default function ReservationsPage() {
     };
 
     const handlePaymentSuccess = (transactionId: string) => {
-        // Optimistically update the reservation status to paid/confirmed
-        // In a real app, you might want to re-fetch or verify the status from the server
+        // Optimistically update the reservation status to processing
         if (selectedReservation) {
             setReservations((prev) =>
                 prev.map((r) =>
-                    r.id === selectedReservation.id ? { ...r, status: 'confirmed' } : r
+                    r.id === selectedReservation.id ? { ...r, status: 'processing' } : r
                 )
             );
         }
@@ -195,7 +198,7 @@ export default function ReservationsPage() {
 
     const filteredReservations = reservations.filter((reservation) => {
         if (activeTab === "all") return true;
-        if (activeTab === "active") return ["confirmed", "pending", "ready"].includes(reservation.status);
+        if (activeTab === "active") return ["confirmed", "pending", "ready", "processing"].includes(reservation.status);
         if (activeTab === "completed") return ["completed", "picked_up"].includes(reservation.status);
         if (activeTab === "cancelled") return reservation.status === "cancelled";
         return true;
@@ -227,7 +230,7 @@ export default function ReservationsPage() {
                 <Card>
                     <CardContent className="p-4 text-center">
                         <p className="text-2xl font-bold text-blue-500">
-                            {reservations.filter((r) => ["confirmed", "pending", "ready"].includes(r.status)).length}
+                            {reservations.filter((r) => ["confirmed", "pending", "ready", "processing"].includes(r.status)).length}
                         </p>
                         <p className="text-sm text-muted-foreground">En cours</p>
                     </CardContent>
@@ -352,6 +355,12 @@ export default function ReservationsPage() {
                                                                 Annuler
                                                             </Button>
                                                         </>
+                                                    )}
+                                                    {reservation.status === "processing" && (
+                                                        <Button variant="outline" size="sm" className="w-full mt-2" disabled>
+                                                            <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                                                            En cours...
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </div>

@@ -146,9 +146,19 @@ serve(async (req) => {
 
         if (txError) {
             console.error('[Airtel Function] DB Insert Error:', txError)
-            // Even if DB fails, if API succeeded we should probably tell the user? 
-            // But strict consistency is safer.
             throw new Error('Transaction recording failed')
+        }
+
+        // 8. Update Order Status to prevents double payment
+        const { error: updateError } = await supabaseClient
+            .from('orders')
+            .update({ status: 'processing' })
+            .eq('id', orderId)
+
+        if (updateError) {
+            console.error('[Airtel Function] Order Status Update Error:', updateError)
+        } else {
+             console.log('[Airtel Function] Order status updated to processing')
         }
 
         return new Response(
