@@ -12,7 +12,14 @@
 import { ApiResponse } from '@/types';
 import { supabaseClient } from '@/api/supabaseClient';
 import { calculatePaymentFees, getFeeRates, PaymentFees } from '@/lib/payment-fees';
-import { validateAirtelPhone, normalizeAirtelPhone, getAirtelPhoneError } from '@/lib/phone-validation';
+import {
+    validateAirtelPhone,
+    validateMoovPhone,
+    normalizePhone,
+    getAirtelPhoneError,
+    getMoovPhoneError,
+    detectOperator
+} from '@/lib/phone-validation';
 import type { QGabonPaymentResponse } from '@/types/qgabon';
 
 // ============================================
@@ -88,7 +95,7 @@ export const initiateAirtelPayment = async (
             };
         }
 
-        const normalizedPhone = normalizeAirtelPhone(request.phone);
+        const normalizedPhone = normalizePhone(request.phone);
         if (!normalizedPhone) {
             return {
                 success: false,
@@ -136,42 +143,43 @@ export const initiateAirtelPayment = async (
             baseAmount: request.baseAmount
         };
 
-        console.log('[Payment Service] Calling Edge Function...');
+        console.log('[Payment Service] Calling Edge Function: initiate-airtel (via fetch)...');
 
-        const { data, error } = await supabaseClient.functions.invoke('initiate-payment', {
-            body: payload,
+        const functionUrl = 'https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/initiate-airtel';
+        
+        const response = await fetch(functionUrl, {
+            method: 'POST',
             headers: {
-                Authorization: `Bearer ${session.access_token}`
-            }
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify(payload)
         });
 
-        console.log('[Payment Service] Edge Function response:', {
-            hasData: !!data,
-            hasError: !!error,
-            success: data?.success
-        });
+        console.log('[Payment Service] Airtel Fetch status:', response.status);
 
-        if (error) {
-            console.error('[Payment Service] Edge Function Error:', error);
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('[Payment Service] Airtel Edge Function Error Body:', data);
             return {
                 success: false,
                 data: null,
                 error: {
-                    message: error.message || 'Erreur lors de l\'initiation du paiement',
-                    code: 'EDGE_FUNCTION_ERROR',
-                    details: error
+                    message: data?.error?.message || 'Erreur Edge Function (Airtel)',
+                    code: data?.error?.code || 'EDGE_ERROR',
+                    details: data
                 }
             };
         }
 
         if (!data || !data.success) {
-            console.error('[Payment Service] Payment failed:', data);
             return {
                 success: false,
                 data: null,
                 error: {
-                    message: data?.error?.message || 'Échec du paiement',
-                    code: data?.error?.code || 'PAYMENT_FAILED',
+                    message: data?.error?.message || 'Échec du paiement Airtel',
+                    code: 'PAYMENT_FAILED',
                     details: data?.error?.details || null
                 }
             };
@@ -195,6 +203,142 @@ export const initiateAirtelPayment = async (
 
     } catch (error) {
         console.error('[Payment Service] Unexpected error:', error);
+        return {
+            success: false,
+            data: null,
+            error: {
+                message: error instanceof Error ? error.message : 'Erreur inconnue',
+                code: 'UNEXPECTED_ERROR',
+                details: error as Record<string, unknown>
+            }
+        };
+    }
+};
+
+/**
+ * Initie un paiement Moov Money via Q-Gabon
+ * 
+ * @param request - Détails du paiement
+ * @returns Réponse avec ID transaction et détails frais
+ */
+export const initiateMoovPayment = async (
+    request: PaymentInitiationRequest
+): Promise<ApiResponse<PaymentInitiationResponse>> => {
+    console.log('[Payment Service] Initiating Moov payment:', {
+        orderId: request.orderId,
+        baseAmount: request.baseAmount,
+        phone: request.phone.slice(0, 3) + '****'
+    });
+
+    try {
+        // === 1. VALIDATION DU TÉLÉPHONE ===
+        const phoneError = getMoovPhoneError(request.phone);
+        if (phoneError) {
+            return {
+                success: false,
+                data: null,
+                error: {
+                    message: phoneError,
+                    code: 'INVALID_PHONE',
+                    details: null
+                }
+            };
+        }
+
+        const normalizedPhone = normalizePhone(request.phone);
+        if (!normalizedPhone) {
+            return {
+                success: false,
+                data: null,
+                error: {
+                    message: 'Impossible de normaliser le numéro de téléphone',
+                    code: 'PHONE_NORMALIZATION_ERROR',
+                    details: null
+                }
+            };
+        }
+
+        // === 2. CALCUL DES FRAIS ===
+        const fees = calculatePaymentFees(request.baseAmount);
+
+        // === 3. RÉCUPÉRATION DU TOKEN D'AUTHENTIFICATION ===
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        if (!session) {
+            return {
+                success: false,
+                data: null,
+                error: {
+                    message: 'Session expirée. Veuillez vous reconnecter.',
+                    code: 'NO_SESSION',
+                    details: null
+                }
+            };
+        }
+
+        // === 4. APPEL À L'EDGE FUNCTION ===
+        const payload = {
+            phone: normalizedPhone,
+            orderId: request.orderId,
+            baseAmount: request.baseAmount
+        };
+
+        console.log('[Payment Service] Calling Edge Function: initiate-moov (via fetch)...');
+
+        const functionUrl = 'https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/initiate-moov';
+        
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        console.log('[Payment Service] Moov Fetch status:', response.status);
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('[Payment Service] Moov Edge Function Error Body:', data);
+            return {
+                success: false,
+                data: null,
+                error: {
+                    message: data?.error?.message || 'Erreur Edge Function (Moov)',
+                    code: data?.error?.code || 'EDGE_ERROR',
+                    details: data
+                }
+            };
+        }
+
+        if (!data || !data.success) {
+            return {
+                success: false,
+                data: null,
+                error: {
+                    message: data?.error?.message || 'Échec du paiement Moov',
+                    code: 'PAYMENT_FAILED',
+                    details: data?.error || null
+                }
+            };
+        }
+
+        return {
+            success: true,
+            data: {
+                transactionId: data.data.transactionId,
+                qGabonReference: data.data.qGabonReference,
+                totalAmount: data.data.totalAmount,
+                fees: data.data.fees,
+                status: data.data.status || 'PENDING',
+                message: data.data.message || 'Paiement Moov initié'
+            },
+            error: null
+        };
+
+    } catch (error) {
         return {
             success: false,
             data: null,

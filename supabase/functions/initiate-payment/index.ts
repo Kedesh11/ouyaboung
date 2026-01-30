@@ -28,12 +28,18 @@ serve(async (req) => {
         // ===================================================================
         // 1. AUTHENTIFICATION
         // ===================================================================
+        
+        console.log('[Edge Function] initiate-payment called (v2-debug)')
 
         const authHeader = req.headers.get('Authorization')
         if (!authHeader) {
             console.error('[Edge Function] Missing Authorization header')
             return new Response(
-                JSON.stringify({ success: false, error: { message: 'Unauthorized', code: 'NO_AUTH_HEADER' } }),
+                JSON.stringify({ 
+                    success: false, 
+                    error: { message: 'Unauthorized', code: 'NO_AUTH_HEADER' },
+                    debug: 'Header missing'
+                }),
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
@@ -55,7 +61,11 @@ serve(async (req) => {
         if (authError || !user) {
             console.error('[Edge Function] Authentication failed:', authError?.message)
             return new Response(
-                JSON.stringify({ success: false, error: { message: 'Invalid token', code: 'AUTH_FAILED' } }),
+                JSON.stringify({ 
+                    success: false, 
+                    error: { message: 'Invalid token', code: 'AUTH_FAILED', details: authError },
+                    debug: 'Auth check failed'
+                }),
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
@@ -66,7 +76,8 @@ serve(async (req) => {
         // 2. PARSE ET VALIDATION DU PAYLOAD
         // ===================================================================
 
-        const { phone, orderId, baseAmount } = await req.json()
+        const { phone: rawPhone, orderId, baseAmount, operator: forcedOperator } = await req.json()
+        const phone = rawPhone.replace(/\s+/g, '')
 
         if (!phone || !orderId || !baseAmount) {
             return new Response(
@@ -133,12 +144,26 @@ serve(async (req) => {
         console.log('[Edge Function] Fees calculated:', fees)
 
         // ===================================================================
+        // 4.5 DÉTECTION OPÉRATEUR ET CONFIGURATION
+        // ===================================================================
+
+        // Préfixes Airtel: 074, 076, 077, 74, 76, 77
+        // Préfixes Moov: 066, 062, 065, 66, 62, 65
+        const isMoov = forcedOperator === 'MOOV' || ['066', '062', '065', '66', '62', '65'].some(p => phone.startsWith(p))
+        const operator = isMoov ? 'MOOV_MONEY' : 'AIRTEL_MONEY'
+        const accountCode = isMoov
+            ? (Deno.env.get('ACCOUNT_CODE_MOOV') ?? Deno.env.get('ACCOUNT_CODE'))
+            : Deno.env.get('ACCOUNT_CODE')
+
+        console.log(`[Edge Function] Operator detected: ${operator}, AccountCode used: ${accountCode}`)
+
+        // ===================================================================
         // 5. APPEL API Q-GABON
         // ===================================================================
 
         const qGabonPayload = {
-            phone: phone.replace(/\s+/g, ''),
-            accountCode: Deno.env.get('ACCOUNT_CODE'),
+            phone: phone,
+            accountCode: accountCode,
             product: 'paiement',
             amount: fees.totalAmount,  // Montant AVEC frais
             agent: Deno.env.get('AGENT')
@@ -181,7 +206,7 @@ serve(async (req) => {
                 transaction_id: qGabonData.data?.transactionId,
                 merchant_reference_id: qGabonData.data?.merchant_reference_id || qGabonData.data?.merchantReferenceId,
                 reference: qGabonData.reference,
-                operator: qGabonData.data?.operator,
+                operator: qGabonData.data?.operator || operator,
                 operator_fees: qGabonData.data?.operatorFees,
                 status: qGabonData.success ? 'PENDING' : 'FAILED',
                 status_code: String(qGabonData.data?.code || qGabonData.data?.status_code || ''),
