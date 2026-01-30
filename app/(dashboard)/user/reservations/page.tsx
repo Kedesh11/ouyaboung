@@ -20,6 +20,7 @@ import {
     getUserOrders,
 } from "@/services";
 import { cancelOrderViaRPC } from "@/api";
+import PaymentModal from "@/components/payment/PaymentModal";
 
 const getStatusBadge = (status: string) => {
     switch (status) {
@@ -63,24 +64,52 @@ export default function ReservationsPage() {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Payment Modal State
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [selectedReservation, setSelectedReservation] = useState<{ id: string, amount: number } | null>(null);
+
+    const openPaymentModal = (reservation: any) => {
+        setSelectedReservation({ id: reservation.id, amount: reservation.price });
+        setIsPaymentModalOpen(true);
+    };
+
+    const handlePaymentSuccess = (transactionId: string) => {
+        // Optimistically update the reservation status to paid/confirmed
+        // In a real app, you might want to re-fetch or verify the status from the server
+        if (selectedReservation) {
+            setReservations((prev) =>
+                prev.map((r) =>
+                    r.id === selectedReservation.id ? { ...r, status: 'confirmed' } : r
+                )
+            );
+        }
+    };
+
     useEffect(() => {
         const loadReservations = async () => {
+            console.log('[ReservationsPage] Starting to load reservations...');
             setIsLoading(true);
             setError(null);
 
             try {
+                console.log('👤 [ReservationsPage] Fetching auth user...');
                 const { data: userData } = await getAuthUser();
                 const userId = userData?.user?.id;
+                console.log('[ReservationsPage] User ID:', userId);
 
                 if (!userId) {
+                    console.warn('[ReservationsPage] No user ID found');
                     setReservations([]);
                     setIsLoading(false);
                     return;
                 }
 
+                console.log('[ReservationsPage] Fetching orders for user:', userId);
                 const resp = await getUserOrders(userId);
+                console.log('[ReservationsPage] Orders response:', resp);
 
                 if (!resp || !resp.success) {
+                    console.error('[ReservationsPage] Failed to load orders:', resp?.error);
                     setError(resp?.error?.message || 'Impossible de charger les réservations');
                     setReservations([]);
                     setIsLoading(false);
@@ -88,6 +117,7 @@ export default function ReservationsPage() {
                 }
 
                 const orders = resp.data?.data || [];
+                console.log('[ReservationsPage] Orders loaded:', orders.length, 'orders');
 
                 const mapped = orders.map((o: any) => {
                     const pickupStart = o.food_item?.pickup_start ? new Date(o.food_item.pickup_start) : null;
@@ -129,9 +159,10 @@ export default function ReservationsPage() {
                     };
                 });
 
+                console.log('[ReservationsPage] Setting reservations:', mapped.length);
                 setReservations(mapped);
             } catch (err) {
-                console.error("Error loading reservations:", err);
+                console.error("[ReservationsPage] Unexpected error:", err);
                 setError(err instanceof Error ? err.message : 'Erreur inconnue lors du chargement');
                 setReservations([]);
             } finally {
@@ -304,14 +335,23 @@ export default function ReservationsPage() {
                                                         <Button variant="outline" size="sm" className="w-full mt-2">Voir le code</Button>
                                                     )}
                                                     {reservation.status === "pending" && (
-                                                        <Button
-                                                            variant="destructive"
-                                                            size="sm"
-                                                            className="w-full mt-2"
-                                                            onClick={() => handleCancel(reservation.id)}
-                                                        >
-                                                            Annuler
-                                                        </Button>
+                                                        <>
+                                                            <Button
+                                                                size="sm"
+                                                                className="w-full mt-2"
+                                                                onClick={() => openPaymentModal(reservation)}
+                                                            >
+                                                                Payer
+                                                            </Button>
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                className="w-full mt-2"
+                                                                onClick={() => handleCancel(reservation.id)}
+                                                            >
+                                                                Annuler
+                                                            </Button>
+                                                        </>
                                                     )}
                                                 </div>
                                             </div>
@@ -323,6 +363,17 @@ export default function ReservationsPage() {
                     )}
                 </TabsContent>
             </Tabs>
+
+            {/* Payment Modal */}
+            {selectedReservation && (
+                <PaymentModal
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => setIsPaymentModalOpen(false)}
+                    amount={selectedReservation.amount}
+                    orderId={selectedReservation.id}
+                    onSuccess={handlePaymentSuccess}
+                />
+            )}
         </div>
     );
 }

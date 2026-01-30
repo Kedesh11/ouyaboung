@@ -40,12 +40,61 @@ export default function UserDashboardPage() {
     const [userImpact, setUserImpact] = useState<UserImpact | null>(null);
     const [favoritesCount, setFavoritesCount] = useState<number>(0);
     const [reservedCountMap, setReservedCountMap] = useState<Record<string, number>>({});
+    const [monthlyGrowth, setMonthlyGrowth] = useState<number>(0);
 
     const userId = user?.id || null;
+
+    // Calculate monthly growth percentage
+    const calculateMonthlyGrowth = async (userId: string) => {
+        try {
+            const supabase = (await import('@supabase/ssr')).createBrowserClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+            );
+
+            const now = new Date();
+            const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+            // Get current month successful transactions
+            const { data: currentMonth } = await supabase
+                .from('transactions')
+                .select('total_amount')
+                .eq('user_id', userId)
+                .eq('status', 'SUCCESS')
+                .gte('created_at', currentMonthStart.toISOString());
+
+            // Get last month successful transactions
+            const { data: lastMonth } = await supabase
+                .from('transactions')
+                .select('total_amount')
+                .eq('user_id', userId)
+                .eq('status', 'SUCCESS')
+                .gte('created_at', lastMonthStart.toISOString())
+                .lte('created_at', lastMonthEnd.toISOString());
+
+            const currentCount = currentMonth?.length || 0;
+            const lastCount = lastMonth?.length || 0;
+
+            if (lastCount === 0 && currentCount > 0) {
+                setMonthlyGrowth(100); // New user with activity
+            } else if (lastCount > 0) {
+                const growth = ((currentCount - lastCount) / lastCount) * 100;
+                setMonthlyGrowth(Math.round(growth));
+            } else {
+                setMonthlyGrowth(0);
+            }
+        } catch (error) {
+            console.error('Error calculating monthly growth:', error);
+            setMonthlyGrowth(0);
+        }
+    };
 
     useEffect(() => {
         if (userId) {
             loadDashboardData();
+            calculateMonthlyGrowth(userId);
         }
     }, [userId]);
 
@@ -253,7 +302,10 @@ export default function UserDashboardPage() {
                             </div>
                             <div className="hidden md:flex items-center gap-2 text-primary">
                                 <TrendingUp className="w-5 h-5" />
-                                <span className="font-medium">+15% impact ce mois</span>
+                                <span className="font-medium">
+                                    {monthlyGrowth > 0 && '+'}
+                                    {monthlyGrowth}% impact ce mois
+                                </span>
                             </div>
                         </div>
                     </CardContent>
