@@ -140,9 +140,14 @@ serve(async (req) => {
                 operator: operator || 'AIRTEL_MONEY',
                 transaction_id: transactionId,
                 merchant_reference_id: reference,
+                amount: amount,
+                total_amount: totalAmount,
+                fees: fees,
                 amount_credited: amountCredited,
                 operator_fees: operatorFees,
                 charge_owner: chargeOwner,
+                customer_id: customerId,
+                operator_owner_charge: operatorOwnerCharge,
                 completed_at: finalStatus !== 'PENDING' ? new Date().toISOString() : null,
                 updated_at: new Date().toISOString()
             })
