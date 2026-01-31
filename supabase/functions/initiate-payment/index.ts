@@ -161,12 +161,22 @@ serve(async (req) => {
         // 5. APPEL API Q-GABON
         // ===================================================================
 
+        // Détérminer l'URL de callback appropriée
+        const projectUrl = Deno.env.get('SUPABASE_URL') ?? ''
+        // Ensure we have a valid base URL (removing trailing slash if any)
+        const baseUrl = projectUrl.replace(/\/$/, '')
+        const callbackEndpoint = isMoov ? 'moov-callback' : 'airtel-callback'
+        const callbackUrl = `${baseUrl}/functions/v1/${callbackEndpoint}`
+
+        console.log(`[Edge Function] Callback URL set to: ${callbackUrl}`)
+
         const qGabonPayload = {
             phone: phone,
             accountCode: accountCode,
             product: 'paiement',
             amount: fees.totalAmount,  // Montant AVEC frais
-            agent: Deno.env.get('AGENT')
+            agent: Deno.env.get('AGENT'),
+            callbackUrl: callbackUrl   // Transmettre l'URL de callback pour la notification
         }
 
         console.log('[Edge Function] Calling Q-Gabon API...')
