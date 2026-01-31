@@ -21,6 +21,9 @@ import {
 } from "@/services";
 import { cancelOrderViaRPC } from "@/api";
 import PaymentModal from "@/components/payment/PaymentModal";
+import { supabaseClient } from "@/api/supabaseClient";
+import { toast } from "sonner";
+import QRCodeModal from "@/components/QRCodeModal";
 
 const getStatusBadge = (status: string) => {
     switch (status) {
@@ -28,6 +31,8 @@ const getStatusBadge = (status: string) => {
             return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">Confirmée</Badge>;
         case "pending":
             return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">En attente</Badge>;
+        case "processing":
+            return <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20">Paiement en cours</Badge>;
         case "ready":
             return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Prête</Badge>;
         case "completed":
@@ -46,6 +51,8 @@ const getStatusIcon = (status: string) => {
             return <AlertCircle className="h-5 w-5 text-blue-500" />;
         case "pending":
             return <Clock className="h-5 w-5 text-yellow-500" />;
+        case "processing":
+            return <Loader2 className="h-5 w-5 text-purple-500 animate-spin" />;
         case "ready":
             return <Package className="h-5 w-5 text-green-500" />;
         case "completed":
@@ -64,9 +71,15 @@ export default function ReservationsPage() {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
+    const [realtimeStatus, setRealtimeStatus] = useState<string>('CONNECTING');
+
     // Payment Modal State
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [selectedReservation, setSelectedReservation] = useState<{ id: string, amount: number } | null>(null);
+    
+    // QR Code Modal State
+    const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+    const [selectedQROrder, setSelectedQROrder] = useState<any | null>(null);
 
     const openPaymentModal = (reservation: any) => {
         setSelectedReservation({ id: reservation.id, amount: reservation.price });
@@ -74,19 +87,24 @@ export default function ReservationsPage() {
     };
 
     const handlePaymentSuccess = (transactionId: string) => {
-        // Optimistically update the reservation status to paid/confirmed
-        // In a real app, you might want to re-fetch or verify the status from the server
+        // Optimistically update the reservation status to processing
         if (selectedReservation) {
             setReservations((prev) =>
                 prev.map((r) =>
-                    r.id === selectedReservation.id ? { ...r, status: 'confirmed' } : r
+                    r.id === selectedReservation.id ? { ...r, status: 'processing' } : r
                 )
             );
         }
     };
 
+    const openQRModal = (reservation: any) => {
+        setSelectedQROrder(reservation);
+        setIsQRModalOpen(true);
+    };
+
     useEffect(() => {
         const loadReservations = async () => {
+            // ... (keep existing load logic)
             console.log('[ReservationsPage] Starting to load reservations...');
             setIsLoading(true);
             setError(null);
@@ -106,20 +124,22 @@ export default function ReservationsPage() {
 
                 console.log('[ReservationsPage] Fetching orders for user:', userId);
                 const resp = await getUserOrders(userId);
-                console.log('[ReservationsPage] Orders response:', resp);
-
-                if (!resp || !resp.success) {
-                    console.error('[ReservationsPage] Failed to load orders:', resp?.error);
+                
+                 if (!resp || !resp.success) {
+                    // ... error handling
+                     console.error('[ReservationsPage] Failed to load orders:', resp?.error);
                     setError(resp?.error?.message || 'Impossible de charger les réservations');
                     setReservations([]);
                     setIsLoading(false);
                     return;
                 }
 
-                const orders = resp.data?.data || [];
+                // ... mapping logic
+                 const orders = resp.data?.data || [];
                 console.log('[ReservationsPage] Orders loaded:', orders.length, 'orders');
 
                 const mapped = orders.map((o: any) => {
+                     // ... mapping code
                     const pickupStart = o.food_item?.pickup_start ? new Date(o.food_item.pickup_start) : null;
                     const pickupEnd = o.food_item?.pickup_end ? new Date(o.food_item.pickup_end) : null;
 
@@ -158,19 +178,60 @@ export default function ReservationsPage() {
                         pk: o.pickup_code // Ensure pickup code is passed if needed
                     };
                 });
-
-                console.log('[ReservationsPage] Setting reservations:', mapped.length);
+                
                 setReservations(mapped);
             } catch (err) {
-                console.error("[ReservationsPage] Unexpected error:", err);
+                // ...
+                 console.error("[ReservationsPage] Unexpected error:", err);
                 setError(err instanceof Error ? err.message : 'Erreur inconnue lors du chargement');
-                setReservations([]);
+                 setReservations([]);
             } finally {
                 setIsLoading(false);
             }
         };
 
         loadReservations();
+    }, []);
+
+    // Realtime Subscription
+    useEffect(() => {
+        if (!supabaseClient) return;
+
+        const channel = supabaseClient
+            .channel('orders-realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'orders',
+                },
+                (payload) => {
+                    console.log('[ReservationsPage] Realtime update received:', payload);
+                    const updatedOrder = payload.new as any;
+                    
+                    setReservations((prev) => 
+                        prev.map((r) => {
+                            if (r.id === updatedOrder.id) {
+                                // Check if status changed to confirmed
+                                if (r.status !== 'confirmed' && updatedOrder.status === 'confirmed') {
+                                    toast.success(`La commande pour ${r.productName} a été confirmée !`);
+                                }
+                                return { ...r, status: updatedOrder.status };
+                            }
+                            return r;
+                        })
+                    );
+                }
+            )
+            .subscribe((status) => {
+                 console.log('[ReservationsPage] Realtime subscription status:', status);
+                 setRealtimeStatus(status);
+            });
+
+        return () => {
+             supabaseClient.removeChannel(channel);
+        };
     }, []);
 
     const handleCancel = async (reservationId: string) => {
@@ -195,7 +256,7 @@ export default function ReservationsPage() {
 
     const filteredReservations = reservations.filter((reservation) => {
         if (activeTab === "all") return true;
-        if (activeTab === "active") return ["confirmed", "pending", "ready"].includes(reservation.status);
+        if (activeTab === "active") return ["confirmed", "pending", "ready", "processing"].includes(reservation.status);
         if (activeTab === "completed") return ["completed", "picked_up"].includes(reservation.status);
         if (activeTab === "cancelled") return reservation.status === "cancelled";
         return true;
@@ -211,9 +272,17 @@ export default function ReservationsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-foreground">Mes réservations</h1>
-                <p className="text-muted-foreground">Historique et suivi de vos commandes</p>
+            <div className="mb-6 flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground">Mes réservations</h1>
+                    <p className="text-muted-foreground">Historique et suivi de vos commandes</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className={`h-2.5 w-2.5 rounded-full ${realtimeStatus === 'SUBSCRIBED' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                    <span className="text-xs text-muted-foreground">
+                        {realtimeStatus === 'SUBSCRIBED' ? 'Live WebSocket' : 'Déconnecté'}
+                    </span>
+                </div>
             </div>
 
             {/* Stats */}
@@ -227,7 +296,7 @@ export default function ReservationsPage() {
                 <Card>
                     <CardContent className="p-4 text-center">
                         <p className="text-2xl font-bold text-blue-500">
-                            {reservations.filter((r) => ["confirmed", "pending", "ready"].includes(r.status)).length}
+                            {reservations.filter((r) => ["confirmed", "pending", "ready", "processing"].includes(r.status)).length}
                         </p>
                         <p className="text-sm text-muted-foreground">En cours</p>
                     </CardContent>
@@ -331,8 +400,15 @@ export default function ReservationsPage() {
                                                     <p className="text-2xl font-bold text-primary">{reservation.price.toLocaleString()} FCFA</p>
                                                     <p className="text-sm text-muted-foreground line-through">{reservation.originalPrice.toLocaleString()} FCFA</p>
 
-                                                    {reservation.status === "confirmed" && (
-                                                        <Button variant="outline" size="sm" className="w-full mt-2">Voir le code</Button>
+                                                    {reservation.status === "confirmed" && reservation.pk && (
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            className="w-full mt-2"
+                                                            onClick={() => openQRModal(reservation)}
+                                                        >
+                                                            Voir le QR Code
+                                                        </Button>
                                                     )}
                                                     {reservation.status === "pending" && (
                                                         <>
@@ -353,6 +429,12 @@ export default function ReservationsPage() {
                                                             </Button>
                                                         </>
                                                     )}
+                                                    {reservation.status === "processing" && (
+                                                        <Button variant="outline" size="sm" className="w-full mt-2" disabled>
+                                                            <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                                                            En cours...
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -365,13 +447,29 @@ export default function ReservationsPage() {
             </Tabs>
 
             {/* Payment Modal */}
-            {selectedReservation && (
-                <PaymentModal
-                    isOpen={isPaymentModalOpen}
-                    onClose={() => setIsPaymentModalOpen(false)}
-                    amount={selectedReservation.amount}
-                    orderId={selectedReservation.id}
-                    onSuccess={handlePaymentSuccess}
+            <PaymentModal
+                isOpen={isPaymentModalOpen}
+                onClose={() => setIsPaymentModalOpen(false)}
+                orderId={selectedReservation?.id || ''}
+                amount={selectedReservation?.amount || 0}
+                onSuccess={handlePaymentSuccess}
+            />
+
+            {/* QR Code Modal */}
+            {selectedQROrder && (
+                <QRCodeModal
+                    open={isQRModalOpen}
+                    onClose={() => setIsQRModalOpen(false)}
+                    order={{
+                        id: selectedQROrder.id,
+                        pickup_code: selectedQROrder.pk,
+                        productName: selectedQROrder.productName,
+                        merchantName: selectedQROrder.merchantName,
+                        merchantAddress: selectedQROrder.merchantAddress,
+                        totalPrice: selectedQROrder.price,
+                        pickupTime: selectedQROrder.pickupTime,
+                        confirmedAt: selectedQROrder.createdAt
+                    }}
                 />
             )}
         </div>
