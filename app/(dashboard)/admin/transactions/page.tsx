@@ -43,15 +43,26 @@ interface Transaction {
   pvit_fees: number;
   app_fees: number;
   total_amount: number;
-  merchant_revenue: number;
+ merchant_revenue: number;
+  // New Q-Gabon fields
+  q_gabon_fees: number;
+  payment_phone_number: string;
+  operator_owner_charge: string;
+  // Q-Gabon technical
   q_gabon_transaction_id: string;
   merchant_reference_id: string;
   operator: string;
+  operator_fees: number;
   status_code: string;
   message: string;
+  // Order info
   order_id: string;
   order_quantity: number;
   order_status: string;
+  pickup_code: string;
+  consumed_at: string;
+  consumed_by: string;
+  // Product/Merchant/Customer
   product_name: string;
   merchant_name: string;
   customer_name: string;
@@ -338,24 +349,30 @@ const AdminTransactionsPage = () => {
 
               {/* Montants détaillés */}
               <div className="space-y-2">
-                <h3 className="font-semibold text-sm text-muted-foreground">Montants</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground">💰 Détails Financiers</h3>
                 <div className="bg-muted p-4 rounded space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Montant de base:</span>
                     <span className="font-medium">{formatCurrency(selectedTransaction.base_amount)}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Frais Airtel (3%):</span>
-                    <span>{formatCurrency(selectedTransaction.airtel_fees)}</span>
+                    <span>Frais Airtel/Moov:</span>
+                    <span>{formatCurrency(selectedTransaction.airtel_fees || 0)}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Frais PVIT (3%):</span>
-                    <span>{formatCurrency(selectedTransaction.pvit_fees)}</span>
+                    <span>Frais PVIT:</span>
+                    <span>{formatCurrency(selectedTransaction.pvit_fees || 0)}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Frais App (3%):</span>
-                    <span>{formatCurrency(selectedTransaction.app_fees)}</span>
+                    <span>Frais App:</span>
+                    <span>{formatCurrency(selectedTransaction.app_fees || 0)}</span>
                   </div>
+                  {selectedTransaction.q_gabon_fees > 0 && (
+                    <div className="flex justify-between text-blue-600">
+                      <span>Frais Q-Gabon (total):</span>
+                      <span className="font-medium">{formatCurrency(selectedTransaction.q_gabon_fees)}</span>
+                    </div>
+                  )}
                   <div className="border-t pt-2 flex justify-between font-bold">
                     <span>Total payé:</span>
                     <span>{formatCurrency(selectedTransaction.total_amount)}</span>
@@ -378,6 +395,10 @@ const AdminTransactionsPage = () => {
                   <p className="font-medium">{selectedTransaction.customer_phone}</p>
                 </div>
                 <div>
+                  <p className="text-muted-foreground">Numéro paiement</p>
+                  <p className="font-medium font-mono text-xs">{selectedTransaction.payment_phone_number || 'N/A'}</p>
+                </div>
+                <div>
                   <p className="text-muted-foreground">Commerce</p>
                   <p className="font-medium">{selectedTransaction.merchant_name}</p>
                 </div>
@@ -386,16 +407,76 @@ const AdminTransactionsPage = () => {
                   <p className="font-medium">{selectedTransaction.product_name}</p>
                 </div>
                 <div>
+                  <p className="text-muted-foreground">Quantité</p>
+                  <p className="font-medium">{selectedTransaction.order_quantity}</p>
+                </div>
+                <div>
                   <p className="text-muted-foreground">Opérateur</p>
                   <p className="font-medium">{selectedTransaction.operator}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Statut</p>
+                  <p className="text-muted-foreground">Code statut</p>
+                  <Badge variant={selectedTransaction.status_code === '200' ? 'default' : 'destructive'}>
+                    {selectedTransaction.status_code || 'N/A'}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Statut paiement</p>
                   <Badge variant={STATUS_MAP[selectedTransaction.payment_status as keyof typeof STATUS_MAP]?.variant}>
                     {STATUS_MAP[selectedTransaction.payment_status as keyof typeof STATUS_MAP]?.label}
                   </Badge>
                 </div>
+                <div>
+                  <p className="text-muted-foreground">Statut commande</p>
+                  <Badge variant=  "secondary">
+                    {selectedTransaction.order_status}
+                  </Badge>
+                </div>
               </div>
+
+              {/* Q-Gabon Technical Data */}
+              {(selectedTransaction.q_gabon_fees > 0 || selectedTransaction.operator_owner_charge) && (
+                <div className="space-y-2 border-t pt-4">
+                  <h3 className="font-semibold text-sm text-muted-foreground">🔧 Données Techniques Q-Gabon</h3>
+                  <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded text-xs space-y-1">
+                    {selectedTransaction.operator_fees > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Frais opérateur:</span>
+                        <span className="font-mono">{formatCurrency(selectedTransaction.operator_fees)}</span>
+                      </div>
+                    )}
+                    {selectedTransaction.operator_owner_charge && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Payeur frais:</span>
+                        <span className="font-mono">{selectedTransaction.operator_owner_charge}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* QR Code Info */}
+              {selectedTransaction.pickup_code && (
+                <div className="space-y-2 border-t pt-4">
+                  <h3 className="font-semibold text-sm text-muted-foreground">📱 Code de Retrait</h3>
+                  <div className="bg-muted p-3 rounded text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Code:</span>
+                      <code className="font-mono text-xs bg-background px-2 py-1 rounded">
+                        {selectedTransaction.pickup_code}
+                      </code>
+                    </div>
+                    {selectedTransaction.consumed_at && (
+                      <div className="mt-2 pt-2 border-t text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-green-600">✓ Consommé le:</span>
+                          <span>{format(new Date(selectedTransaction.consumed_at), "d MMM yyyy", { locale: fr })}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Transaction IDs */}
               <div className="space-y-2">
