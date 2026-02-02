@@ -20,6 +20,7 @@ import {
     co2KgToTrees,
     co2KgToCarKm,
 } from "@/lib/impactCalculations";
+import { toast } from "sonner";
 
 const defaultMonthly = [
     { month: 'Jan', meals: 0, co2: 0 },
@@ -32,6 +33,8 @@ export default function ImpactPage() {
     const [loading, setLoading] = useState(true);
     const [impact, setImpact] = useState<any | null>(null);
     const [monthlyData, setMonthlyData] = useState<typeof defaultMonthly>(defaultMonthly);
+    const [notifiedBadges, setNotifiedBadges] = useState<string[]>([]);
+    const [newlyEarnedBadges, setNewlyEarnedBadges] = useState<string[]>([]);
 
     useEffect(() => {
         const load = async () => {
@@ -65,6 +68,18 @@ export default function ImpactPage() {
             }
         };
         load();
+    }, []);
+
+    // Load notified badges from localStorage
+    useEffect(() => {
+        const stored = localStorage.getItem('impact-notified-badges');
+        if (stored) {
+            try {
+                setNotifiedBadges(JSON.parse(stored));
+            } catch (e) {
+                console.error('Error loading notified badges:', e);
+            }
+        }
     }, []);
 
     const impactData = impact
@@ -138,6 +153,43 @@ export default function ImpactPage() {
             progress: Math.min(100, Math.round((impactData.co2Saved / co2Threshold) * 100)),
         },
     ];
+
+    // Check for newly earned badges and show notifications
+    useEffect(() => {
+        if (loading || !impact) return;
+
+        const earnedBadgeIds = dynamicBadges
+            .filter(badge => badge.earned)
+            .map(badge => badge.id);
+
+        const newBadges = earnedBadgeIds.filter(id => !notifiedBadges.includes(id));
+
+        if (newBadges.length > 0) {
+            // Update notified badges
+            const updated = [...notifiedBadges, ...newBadges];
+            setNotifiedBadges(updated);
+            localStorage.setItem('impact-notified-badges', JSON.stringify(updated));
+            
+            // Set newly earned for animation
+            setNewlyEarnedBadges(newBadges);
+            
+            // Show toast notification for each new badge
+            newBadges.forEach(badgeId => {
+                const badge = dynamicBadges.find(b => b.id === badgeId);
+                if (badge) {
+                    toast.success(`🎉 Nouveau badge débloqué !`, {
+                        description: `${badge.name}: ${badge.description}`,
+                        duration: 5000,
+                    });
+                }
+            });
+
+            // Clear animation after 3 seconds
+            setTimeout(() => {
+                setNewlyEarnedBadges([]);
+            }, 3000);
+        }
+    }, [impact, loading]);
 
     if (loading) {
         return (
@@ -237,43 +289,72 @@ export default function ImpactPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-2 gap-4">
-                            {dynamicBadges.map((badge) => (
-                                <div
-                                    key={badge.id}
-                                    className={`p-4 rounded-lg border transition-all ${badge.earned
-                                            ? "bg-primary/5 border-primary/20"
-                                            : "bg-muted/30 border-border opacity-60"
+                            {dynamicBadges.map((badge) => {
+                                const isNewlyEarned = newlyEarnedBadges.includes(badge.id);
+                                
+                                return (
+                                    <div
+                                        key={badge.id}
+                                        className={`p-4 rounded-lg border transition-all duration-500 ${
+                                            badge.earned
+                                                ? "bg-primary/5 border-primary/20"
+                                                : "bg-muted/30 border-border opacity-60"
+                                        } ${
+                                            isNewlyEarned 
+                                                ? "animate-pulse ring-2 ring-primary/50 shadow-lg shadow-primary/20" 
+                                                : ""
                                         }`}
-                                >
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div
-                                            className={`p-2 rounded-full ${badge.earned ? "bg-primary/10" : "bg-muted"
+                                    >
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <div
+                                                className={`p-2 rounded-full transition-all duration-500 ${
+                                                    badge.earned ? "bg-primary/10" : "bg-muted"
+                                                } ${
+                                                    isNewlyEarned 
+                                                        ? "bg-gradient-to-br from-primary/20 to-primary/5 scale-110" 
+                                                        : ""
                                                 }`}
-                                        >
-                                            <badge.icon
-                                                className={`h-5 w-5 ${badge.earned ? "text-primary" : "text-muted-foreground"
+                                            >
+                                                <badge.icon
+                                                    className={`h-5 w-5 transition-all duration-500 ${
+                                                        badge.earned ? "text-primary" : "text-muted-foreground"
+                                                    } ${
+                                                        isNewlyEarned ? "text-primary animate-bounce" : ""
                                                     }`}
-                                            />
+                                                />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-medium text-sm truncate">{badge.name}</h4>
+                                                <p className="text-xs text-muted-foreground truncate">
+                                                    {badge.description}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="font-medium text-sm truncate">{badge.name}</h4>
-                                            <p className="text-xs text-muted-foreground truncate">
-                                                {badge.description}
-                                            </p>
-                                        </div>
+                                        {badge.earned ? (
+                                            <div className="flex items-center gap-1">
+                                                <p className="text-xs text-primary font-medium">
+                                                    ✓ Obtenu le {new Date(badge.earnedDate!).toLocaleDateString("fr-FR")}
+                                                </p>
+                                                {isNewlyEarned && (
+                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold animate-pulse">
+                                                        Nouveau !
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                <Progress 
+                                                    value={badge.progress} 
+                                                    className="h-1.5"
+                                                />
+                                                <p className="text-xs text-muted-foreground">
+                                                    {badge.progress}% complété
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
-                                    {badge.earned ? (
-                                        <p className="text-xs text-primary">
-                                            Obtenu le {new Date(badge.earnedDate!).toLocaleDateString("fr-FR")}
-                                        </p>
-                                    ) : (
-                                        <div className="space-y-1">
-                                            <Progress value={badge.progress} className="h-1.5" />
-                                            <p className="text-xs text-muted-foreground">{badge.progress}%</p>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>
