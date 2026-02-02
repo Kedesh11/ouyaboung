@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { createBrowserClient } from '@supabase/ssr';
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, ShoppingBag, DollarSign, TrendingUp, Eye, Calendar, Receipt } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, ShoppingBag, DollarSign, TrendingUp, Eye, Calendar, Receipt, Filter } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -43,7 +58,7 @@ interface Transaction {
   pvit_fees: number;
   app_fees: number;
   total_amount: number;
- merchant_revenue: number;
+  merchant_revenue: number;
   // New Q-Gabon fields
   q_gabon_fees: number;
   payment_phone_number: string;
@@ -78,11 +93,15 @@ const STATUS_MAP = {
   TIMEOUT: { label: 'Expiré', variant: 'destructive' as const }
 };
 
+const ITEMS_PER_PAGE = 5;
+
 const AdminTransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Initialize Supabase client
   const supabase = createBrowserClient(
@@ -139,12 +158,18 @@ const AdminTransactionsPage = () => {
   // Filter transactions
   const filteredTransactions = transactions.filter(tx => {
     const query = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       tx.q_gabon_reference?.toLowerCase().includes(query) ||
       tx.customer_name?.toLowerCase().includes(query) ||
       tx.merchant_name?.toLowerCase().includes(query) ||
       tx.product_name?.toLowerCase().includes(query)
     );
+
+    const matchesStatus = statusFilter === 'all'
+      ? true
+      : tx.payment_status === statusFilter;
+
+    return matchesSearch && matchesStatus;
   });
 
   // Calculate stats
@@ -154,15 +179,32 @@ const AdminTransactionsPage = () => {
 
   const completedCount = transactions.filter(tx => tx.payment_status === 'SUCCESS').length;
   const pendingCount = transactions.filter(tx => tx.payment_status === 'PENDING').length;
-  const totalFees = transactions
-    .filter(tx => tx.payment_status === 'SUCCESS')
-    .reduce((sum, tx) => sum + (tx.airtel_fees + tx.pvit_fees + tx.app_fees), 0);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+    setCurrentPage(1);
+  };
 
   return (
-    <AdminLayout
-      title="Transactions"
-      subtitle="Suivi des ventes et transactions"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Transactions</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Suivi des ventes et transactions
+        </p>
+      </div>
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
@@ -238,16 +280,33 @@ const AdminTransactionsPage = () => {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Rechercher une transaction..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={handleSearchChange}
             className="pl-9"
           />
+        </div>
+        <div className="w-full sm:w-[200px]">
+          <Select value={statusFilter} onValueChange={handleStatusChange}>
+            <SelectTrigger>
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4" />
+                <SelectValue placeholder="Statut" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les statuts</SelectItem>
+              <SelectItem value="SUCCESS">Succès</SelectItem>
+              <SelectItem value="PENDING">En attente</SelectItem>
+              <SelectItem value="FAILED">Échoué</SelectItem>
+              <SelectItem value="CANCELLED">Annulé</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -269,63 +328,98 @@ const AdminTransactionsPage = () => {
               <p>Aucune transaction trouvée</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Référence</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Commerce</TableHead>
-                  <TableHead>Produit</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTransactions.map((tx) => {
-                  const status = STATUS_MAP[tx.payment_status as keyof typeof STATUS_MAP] ||
-                    { label: tx.payment_status, variant: 'secondary' as const };
+            <div className="overflow-x-auto">
+              <Table className="min-w-[1000px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Référence</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Commerce</TableHead>
+                    <TableHead>Produit</TableHead>
+                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedTransactions.map((tx) => {
+                    const status = STATUS_MAP[tx.payment_status as keyof typeof STATUS_MAP] ||
+                      { label: tx.payment_status, variant: 'secondary' as const };
 
-                  return (
-                    <TableRow key={tx.transaction_id}>
-                      <TableCell className="font-mono text-sm">
-                        {tx.q_gabon_reference || 'N/A'}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {tx.customer_name || 'Inconnu'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {tx.merchant_name}
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {tx.product_name}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(tx.total_amount)}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(tx.transaction_date), "d MMM yyyy HH:mm", { locale: fr })}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={status.variant}>
-                          {status.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedTransaction(tx)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    return (
+                      <TableRow key={tx.transaction_id}>
+                        <TableCell className="font-mono text-sm">
+                          {tx.q_gabon_reference || 'N/A'}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {tx.customer_name || 'Inconnu'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {tx.merchant_name}
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          {tx.product_name}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {formatCurrency(tx.total_amount)}
+                        </TableCell>
+                        <TableCell>
+                          {format(new Date(tx.transaction_date), "d MMM yyyy HH:mm", { locale: fr })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={status.variant}>
+                            {status.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedTransaction(tx)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  {[...Array(totalPages)].map((_, i) => (
+                    <PaginationItem key={i + 1}>
+                      <PaginationLink
+                        isActive={currentPage === i + 1}
+                        onClick={() => setCurrentPage(i + 1)}
+                        className="cursor-pointer"
+                      >
+                        {i + 1}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -515,7 +609,7 @@ const AdminTransactionsPage = () => {
           )}
         </DialogContent>
       </Dialog>
-    </AdminLayout>
+    </div>
   );
 };
 

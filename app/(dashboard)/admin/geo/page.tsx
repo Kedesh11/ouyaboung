@@ -6,7 +6,7 @@
 // ============================================
 
 import { useEffect, useState } from "react";
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Store, ShoppingBag, TrendingUp } from "lucide-react";
 import { adminService } from "@/services/admin.service";
@@ -37,10 +37,13 @@ const AdminGeoPage = () => {
   const totalSales = geoData.reduce((sum, g) => sum + g.salesCount, 0);
 
   return (
-    <AdminLayout
-      title="Répartition géographique"
-      subtitle="Distribution des commerces et ventes par ville"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Répartition géographique</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Distribution des commerces et ventes par ville
+        </p>
+      </div>
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
@@ -176,7 +179,7 @@ const AdminGeoPage = () => {
           </div>
         </CardContent>
       </Card>
-    </AdminLayout>
+    </div>
   );
 };
 
