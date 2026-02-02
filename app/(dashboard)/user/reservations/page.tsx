@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
     Clock,
     MapPin,
     Phone,
@@ -80,6 +89,11 @@ export default function ReservationsPage() {
     // QR Code Modal State
     const [isQRModalOpen, setIsQRModalOpen] = useState(false);
     const [selectedQROrder, setSelectedQROrder] = useState<any | null>(null);
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasNewReservations, setHasNewReservations] = useState(false);
+    const itemsPerPage = 3;
 
     const openPaymentModal = (reservation: any) => {
         setSelectedReservation({ id: reservation.id, amount: reservation.price });
@@ -202,26 +216,42 @@ export default function ReservationsPage() {
             .on(
                 'postgres_changes',
                 {
-                    event: 'UPDATE',
+                    event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
                     schema: 'public',
                     table: 'orders',
                 },
                 (payload) => {
                     console.log('[ReservationsPage] Realtime update received:', payload);
-                    const updatedOrder = payload.new as any;
                     
-                    setReservations((prev) => 
-                        prev.map((r) => {
-                            if (r.id === updatedOrder.id) {
-                                // Check if status changed to confirmed
-                                if (r.status !== 'confirmed' && updatedOrder.status === 'confirmed') {
-                                    toast.success(`La commande pour ${r.productName} a été confirmée !`);
+                    // Handle INSERT - new reservation
+                    if (payload.eventType === 'INSERT') {
+                        if (currentPage === 1) {
+                            // If on page 1, we could refetch, but for now just show notification
+                            toast.info('Nouvelle réservation créée !');
+                        } else {
+                            // Show badge to go to page 1
+                            setHasNewReservations(true);
+                        }
+                        return;
+                    }
+                    
+                    // Handle UPDATE
+                    if (payload.eventType === 'UPDATE') {
+                        const updatedOrder = payload.new as any;
+                        
+                        setReservations((prev) => 
+                            prev.map((r) => {
+                                if (r.id === updatedOrder.id) {
+                                    // Check if status changed to confirmed
+                                    if (r.status !== 'confirmed' && updatedOrder.status === 'confirmed') {
+                                        toast.success(`La commande pour ${r.productName} a été confirmée !`);
+                                    }
+                                    return { ...r, status: updatedOrder.status };
                                 }
-                                return { ...r, status: updatedOrder.status };
-                            }
-                            return r;
-                        })
-                    );
+                                return r;
+                            })
+                        );
+                    }
                 }
             )
             .subscribe((status) => {
@@ -232,7 +262,7 @@ export default function ReservationsPage() {
         return () => {
              supabaseClient.removeChannel(channel);
         };
-    }, []);
+    }, [currentPage]);
 
     const handleCancel = async (reservationId: string) => {
         if (!confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) {
@@ -261,6 +291,23 @@ export default function ReservationsPage() {
         if (activeTab === "cancelled") return reservation.status === "cancelled";
         return true;
     });
+
+    // Pagination calculations
+    const totalPages = Math.ceil(filteredReservations.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentReservations = filteredReservations.slice(startIndex, endIndex);
+
+    // Handler to go to page 1 when new reservations arrive
+    const handleGoToNewReservations = () => {
+        setCurrentPage(1);
+        setHasNewReservations(false);
+    };
+
+    // Reset to page 1 when tab changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab]);
 
     if (isLoading) {
         return (
@@ -357,7 +404,7 @@ export default function ReservationsPage() {
                             </CardContent>
                         </Card>
                     ) : (
-                        filteredReservations.map((reservation) => (
+                        currentReservations.map((reservation) => (
                             <Card key={reservation.id} className="overflow-hidden">
                                 <CardContent className="p-0">
                                     <div className="flex flex-col md:flex-row">
@@ -442,6 +489,87 @@ export default function ReservationsPage() {
                                 </CardContent>
                             </Card>
                         ))
+                    )}
+
+                    {/* Pagination Controls */}
+                    {!isLoading && !error && filteredReservations.length > itemsPerPage && (
+                        <div className="mt-6 space-y-3">
+                            {/* New Reservations Notification */}
+                            {hasNewReservations && currentPage > 1 && (
+                                <div className="flex justify-center">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={handleGoToNewReservations}
+                                        className="text-xs gap-2"
+                                    >
+                                        <Package className="w-3 h-3" />
+                                        Nouvelles réservations
+                                    </Button>
+                                </div>
+                            )}
+
+                            {/* Info text */}
+                            <div className="text-sm text-muted-foreground text-center">
+                                Affichage {startIndex + 1} - {Math.min(endIndex, filteredReservations.length)} sur {filteredReservations.length} réservations
+                            </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <Pagination>
+                                    <PaginationContent>
+                                        {/* Previous Button */}
+                                        <PaginationItem>
+                                            <PaginationPrevious 
+                                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                                className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                            />
+                                        </PaginationItem>
+
+                                        {/* Page Numbers */}
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                                            // Show first page, last page, current page, and pages around current
+                                            const showPage = 
+                                                page === 1 || 
+                                                page === totalPages || 
+                                                (page >= currentPage - 1 && page <= currentPage + 1);
+
+                                            if (!showPage) {
+                                                // Show ellipsis
+                                                if (page === currentPage - 2 || page === currentPage + 2) {
+                                                    return (
+                                                        <PaginationItem key={page}>
+                                                            <PaginationEllipsis />
+                                                        </PaginationItem>
+                                                    );
+                                                }
+                                                return null;
+                                            }
+
+                                            return (
+                                                <PaginationItem key={page}>
+                                                    <PaginationLink
+                                                        onClick={() => setCurrentPage(page)}
+                                                        isActive={currentPage === page}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        {page}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            );
+                                        })}
+
+                                        {/* Next Button */}
+                                        <PaginationItem>
+                                            <PaginationNext 
+                                                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                                                className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                            />
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            )}
+                        </div>
                     )}
                 </TabsContent>
             </Tabs>

@@ -6,6 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     Dialog,
     DialogContent,
@@ -20,7 +28,16 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle } from "lucide-react";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, Filter, X, Search } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -67,6 +84,16 @@ export default function UserTransactionsPage() {
     const [transactions, setTransactions] = useState<UserTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState<UserTransaction | null>(null);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasNewTransactions, setHasNewTransactions] = useState(false);
+    const itemsPerPage = 5;
+
+    // Filter states
+    const [dateFilter, setDateFilter] = useState<'all' | '24h' | '7d' | '30d'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'SUCCESS' | 'PENDING' | 'FAILED' | 'CANCELLED' | 'TIMEOUT'>('all');
+    const [searchText, setSearchText] = useState('');
 
     // Initialize Supabase client
     const supabase = createBrowserClient(
@@ -116,26 +143,96 @@ export default function UserTransactionsPage() {
                 schema: 'public',
                 table: 'transactions'
             }, () => {
-                fetchTransactions();
+                // If on page 1, refresh immediately
+                if (currentPage === 1) {
+                    fetchTransactions();
+                } else {
+                    // Otherwise, show a notification badge
+                    setHasNewTransactions(true);
+                }
             })
             .subscribe();
 
         return () => {
             channel.unsubscribe();
         };
-    }, []);
+    }, [currentPage]);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('fr-FR').format(amount) + ' XAF';
     };
 
-    // Calculate stats
-    const totalSpent = transactions
+    // Apply filters
+    const filteredTransactions = transactions.filter((tx) => {
+        // Date filter
+        if (dateFilter !== 'all') {
+            const txDate = new Date(tx.transaction_date);
+            const now = new Date();
+            const diffMs = now.getTime() - txDate.getTime();
+            const diffHours = diffMs / (1000 * 60 * 60);
+            const diffDays = diffHours / 24;
+
+            if (dateFilter === '24h' && diffHours > 24) return false;
+            if (dateFilter === '7d' && diffDays > 7) return false;
+            if (dateFilter === '30d' && diffDays > 30) return false;
+        }
+
+        // Status filter
+        if (statusFilter !== 'all' && tx.payment_status !== statusFilter) {
+            return false;
+        }
+
+        // Text search filter
+        if (searchText.trim()) {
+            const search = searchText.toLowerCase();
+            const matchesReference = tx.q_gabon_reference?.toLowerCase().includes(search);
+            const matchesMerchant = tx.merchant_name?.toLowerCase().includes(search);
+            const matchesProduct = tx.product_name?.toLowerCase().includes(search);
+            
+            if (!matchesReference && !matchesMerchant && !matchesProduct) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    // Calculate stats from filtered results
+    const totalSpent = filteredTransactions
         .filter(tx => tx.payment_status === 'SUCCESS')
         .reduce((sum, tx) => sum + tx.total_amount, 0);
 
-    const successCount = transactions.filter(tx => tx.payment_status === 'SUCCESS').length;
-    const pendingCount = transactions.filter(tx => tx.payment_status === 'PENDING').length;
+    const successCount = filteredTransactions.filter(tx => tx.payment_status === 'SUCCESS').length;
+    const pendingCount = filteredTransactions.filter(tx => tx.payment_status === 'PENDING').length;
+
+    // Pagination calculations on filtered results
+    const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentTransactions = filteredTransactions.slice(startIndex, endIndex);
+
+    // Handler to go to page 1 when new transactions arrive
+    const handleGoToNewTransactions = () => {
+        setCurrentPage(1);
+        setHasNewTransactions(false);
+        fetchTransactions();
+    };
+
+    // Reset filters
+    const handleResetFilters = () => {
+        setDateFilter('all');
+        setStatusFilter('all');
+        setSearchText('');
+        setCurrentPage(1);
+    };
+
+    // Check if any filter is active
+    const hasActiveFilters = dateFilter !== 'all' || statusFilter !== 'all' || searchText.trim() !== '';
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [dateFilter, statusFilter, searchText]);
 
     return (
         <div className="space-y-6 p-6">
@@ -146,6 +243,108 @@ export default function UserTransactionsPage() {
                     Historique de tous vos paiements sur ouyaboung
                 </p>
             </div>
+
+            {/* Filters */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Filter className="w-4 h-4" />
+                        Filtres de recherche
+                        {hasActiveFilters && (
+                            <Badge variant="secondary" className="ml-auto">
+                                {[dateFilter !== 'all', statusFilter !== 'all', searchText.trim()].filter(Boolean).length} actif(s)
+                            </Badge>
+                        )}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {/* Search Input */}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Rechercher..."
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+
+                        {/* Date Filter */}
+                        <Select value={dateFilter} onValueChange={(value: any) => setDateFilter(value)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Période" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Toutes les dates</SelectItem>
+                                <SelectItem value="24h">Dernières 24h</SelectItem>
+                                <SelectItem value="7d">7 derniers jours</SelectItem>
+                                <SelectItem value="30d">30 derniers jours</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {/* Status Filter */}
+                        <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Statut" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Tous les statuts</SelectItem>
+                                <SelectItem value="SUCCESS">Payé</SelectItem>
+                                <SelectItem value="PENDING">En attente</SelectItem>
+                                <SelectItem value="FAILED">Échoué</SelectItem>
+                                <SelectItem value="CANCELLED">Annulé</SelectItem>
+                                <SelectItem value="TIMEOUT">Expiré</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {/* Reset Button */}
+                        <Button
+                            variant="outline"
+                            onClick={handleResetFilters}
+                            disabled={!hasActiveFilters}
+                            className="w-full"
+                        >
+                            <X className="w-4 h-4 mr-2" />
+                            Réinitialiser
+                        </Button>
+                    </div>
+
+                    {/* Active Filters Display */}
+                    {hasActiveFilters && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            <span className="text-sm text-muted-foreground">Filtres actifs:</span>
+                            {dateFilter !== 'all' && (
+                                <Badge variant="secondary" className="gap-1">
+                                    Période: {dateFilter === '24h' ? '24h' : dateFilter === '7d' ? '7 jours' : '30 jours'}
+                                    <X 
+                                        className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                                        onClick={() => setDateFilter('all')}
+                                    />
+                                </Badge>
+                            )}
+                            {statusFilter !== 'all' && (
+                                <Badge variant="secondary" className="gap-1">
+                                    Statut: {STATUS_MAP[statusFilter]?.label || statusFilter}
+                                    <X 
+                                        className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                                        onClick={() => setStatusFilter('all')}
+                                    />
+                                </Badge>
+                            )}
+                            {searchText.trim() && (
+                                <Badge variant="secondary" className="gap-1">
+                                    Recherche: "{searchText}"
+                                    <X 
+                                        className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                                        onClick={() => setSearchText('')}
+                                    />
+                                </Badge>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -159,8 +358,11 @@ export default function UserTransactionsPage() {
                                 <Skeleton className="h-8 w-12" />
                             ) : (
                                 <>
-                                    <p className="text-2xl font-bold">{transactions.length}</p>
-                                    <p className="text-sm text-muted-foreground">Total</p>
+                                    <p className="text-2xl font-bold">{filteredTransactions.length}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {hasActiveFilters ? 'Filtrées' : 'Total'}
+                                        {hasActiveFilters && <span className="text-xs ml-1">sur {transactions.length}</span>}
+                                    </p>
                                 </>
                             )}
                         </div>
@@ -224,8 +426,19 @@ export default function UserTransactionsPage() {
 
             {/* Transactions Table */}
             <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-base">Historique des paiements</CardTitle>
+                    {hasNewTransactions && currentPage > 1 && (
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleGoToNewTransactions}
+                            className="text-xs"
+                        >
+                            <TrendingUp className="w-3 h-3 mr-1" />
+                            Nouvelles transactions
+                        </Button>
+                    )}
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -241,59 +454,124 @@ export default function UserTransactionsPage() {
                             <p className="text-sm mt-1">Vos paiements apparaîtront ici</p>
                         </div>
                     ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Référence</TableHead>
-                                    <TableHead>Commerce</TableHead>
-                                    <TableHead>Produit</TableHead>
-                                    <TableHead className="text-right">Montant</TableHead>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Statut</TableHead>
-                                    <TableHead className="text-right">Détails</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {transactions.map((tx) => {
-                                    const status = STATUS_MAP[tx.payment_status as keyof typeof STATUS_MAP] ||
-                                        { label: tx.payment_status, variant: 'secondary' as const, icon: Receipt };
+                        <>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Référence</TableHead>
+                                        <TableHead>Commerce</TableHead>
+                                        <TableHead>Produit</TableHead>
+                                        <TableHead className="text-right">Montant</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Statut</TableHead>
+                                        <TableHead className="text-right">Détails</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {currentTransactions.map((tx) => {
+                                        const status = STATUS_MAP[tx.payment_status as keyof typeof STATUS_MAP] ||
+                                            { label: tx.payment_status, variant: 'secondary' as const, icon: Receipt };
 
-                                    return (
-                                        <TableRow key={tx.transaction_id}>
-                                            <TableCell className="font-mono text-sm">
-                                                {tx.q_gabon_reference || 'N/A'}
-                                            </TableCell>
-                                            <TableCell className="font-medium">
-                                                {tx.merchant_name}
-                                            </TableCell>
-                                            <TableCell className="max-w-[200px] truncate">
-                                                {tx.product_name}
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium">
-                                                {formatCurrency(tx.total_amount)}
-                                            </TableCell>
-                                            <TableCell>
-                                                {format(new Date(tx.transaction_date), "d MMM yyyy", { locale: fr })}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={status.variant}>
-                                                    {status.label}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setSelectedTransaction(tx)}
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
+                                        return (
+                                            <TableRow key={tx.transaction_id}>
+                                                <TableCell className="font-mono text-sm">
+                                                    {tx.q_gabon_reference || 'N/A'}
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    {tx.merchant_name}
+                                                </TableCell>
+                                                <TableCell className="max-w-[200px] truncate">
+                                                    {tx.product_name}
+                                                </TableCell>
+                                                <TableCell className="text-right font-medium">
+                                                    {formatCurrency(tx.total_amount)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {format(new Date(tx.transaction_date), "d MMM yyyy", { locale: fr })}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={status.variant}>
+                                                        {status.label}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setSelectedTransaction(tx)}
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+
+                            {/* Pagination Controls */}
+                            {totalPages > 1 && (
+                                <div className="mt-6 space-y-3">
+                                    {/* Info text */}
+                                    <div className="text-sm text-muted-foreground text-center">
+                                        Affichage {startIndex + 1} - {Math.min(endIndex, filteredTransactions.length)} sur {filteredTransactions.length} transactions
+                                        {hasActiveFilters && <span className="ml-1 text-xs">(filtrées sur {transactions.length} au total)</span>}
+                                    </div>
+
+                                    {/* Pagination */}
+                                    <Pagination>
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious 
+                                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                />
+                                            </PaginationItem>
+
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                                                // Show first page, last page, current page, and pages around current
+                                                const showPage = 
+                                                    page === 1 || 
+                                                    page === totalPages || 
+                                                    (page >= currentPage - 1 && page <= currentPage + 1);
+
+                                                const showEllipsisBefore = page === currentPage - 2 && currentPage > 3;
+                                                const showEllipsisAfter = page === currentPage + 2 && currentPage < totalPages - 2;
+
+                                                if (showEllipsisBefore || showEllipsisAfter) {
+                                                    return (
+                                                        <PaginationItem key={page}>
+                                                            <PaginationEllipsis />
+                                                        </PaginationItem>
+                                                    );
+                                                }
+
+                                                if (!showPage) return null;
+
+                                                return (
+                                                    <PaginationItem key={page}>
+                                                        <PaginationLink
+                                                            onClick={() => setCurrentPage(page)}
+                                                            isActive={currentPage === page}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            {page}
+                                                        </PaginationLink>
+                                                    </PaginationItem>
+                                                );
+                                            })}
+
+                                            <PaginationItem>
+                                                <PaginationNext 
+                                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                                                />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
+                            )}
+                        </>
                     )}
                 </CardContent>
             </Card>
