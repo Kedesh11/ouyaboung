@@ -198,50 +198,50 @@ export default function ImpactPage() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-foreground">Mon impact</h1>
-                <p className="text-muted-foreground">Votre contribution à la planète</p>
+        <div className="space-y-4 md:space-y-6 p-4 md:p-6">
+            <div className="mb-4 md:mb-6">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground">Mon impact</h1>
+                <p className="text-sm sm:text-base text-muted-foreground">Votre contribution à la planète</p>
             </div>
 
             {/* Main Impact Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
                 <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
-                    <CardContent className="p-4 text-center">
-                        <ShoppingBag className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                        <p className="text-2xl font-bold text-green-500">{impactData.mealsRescued}</p>
-                        <p className="text-xs text-muted-foreground">Commandes</p>
+                    <CardContent className="p-3 sm:p-4 text-center">
+                        <ShoppingBag className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 mx-auto mb-1 sm:mb-2" />
+                        <p className="text-lg sm:text-2xl font-bold text-green-500">{impactData.mealsRescued}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Commandes</p>
                     </CardContent>
                 </Card>
 
                 <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/20">
-                    <CardContent className="p-4 text-center">
-                        <Leaf className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
-                        <p className="text-2xl font-bold text-emerald-500">{impactData.co2Saved.toFixed(1)} kg</p>
-                        <p className="text-xs text-muted-foreground">CO₂ évités</p>
+                    <CardContent className="p-3 sm:p-4 text-center">
+                        <Leaf className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500 mx-auto mb-1 sm:mb-2" />
+                        <p className="text-lg sm:text-2xl font-bold text-emerald-500">{impactData.co2Saved.toFixed(1)} kg</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">CO₂ évités</p>
                     </CardContent>
                 </Card>
 
                 <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
-                    <CardContent className="p-4 text-center">
-                        <Droplets className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-                        <p className="text-2xl font-bold text-blue-500">{impactData.foodSavedKg.toFixed(1)} kg</p>
-                        <p className="text-xs text-muted-foreground">Nourriture sauvée</p>
+                    <CardContent className="p-3 sm:p-4 text-center">
+                        <Droplets className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 mx-auto mb-1 sm:mb-2" />
+                        <p className="text-lg sm:text-2xl font-bold text-blue-500">{impactData.foodSavedKg.toFixed(1)} kg</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Nourriture sauvée</p>
                     </CardContent>
                 </Card>
 
                 <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
-                    <CardContent className="p-4 text-center">
-                        <TrendingUp className="h-8 w-8 text-primary mx-auto mb-2" />
-                        <p className="text-2xl font-bold text-primary">
+                    <CardContent className="p-3 sm:p-4 text-center">
+                        <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-primary mx-auto mb-1 sm:mb-2" />
+                        <p className="text-lg sm:text-2xl font-bold text-primary">
                             {impactData.moneySaved > 0 ? `${(impactData.moneySaved / 1000).toFixed(0)}k` : '0'}
                         </p>
-                        <p className="text-xs text-muted-foreground">FCFA économisés</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">FCFA économisés</p>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                 {/* Impact Summary */}
                 <Card>
                     <CardHeader>
@@ -288,14 +288,14 @@ export default function ImpactPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                             {dynamicBadges.map((badge) => {
                                 const isNewlyEarned = newlyEarnedBadges.includes(badge.id);
                                 
                                 return (
                                     <div
                                         key={badge.id}
-                                        className={`p-4 rounded-lg border transition-all duration-500 ${
+                                        className={`p-3 sm:p-4 rounded-lg border transition-all duration-500 ${
                                             badge.earned
                                                 ? "bg-primary/5 border-primary/20"
                                                 : "bg-muted/30 border-border opacity-60"
@@ -305,7 +305,7 @@ export default function ImpactPage() {
                                                 : ""
                                         }`}
                                     >
-                                        <div className="flex items-center gap-3 mb-2">
+                                        <div className="flex items-center gap-2 sm:gap-3 mb-2">
                                             <div
                                                 className={`p-2 rounded-full transition-all duration-500 ${
                                                     badge.earned ? "bg-primary/10" : "bg-muted"
@@ -324,8 +324,8 @@ export default function ImpactPage() {
                                                 />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-medium text-sm truncate">{badge.name}</h4>
-                                                <p className="text-xs text-muted-foreground truncate">
+                                                <h4 className="font-medium text-xs sm:text-sm truncate">{badge.name}</h4>
+                                                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                                                     {badge.description}
                                                 </p>
                                             </div>
@@ -366,27 +366,27 @@ export default function ImpactPage() {
                     <CardTitle className="text-lg">Équivalents environnementaux</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
                         {(() => {
                             const carKm = co2KgToCarKm(impactData.co2Saved || 0);
                             const ledHours = Math.round((impactData.energySaved || 0) * 100); // assume 10W LED -> 0.01 kW
                             const trees = co2KgToTrees(impactData.co2Saved || 0);
                             return (
                                 <>
-                                    <div className="text-center p-4 rounded-lg bg-muted/30">
-                                        <p className="text-3xl mb-2">🚗</p>
-                                        <p className="text-xl font-bold text-foreground">{carKm} km</p>
-                                        <p className="text-sm text-muted-foreground">de trajet en voiture évités</p>
+                                    <div className="text-center p-3 sm:p-4 rounded-lg bg-muted/30">
+                                        <p className="text-2xl sm:text-3xl mb-1 sm:mb-2">🚗</p>
+                                        <p className="text-lg sm:text-xl font-bold text-foreground">{carKm} km</p>
+                                        <p className="text-xs sm:text-sm text-muted-foreground">de trajet en voiture évités</p>
                                     </div>
-                                    <div className="text-center p-4 rounded-lg bg-muted/30">
-                                        <p className="text-3xl mb-2">💡</p>
-                                        <p className="text-xl font-bold text-foreground">{ledHours} heures</p>
-                                        <p className="text-sm text-muted-foreground">d'éclairage LED économisées</p>
+                                    <div className="text-center p-3 sm:p-4 rounded-lg bg-muted/30">
+                                        <p className="text-2xl sm:text-3xl mb-1 sm:mb-2">💡</p>
+                                        <p className="text-lg sm:text-xl font-bold text-foreground">{ledHours} heures</p>
+                                        <p className="text-xs sm:text-sm text-muted-foreground">d'éclairage LED économisées</p>
                                     </div>
-                                    <div className="text-center p-4 rounded-lg bg-muted/30">
-                                        <p className="text-3xl mb-2">🌳</p>
-                                        <p className="text-xl font-bold text-foreground">{trees} arbres</p>
-                                        <p className="text-sm text-muted-foreground">plantés en équivalent CO₂</p>
+                                    <div className="text-center p-3 sm:p-4 rounded-lg bg-muted/30">
+                                        <p className="text-2xl sm:text-3xl mb-1 sm:mb-2">🌳</p>
+                                        <p className="text-lg sm:text-xl font-bold text-foreground">{trees} arbres</p>
+                                        <p className="text-xs sm:text-sm text-muted-foreground">plantés en équivalent CO₂</p>
                                     </div>
                                 </>
                             );

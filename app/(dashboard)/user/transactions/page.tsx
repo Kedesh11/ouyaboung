@@ -235,11 +235,11 @@ export default function UserTransactionsPage() {
     }, [dateFilter, statusFilter, searchText]);
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-4 md:space-y-6 p-4 md:p-6">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Mes Transactions</h1>
-                <p className="text-muted-foreground mt-2">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Mes Transactions</h1>
+                <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
                     Historique de tous vos paiements sur ouyaboung
                 </p>
             </div>
@@ -247,8 +247,8 @@ export default function UserTransactionsPage() {
             {/* Filters */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Filter className="w-4 h-4" />
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                        <Filter className="w-3 h-3 sm:w-4 sm:h-4" />
                         Filtres de recherche
                         {hasActiveFilters && (
                             <Badge variant="secondary" className="ml-auto">
@@ -258,7 +258,7 @@ export default function UserTransactionsPage() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                         {/* Search Input */}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -303,7 +303,7 @@ export default function UserTransactionsPage() {
                             variant="outline"
                             onClick={handleResetFilters}
                             disabled={!hasActiveFilters}
-                            className="w-full"
+                            className="w-full sm:w-auto h-10"
                         >
                             <X className="w-4 h-4 mr-2" />
                             Réinitialiser
@@ -347,7 +347,7 @@ export default function UserTransactionsPage() {
             </Card>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 <Card>
                     <CardContent className="p-4 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -426,14 +426,14 @@ export default function UserTransactionsPage() {
 
             {/* Transactions Table */}
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="text-base">Historique des paiements</CardTitle>
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <CardTitle className="text-sm sm:text-base">Historique des paiements</CardTitle>
                     {hasNewTransactions && currentPage > 1 && (
                         <Button 
                             variant="outline" 
                             size="sm"
                             onClick={handleGoToNewTransactions}
-                            className="text-xs"
+                            className="text-xs w-full sm:w-auto h-10 sm:h-9"
                         >
                             <TrendingUp className="w-3 h-3 mr-1" />
                             Nouvelles transactions
@@ -455,7 +455,10 @@ export default function UserTransactionsPage() {
                         </div>
                     ) : (
                         <>
-                            <Table>
+                            {/* Table with horizontal scroll on mobile */}
+                            <div className="-mx-4 sm:mx-0 overflow-x-auto">
+                                <div className="inline-block min-w-full align-middle">
+                                    <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Référence</TableHead>
@@ -508,6 +511,8 @@ export default function UserTransactionsPage() {
                                     })}
                                 </TableBody>
                             </Table>
+                                </div>
+                            </div>
 
                             {/* Pagination Controls */}
                             {totalPages > 1 && (
