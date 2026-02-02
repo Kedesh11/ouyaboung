@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import {
   Bell,
   Shield,
@@ -183,10 +183,13 @@ const MerchantSettingsPage = () => {
   };
 
   return (
-    <MerchantLayout
-      title="Paramètres"
-      subtitle="Gérez vos préférences et votre compte"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Paramètres</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Gérez vos préférences et votre compte
+        </p>
+      </div>
       <div className="max-w-2xl space-y-6">
         {/* Notifications */}
         <motion.div
@@ -491,7 +494,7 @@ const MerchantSettingsPage = () => {
           Enregistrer les paramètres
         </Button>
       </div>
-    </MerchantLayout>
+    </div>
   );
 };
 

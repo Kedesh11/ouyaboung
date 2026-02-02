@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import {
   Store,
   MapPin,
@@ -230,10 +230,13 @@ const MerchantProfilePage = () => {
   };
 
   return (
-    <MerchantLayout
-      title="Mon commerce"
-      subtitle="Gérez les informations de votre établissement"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Mon commerce</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Gérez les informations de votre établissement
+        </p>
+      </div>
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Main Info */}
         <motion.div
@@ -559,7 +562,7 @@ const MerchantProfilePage = () => {
           </Button>
         </motion.div>
       </div>
-    </MerchantLayout>
+    </div>
   );
 };
 
