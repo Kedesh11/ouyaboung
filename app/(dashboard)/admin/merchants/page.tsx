@@ -1,207 +1,339 @@
 "use client";
 
 // ============================================
-// Admin Merchants Page - Merchant Management
+// Admin Merchants Page - Directory Management
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
 import { useEffect, useState } from "react";
-import AdminLayout from "@/components/admin/AdminLayout";
-import MerchantValidationCard from "@/components/admin/MerchantValidationCard";
-import MerchantValidationModal from "@/components/admin/MerchantValidationModal";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Store, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Search, Store, Eye, CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
+import MerchantValidationModal from "@/components/admin/MerchantValidationModal";
 import { adminService } from "@/services/admin.service";
-import type { MerchantRegistration, MerchantStatus } from "@/types/admin.types";
+import { MerchantRegistration } from "@/types/admin.types";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+
+const ITEMS_PER_PAGE = 3;
 
 const AdminMerchantsPage = () => {
   const [merchants, setMerchants] = useState<MerchantRegistration[]>([]);
-  const [filteredMerchants, setFilteredMerchants] = useState<MerchantRegistration[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<'all' | MerchantStatus>('all');
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
-
-  // Modal state
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantRegistration | null>(null);
-  const [modalMode, setModalMode] = useState<'view' | 'validate' | 'refuse'>('view');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     loadMerchants();
   }, []);
 
-  useEffect(() => {
-    filterMerchants();
-  }, [merchants, searchQuery, activeTab]);
-
   const loadMerchants = async () => {
-    setIsLoading(true);
     try {
+      setIsLoading(true);
       const data = await adminService.getMerchants();
       setMerchants(data);
     } catch (error) {
-      console.error('Error loading merchants:', error);
+      console.error("Error loading merchants:", error);
       toast.error("Erreur lors du chargement des commerces");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filterMerchants = () => {
-    let filtered = merchants;
-
-    // Filter by status
-    if (activeTab !== 'all') {
-      filtered = filtered.filter(m => m.status === activeTab);
-    }
-
-    // Filter by search
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(m =>
-        m.businessName.toLowerCase().includes(query) ||
-        m.ownerName.toLowerCase().includes(query) ||
-        m.city.toLowerCase().includes(query) ||
-        m.email.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredMerchants(filtered);
+  const handleValidationSuccess = (updatedMerchant: MerchantRegistration) => {
+    setMerchants(prev => prev.map(m => m.id === updatedMerchant.id ? updatedMerchant : m));
+    toast.success(`Statut du commerce mis à jour: ${updatedMerchant.status === 'validated' ? 'Validé' : 'Refusé'}`);
+    setSelectedMerchant(null);
   };
 
-  const getCounts = () => {
-    return {
-      all: merchants.length,
-      pending: merchants.filter(m => m.status === 'pending').length,
-      validated: merchants.filter(m => m.status === 'validated').length,
-      refused: merchants.filter(m => m.status === 'refused').length,
-    };
+  const filteredMerchants = merchants.filter(merchant => {
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = (
+      merchant.businessName.toLowerCase().includes(query) ||
+      merchant.ownerName.toLowerCase().includes(query) ||
+      merchant.email.toLowerCase().includes(query)
+    );
+    
+    const matchesStatus = activeTab === 'all' 
+      ? true 
+      : activeTab === 'pending'
+        ? merchant.status === 'pending'
+        : activeTab === 'validated'
+          ? merchant.status === 'validated'
+          : merchant.status === 'refused';
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredMerchants.length / ITEMS_PER_PAGE);
+  const paginatedMerchants = filteredMerchants.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    setCurrentPage(1);
   };
 
-  const counts = getCounts();
-
-  const handleViewMerchant = (merchant: MerchantRegistration) => {
-    setSelectedMerchant(merchant);
-    setModalMode('view');
-    setIsModalOpen(true);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setCurrentPage(1);
   };
 
-  const handleValidateMerchant = (merchant: MerchantRegistration) => {
-    setSelectedMerchant(merchant);
-    setModalMode('validate');
-    setIsModalOpen(true);
-  };
+  if (isLoading) {
+    return (
+      <div className="space-y-4 md:space-y-6 lg:p-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
-  const handleRefuseMerchant = (merchant: MerchantRegistration) => {
-    setSelectedMerchant(merchant);
-    setModalMode('refuse');
-    setIsModalOpen(true);
-  };
+  const MerchantTable = ({ data }: { data: MerchantRegistration[] }) => (
+    <>
+      <div className="overflow-x-auto">
+        <Table className="min-w-[800px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Commerce</TableHead>
+              <TableHead>Propriétaire</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Ville</TableHead>
+              <TableHead>Date d&apos;inscription</TableHead>
+              <TableHead>Statut</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((merchant) => (
+              <TableRow key={merchant.id}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Store className="w-4 h-4 text-primary" />
+                    </div>
+                    {merchant.businessName}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div>
+                    <p className="text-sm font-medium">{merchant.ownerName}</p>
+                    <p className="text-xs text-muted-foreground">{merchant.email}</p>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline">{merchant.businessType}</Badge>
+                </TableCell>
+                <TableCell>{merchant.city}</TableCell>
+                <TableCell>
+                  {format(merchant.createdAt, "d MMM yyyy", { locale: fr })}
+                </TableCell>
+                <TableCell>
+                  {merchant.status === 'validated' && (
+                    <Badge className="bg-green-500 hover:bg-green-600">
+                      <CheckCircle className="w-3 h-3 mr-1" /> Validé
+                    </Badge>
+                  )}
+                  {merchant.status === 'pending' && (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
+                      <Clock className="w-3 h-3 mr-1" /> En attente
+                    </Badge>
+                  )}
+                  {merchant.status === 'refused' && (
+                    <Badge variant="destructive">
+                      <XCircle className="w-3 h-3 mr-1" /> Refusé
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedMerchant(merchant)}
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {data.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  Aucun commerce trouvé
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-  const handleConfirmAction = async (reason?: string) => {
-    if (!selectedMerchant) return;
-
-    setIsProcessing(true);
-    try {
-      await adminService.updateMerchantStatus({
-        merchantId: selectedMerchant.id,
-        action: modalMode === 'validate' ? 'validate' : 'refuse',
-        reason,
-        adminId: 'admin-1',
-      });
-
-      toast.success(
-        modalMode === 'validate' 
-          ? 'Commerce validé avec succès' 
-          : 'Commerce refusé'
-      );
-
-      loadMerchants();
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error('Error processing merchant:', error);
-      toast.error("Une erreur est survenue");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-4">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              {[...Array(totalPages)].map((_, i) => (
+                <PaginationItem key={i + 1}>
+                  <PaginationLink
+                    isActive={currentPage === i + 1}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className="cursor-pointer"
+                  >
+                    {i + 1}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+    </>
+  );
 
   return (
-    <AdminLayout
-      title="Gestion des commerces"
-      subtitle="Gérez tous les commerces de la plateforme"
-    >
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Gestion des commerces</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Gérez tous les commerces de la plateforme
+        </p>
+      </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Store className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{merchants.length}</p>
+              <p className="text-sm text-muted-foreground">Total Commerces</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {merchants.filter(m => m.status === 'validated').length}
+              </p>
+              <p className="text-sm text-muted-foreground">Validés</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">
+                {merchants.filter(m => m.status === 'pending').length}
+              </p>
+              <p className="text-sm text-muted-foreground">En attente</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search & Filter */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Rechercher un commerce..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={handleSearchChange}
             className="pl-9"
           />
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="all" className="gap-2">
-            <Store className="w-4 h-4" />
-            Tous ({counts.all})
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <TabsList className="mb-4 w-full justify-start overflow-x-auto">
+          <TabsTrigger value="all">Tous ({merchants.length})</TabsTrigger>
+          <TabsTrigger value="validated">
+            Validés ({merchants.filter(m => m.status === 'validated').length})
           </TabsTrigger>
-          <TabsTrigger value="pending" className="gap-2">
-            <Clock className="w-4 h-4" />
-            En attente ({counts.pending})
+          <TabsTrigger value="pending">
+            En attente ({merchants.filter(m => m.status === 'pending').length})
           </TabsTrigger>
-          <TabsTrigger value="validated" className="gap-2">
-            <CheckCircle className="w-4 h-4" />
-            Validés ({counts.validated})
-          </TabsTrigger>
-          <TabsTrigger value="refused" className="gap-2">
-            <XCircle className="w-4 h-4" />
-            Refusés ({counts.refused})
+          <TabsTrigger value="refused">
+            Refusés ({merchants.filter(m => m.status === 'refused').length})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={activeTab} className="mt-0">
-          {filteredMerchants.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Store className="w-12 h-12 text-muted-foreground/50 mb-3" />
-              <p className="text-muted-foreground">
-                {searchQuery ? 'Aucun commerce trouvé' : 'Aucun commerce dans cette catégorie'}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredMerchants.map((merchant) => (
-                <MerchantValidationCard
-                  key={merchant.id}
-                  merchant={merchant}
-                  onView={handleViewMerchant}
-                  onValidate={handleValidateMerchant}
-                  onRefuse={handleRefuseMerchant}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Liste des commerces</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TabsContent value="all" className="mt-0">
+              <MerchantTable data={paginatedMerchants} />
+            </TabsContent>
+            <TabsContent value="validated" className="mt-0">
+              <MerchantTable data={paginatedMerchants} />
+            </TabsContent>
+            <TabsContent value="pending" className="mt-0">
+              <MerchantTable data={paginatedMerchants} />
+            </TabsContent>
+            <TabsContent value="refused" className="mt-0">
+              <MerchantTable data={paginatedMerchants} />
+            </TabsContent>
+          </CardContent>
+        </Card>
       </Tabs>
 
-      {/* Validation Modal */}
       <MerchantValidationModal
         merchant={selectedMerchant}
-        mode={modalMode}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onConfirm={handleConfirmAction}
-        isLoading={isProcessing}
+        mode="view"
+        isOpen={!!selectedMerchant}
+        onClose={() => setSelectedMerchant(null)}
+        onConfirm={() => {}}
       />
-    </AdminLayout>
+    </div>
   );
 };
 

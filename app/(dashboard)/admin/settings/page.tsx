@@ -6,7 +6,7 @@
 // ============================================
 
 import { useState, useEffect } from "react";
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,19 +91,22 @@ const AdminSettingsPage = () => {
 
   if (isLoading || !platformSettings) {
     return (
-      <AdminLayout title="Paramètres" subtitle="Configuration de la plateforme">
+      <div className="space-y-4 md:space-y-6 lg:p-6">
         <div className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      </AdminLayout>
+      </div>
     );
   }
 
   return (
-    <AdminLayout
-      title="Paramètres"
-      subtitle="Configuration de la plateforme"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Paramètres</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Configuration de la plateforme
+        </p>
+      </div>
       <Tabs defaultValue="general">
         <TabsList className="mb-6">
           <TabsTrigger value="general" className="gap-2">
@@ -317,7 +320,7 @@ const AdminSettingsPage = () => {
           </div>
         </TabsContent>
       </Tabs>
-    </AdminLayout>
+    </div>
   );
 };
 

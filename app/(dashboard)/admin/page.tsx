@@ -6,7 +6,7 @@
 // ============================================
 
 import { useEffect, useState } from "react";
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import KPICard from "@/components/admin/KPICard";
 import ActivityFeed from "@/components/admin/ActivityFeed";
 import MerchantValidationCard from "@/components/admin/MerchantValidationCard";
@@ -157,10 +157,13 @@ const AdminDashboardPage = () => {
   };
 
   return (
-    <AdminLayout
-      title="Tableau de bord"
-      subtitle="Vue d'ensemble de la plateforme ouyaboung"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Tableau de bord</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Vue d&apos;ensemble de la plateforme ouyaboung
+        </p>
+      </div>
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KPICard
@@ -375,7 +378,7 @@ const AdminDashboardPage = () => {
         onConfirm={handleConfirmAction}
         isLoading={isProcessing}
       />
-    </AdminLayout>
+    </div>
   );
 };
 
