@@ -127,10 +127,10 @@ export default function MerchantDashboardPage() {
     ];
 
     return (
-        <div className="space-y-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-foreground">Tableau de bord</h1>
-                <p className="text-muted-foreground">Vue d'ensemble de votre activité</p>
+        <div className="space-y-4 md:space-y-6">
+            <div className="mb-4 md:mb-6">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground">Tableau de bord</h1>
+                <p className="text-sm sm:text-base text-muted-foreground">Vue d'ensemble de votre activité</p>
             </div>
 
             {/* Alerts / Notifications for Pending Orders */}
@@ -138,7 +138,7 @@ export default function MerchantDashboardPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded-lg p-4 flex items-start gap-3"
+                    className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row items-start gap-2 sm:gap-3"
                 >
                     <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
                     <div>
@@ -149,7 +149,7 @@ export default function MerchantDashboardPage() {
                             Des clients ont réservé des paniers. Veuillez confirmer leur disponibilité.
                         </p>
                         <Link href="/merchant/orders?status=pending">
-                            <Button variant="outline" size="sm" className="mt-3 bg-white dark:bg-black/20 border-yellow-300 hover:bg-yellow-100 text-yellow-800">
+                            <Button variant="outline" size="sm" className="mt-2 sm:mt-3 w-full sm:w-auto bg-white dark:bg-black/20 border-yellow-300 hover:bg-yellow-100 text-yellow-800">
                                 Gérer les commandes
                             </Button>
                         </Link>
@@ -158,7 +158,7 @@ export default function MerchantDashboardPage() {
             )}
 
             {/* Stats Grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 {dashboardStats.map((stat, index) => (
                     <motion.div
                         key={stat.title}
@@ -167,15 +167,15 @@ export default function MerchantDashboardPage() {
                         transition={{ delay: index * 0.1 }}
                     >
                         <Card>
-                            <CardContent className="p-6">
+                            <CardContent className="p-4 sm:p-6">
                                 <div className="flex items-center justify-between">
                                     <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
                                         <stat.icon className={`w-6 h-6 ${stat.color}`} />
                                     </div>
                                 </div>
-                                <div className="mt-4">
-                                    <h3 className="text-2xl font-bold text-foreground">{stat.value}</h3>
-                                    <p className="text-sm font-medium text-foreground/80">{stat.title}</p>
+                                <div className="mt-3 sm:mt-4">
+                                    <h3 className="text-xl sm:text-2xl font-bold text-foreground">{stat.value}</h3>
+                                    <p className="text-xs sm:text-sm font-medium text-foreground/80">{stat.title}</p>
                                     <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
                                 </div>
                             </CardContent>
@@ -184,7 +184,7 @@ export default function MerchantDashboardPage() {
                 ))}
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
                 {/* Recent Orders */}
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
@@ -193,8 +193,8 @@ export default function MerchantDashboardPage() {
                     className="lg:col-span-2"
                 >
                     <Card className="h-full">
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <CardTitle>Commandes récentes</CardTitle>
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                            <CardTitle className="text-base sm:text-lg">Commandes récentes</CardTitle>
                             <Link href="/merchant/orders">
                                 <Button variant="ghost" size="sm" className="gap-1">
                                     Tout voir <ArrowRight className="w-4 h-4" />
@@ -209,7 +209,7 @@ export default function MerchantDashboardPage() {
                                     </div>
                                 ) : (
                                     recentOrders.map((order) => (
-                                        <div key={order.id} className="flex items-center justify-between p-4 rounded-lg border border-border bg-card/50">
+                                        <div key={order.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 rounded-lg border border-border bg-card/50">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary uppercase">
                                                     {order.user?.full_name?.substring(0, 2) || "CL"}
@@ -221,7 +221,7 @@ export default function MerchantDashboardPage() {
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-left sm:text-right">
                                                 <Badge
                                                     variant="outline"
                                                     className={`mb-1 ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :

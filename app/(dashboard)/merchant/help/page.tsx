@@ -8,7 +8,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import { Mail, Phone, MessageCircle, FileText } from "lucide-react";
 
 const MerchantHelpPage = () => {
@@ -32,7 +32,13 @@ const MerchantHelpPage = () => {
     ];
 
     return (
-        <MerchantLayout title="Aide & Support" subtitle="Questions fréquentes et contact">
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Aide & Support</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Questions fréquentes et contact
+        </p>
+      </div>
             <div className="grid lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                     <Card>
@@ -111,7 +117,7 @@ const MerchantHelpPage = () => {
                     </Card>
                 </div>
             </div>
-        </MerchantLayout>
+    </div>
     );
 };
 

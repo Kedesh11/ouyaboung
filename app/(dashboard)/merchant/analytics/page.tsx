@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import {
   TrendingUp,
   TrendingDown,
@@ -224,7 +224,13 @@ const MerchantAnalyticsPage = () => {
   ];
 
   return (
-    <MerchantLayout title="Statistiques" subtitle="Analysez vos performances">
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Statistiques</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Analysez vos performances
+        </p>
+      </div>
       {/* Period Selector */}
       <Tabs value={period} onValueChange={setPeriod} className="mb-6">
         <TabsList>
@@ -415,7 +421,7 @@ const MerchantAnalyticsPage = () => {
           </CardContent>
         </Card>
       </motion.div>
-    </MerchantLayout>
+    </div>
   );
 };
 

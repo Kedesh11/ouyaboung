@@ -21,7 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import AddProductModal from "@/components/merchant/AddProductModal";
 import {
   Plus,
@@ -351,7 +351,13 @@ const MerchantProductsContent = () => {
 
 const MerchantProductsPage = () => {
   return (
-    <MerchantLayout title="Mes produits" subtitle="Gérez vos invendus">
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Mes produits</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Gérez vos invendus
+        </p>
+      </div>
       <Suspense fallback={
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -359,7 +365,7 @@ const MerchantProductsPage = () => {
       }>
         <MerchantProductsContent />
       </Suspense>
-    </MerchantLayout>
+    </div>
   );
 };
 

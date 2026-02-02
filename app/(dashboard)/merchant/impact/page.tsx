@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import {
   Leaf,
   Droplets,
@@ -87,19 +87,22 @@ const MerchantImpactPage = () => {
 
   if (isLoading) {
     return (
-      <MerchantLayout title="Impact environnemental">
+      <div className="space-y-4 md:space-y-6 lg:p-6">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      </MerchantLayout>
+      </div>
     );
   }
 
   return (
-    <MerchantLayout
-      title="Impact environnemental"
-      subtitle="Votre contribution à la lutte contre le gaspillage"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Impact environnemental</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Votre contribution à la lutte contre le gaspillage
+        </p>
+      </div>
       {/* Hero Impact */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -297,7 +300,7 @@ const MerchantImpactPage = () => {
           </Card>
         </motion.div>
       </div>
-    </MerchantLayout>
+    </div>
   );
 };
 

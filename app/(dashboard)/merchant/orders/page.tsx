@@ -20,7 +20,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import {
   Search,
   Clock,
@@ -196,9 +196,15 @@ const MerchantOrdersPage = () => {
   };
 
   return (
-    <MerchantLayout title="Réservations" subtitle="Gérez les commandes de vos clients">
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Réservations</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Gérez les commandes de vos clients
+        </p>
+      </div>
       {/* Search */}
-      <div className="relative max-w-md mb-6">
+      <div className="relative w-full sm:max-w-md mb-4 md:mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Rechercher par code ou produit..."
@@ -212,23 +218,23 @@ const MerchantOrdersPage = () => {
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as OrderStatus | "all")}
-        className="mb-6"
+        className="mb-4 md:mb-6"
       >
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="all">Toutes ({statusCounts.all})</TabsTrigger>
-          <TabsTrigger value="pending" className="gap-1">
+        <TabsList className="flex-wrap h-auto gap-1 justify-start">
+          <TabsTrigger value="all" className="text-xs sm:text-sm h-8 sm:h-10">Toutes ({statusCounts.all})</TabsTrigger>
+          <TabsTrigger value="pending" className="gap-1 text-xs sm:text-sm h-8 sm:h-10">
             <Clock className="w-3 h-3" />
             En attente ({statusCounts.pending})
           </TabsTrigger>
-          <TabsTrigger value="confirmed" className="gap-1">
+          <TabsTrigger value="confirmed" className="gap-1 text-xs sm:text-sm h-8 sm:h-10">
             <CheckCircle className="w-3 h-3" />
             Confirmées ({statusCounts.confirmed})
           </TabsTrigger>
-          <TabsTrigger value="ready" className="gap-1">
+          <TabsTrigger value="ready" className="gap-1 text-xs sm:text-sm h-8 sm:h-10">
             <Package className="w-3 h-3" />
             Prêtes ({statusCounts.ready})
           </TabsTrigger>
-          <TabsTrigger value="completed" className="gap-1">
+          <TabsTrigger value="completed" className="gap-1 text-xs sm:text-sm h-8 sm:h-10">
             <CheckCircle className="w-3 h-3" />
             Récupérées ({statusCounts.completed})
           </TabsTrigger>
@@ -241,7 +247,7 @@ const MerchantOrdersPage = () => {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : filteredOrders.length > 0 ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {filteredOrders.map((order) => (
             <OrderCard key={order.id} order={order} />
           ))}
@@ -264,7 +270,7 @@ const MerchantOrdersPage = () => {
 
       {/* Order Detail Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md p-4 sm:p-6">
           {selectedOrder && (
             <>
               <DialogHeader>
@@ -346,7 +352,7 @@ const MerchantOrdersPage = () => {
           )}
         </DialogContent>
       </Dialog>
-    </MerchantLayout>
+    </div>
   );
 };
 

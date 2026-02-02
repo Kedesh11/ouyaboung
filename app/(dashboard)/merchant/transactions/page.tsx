@@ -145,17 +145,17 @@ export default function MerchantTransactionsPage() {
         .reduce((sum, tx) => sum + (tx.total_amount - tx.merchant_revenue), 0);
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-4 md:space-y-6 p-4 md:p-6">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Mes Ventes</h1>
-                <p className="text-muted-foreground mt-2">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Mes Ventes</h1>
+                <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
                     Historique et statistiques de vos ventes
                 </p>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 <Card>
                     <CardContent className="p-4 flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
@@ -166,8 +166,8 @@ export default function MerchantTransactionsPage() {
                                 <Skeleton className="h-8 w-24" />
                             ) : (
                                 <>
-                                    <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
-                                    <p className="text-sm text-muted-foreground">Revenus totaux</p>
+                                    <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground">Revenus totaux</p>
                                 </>
                             )}
                         </div>
@@ -184,8 +184,8 @@ export default function MerchantTransactionsPage() {
                                 <Skeleton className="h-8 w-12" />
                             ) : (
                                 <>
-                                    <p className="text-2xl font-bold">{totalSales}</p>
-                                    <p className="text-sm text-muted-foreground">Ventes réussies</p>
+                                    <p className="text-xl sm:text-2xl font-bold">{totalSales}</p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground">Ventes réussies</p>
                                 </>
                             )}
                         </div>
@@ -202,8 +202,8 @@ export default function MerchantTransactionsPage() {
                                 <Skeleton className="h-8 w-12" />
                             ) : (
                                 <>
-                                    <p className="text-2xl font-bold">{pendingCount}</p>
-                                    <p className="text-sm text-muted-foreground">En attente</p>
+                                    <p className="text-xl sm:text-2xl font-bold">{pendingCount}</p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground">En attente</p>
                                 </>
                             )}
                         </div>
@@ -220,8 +220,8 @@ export default function MerchantTransactionsPage() {
                                 <Skeleton className="h-8 w-24" />
                             ) : (
                                 <>
-                                    <p className="text-2xl font-bold">{formatCurrency(totalFees)}</p>
-                                    <p className="text-sm text-muted-foreground">Frais totaux</p>
+                                    <p className="text-xl sm:text-2xl font-bold">{formatCurrency(totalFees)}</p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground">Frais totaux</p>
                                 </>
                             )}
                         </div>
@@ -232,7 +232,7 @@ export default function MerchantTransactionsPage() {
             {/* Transactions Table */}
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">Historique des ventes</CardTitle>
+                    <CardTitle className="text-sm sm:text-base">Historique des ventes</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -248,7 +248,9 @@ export default function MerchantTransactionsPage() {
                             <p className="text-sm mt-1">Vos ventes apparaîtront ici</p>
                         </div>
                     ) : (
-                        <Table>
+                        <div className="-mx-4 sm:mx-0 overflow-x-auto">
+                            <div className="inline-block min-w-full align-middle">
+                                <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Référence</TableHead>
@@ -301,13 +303,15 @@ export default function MerchantTransactionsPage() {
                                 })}
                             </TableBody>
                         </Table>
+                            </div>
+                        </div>
                     )}
                 </CardContent>
             </Card>
 
             {/* Transaction Details Dialog */}
             <Dialog open={!!selectedTransaction} onOpenChange={() => setSelectedTransaction(null)}>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[85vh] sm:max-h-[80vh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader>
                         <DialogTitle>Détails de la vente</DialogTitle>
                     </DialogHeader>
@@ -352,7 +356,7 @@ export default function MerchantTransactionsPage() {
                             </div>
 
                             {/* Informations */}
-                            <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                                 <div>
                                     <p className="text-muted-foreground">Client</p>
                                     <p className="font-medium">{selectedTransaction.customer_name}</p>
