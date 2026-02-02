@@ -11,7 +11,7 @@ import { fr } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import MerchantLayout from "@/components/merchant/MerchantLayout";
+
 import {
     Bell,
     CheckCircle,
@@ -84,7 +84,13 @@ const MerchantNotificationsPage = () => {
     };
 
     return (
-        <MerchantLayout title="Notifications" subtitle="Restez informé de votre activité">
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Notifications</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Restez informé de votre activité
+        </p>
+      </div>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-xl flex items-center gap-2">
@@ -144,7 +150,7 @@ const MerchantNotificationsPage = () => {
                     )}
                 </CardContent>
             </Card>
-        </MerchantLayout>
+    </div>
     );
 };
 
