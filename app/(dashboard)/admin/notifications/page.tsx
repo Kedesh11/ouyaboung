@@ -1,6 +1,6 @@
 "use client";
 
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,13 @@ const AdminNotificationsPage = () => {
     );
 
     return (
-        <AdminLayout title="Notifications" subtitle="Gérez vos alertes et messages système">
+        <div className="space-y-4 md:space-y-6 lg:p-6">
+            <div className="mb-4 md:mb-6">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Notifications</h1>
+                <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+                    Gérez vos alertes et messages système
+                </p>
+            </div>
             <div className="max-w-4xl mx-auto">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -156,7 +162,7 @@ const AdminNotificationsPage = () => {
                     </CardContent>
                 </Card>
             </div>
-        </AdminLayout>
+        </div>
     );
 };
 

@@ -6,7 +6,7 @@
 // ============================================
 
 import { useEffect, useState } from "react";
-import AdminLayout from "@/components/admin/AdminLayout";
+
 import KPICard from "@/components/admin/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -65,10 +65,13 @@ const AdminAnalyticsPage = () => {
   }));
 
   return (
-    <AdminLayout
-      title="Statistiques"
-      subtitle="Analyses et performances de la plateforme"
-    >
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Statistiques</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Analyses et performances de la plateforme
+        </p>
+      </div>
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KPICard
@@ -278,7 +281,7 @@ const AdminAnalyticsPage = () => {
           </div>
         </TabsContent>
       </Tabs>
-    </AdminLayout>
+    </div>
   );
 };
 
