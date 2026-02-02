@@ -318,22 +318,22 @@ export default function ReservationsPage() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="mb-6 flex items-center justify-between">
+        <div className="space-y-4 md:space-y-6 p-4 md:p-6">
+            <div className="mb-4 md:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">Mes réservations</h1>
-                    <p className="text-muted-foreground">Historique et suivi de vos commandes</p>
+                    <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground">Mes réservations</h1>
+                    <p className="text-sm sm:text-base text-muted-foreground">Historique et suivi de vos commandes</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className={`h-2.5 w-2.5 rounded-full ${realtimeStatus === 'SUBSCRIBED' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-xs text-muted-foreground">
+                    <div className={`h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full ${realtimeStatus === 'SUBSCRIBED' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
                         {realtimeStatus === 'SUBSCRIBED' ? 'Live WebSocket' : 'Déconnecté'}
                     </span>
                 </div>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
                 <Card>
                     <CardContent className="p-4 text-center">
                         <p className="text-2xl font-bold text-foreground">{reservations.length}</p>
@@ -368,14 +368,14 @@ export default function ReservationsPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-6">
-                    <TabsTrigger value="all">Toutes</TabsTrigger>
-                    <TabsTrigger value="active">En cours</TabsTrigger>
-                    <TabsTrigger value="completed">Récupérées</TabsTrigger>
-                    <TabsTrigger value="cancelled">Annulées</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-4 mb-4 md:mb-6 h-9 sm:h-10">
+                    <TabsTrigger value="all" className="text-xs sm:text-sm">Toutes</TabsTrigger>
+                    <TabsTrigger value="active" className="text-xs sm:text-sm">En cours</TabsTrigger>
+                    <TabsTrigger value="completed" className="text-xs sm:text-sm">Récupérées</TabsTrigger>
+                    <TabsTrigger value="cancelled" className="text-xs sm:text-sm">Annulées</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value={activeTab} className="space-y-4">
+                <TabsContent value={activeTab} className="space-y-3 md:space-y-4">
                     {isLoading ? (
                         <Card>
                             <CardContent className="p-8 text-center">
@@ -407,15 +407,15 @@ export default function ReservationsPage() {
                         currentReservations.map((reservation) => (
                             <Card key={reservation.id} className="overflow-hidden">
                                 <CardContent className="p-0">
-                                    <div className="flex flex-col md:flex-row">
+                                    <div className="flex flex-col sm:flex-row">
                                         {/* Left side - Status indicator */}
-                                        <div className="p-4 flex items-center justify-center bg-muted/30 md:w-16">
+                                        <div className="p-3 sm:p-4 flex items-center justify-center bg-muted/30 sm:w-16">
                                             {getStatusIcon(reservation.status)}
                                         </div>
 
                                         {/* Main content */}
-                                        <div className="flex-1 p-4">
-                                            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                                        <div className="flex-1 p-3 sm:p-4">
+                                            <div className="flex flex-col gap-3 sm:gap-4">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <h3 className="font-semibold text-foreground">{reservation.productName}</h3>
@@ -441,8 +441,8 @@ export default function ReservationsPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* Price and actions */}
-                                                <div className="text-right space-y-2">
+                                                {/* Price and actions - now beside content on larger screens */}
+                                                <div className="border-t sm:border-t-0 sm:border-l sm:pl-4 pt-3 sm:pt-0 sm:text-right space-y-2 sm:min-w-[200px]">
                                                     <p className="text-xs text-muted-foreground">Réf: {reservation.id}</p>
                                                     <p className="text-2xl font-bold text-primary">{reservation.price.toLocaleString()} FCFA</p>
                                                     <p className="text-sm text-muted-foreground line-through">{reservation.originalPrice.toLocaleString()} FCFA</p>
@@ -451,7 +451,7 @@ export default function ReservationsPage() {
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 
-                                                            className="w-full mt-2"
+                                                            className="w-full sm:w-auto h-10 sm:h-9"
                                                             onClick={() => openQRModal(reservation)}
                                                         >
                                                             Voir le QR Code
@@ -461,7 +461,7 @@ export default function ReservationsPage() {
                                                         <>
                                                             <Button
                                                                 size="sm"
-                                                                className="w-full mt-2"
+                                                                className="w-full sm:w-auto h-10 sm:h-9"
                                                                 onClick={() => openPaymentModal(reservation)}
                                                             >
                                                                 Payer
@@ -469,7 +469,7 @@ export default function ReservationsPage() {
                                                             <Button
                                                                 variant="destructive"
                                                                 size="sm"
-                                                                className="w-full mt-2"
+                                                                className="w-full sm:w-auto h-10 sm:h-9"
                                                                 onClick={() => handleCancel(reservation.id)}
                                                             >
                                                                 Annuler
