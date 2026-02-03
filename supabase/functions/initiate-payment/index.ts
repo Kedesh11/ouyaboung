@@ -161,40 +161,8 @@ serve(async (req) => {
         // 5. APPEL API Q-GABON
         // ===================================================================
 
-        // Détérminer l'URL de callback appropriée
-        const projectUrl = Deno.env.get('SUPABASE_URL') ?? ''
-        // Ensure we have a valid base URL (removing trailing slash if any)
-        const baseUrl = projectUrl.replace(/\/$/, '')
-        const callbackEndpoint = isMoov ? 'moov-callback' : 'airtel-callback'
-        const callbackUrl = `${baseUrl}/functions/v1/${callbackEndpoint}`
-
-        console.log(`[Edge Function] Callback URL set to: ${callbackUrl}`)
-
-        const qGabonPayload = {
-            phone: phone,
-            accountCode: accountCode,
-            product: 'paiement',
-            amount: fees.totalAmount,  // Montant AVEC frais
-            agent: Deno.env.get('AGENT'),
-            callbackUrl: callbackUrl   // Transmettre l'URL de callback pour la notification
-        }
-
-        console.log('[Edge Function] Calling Q-Gabon API...')
-
-        const qGabonResponse = await fetch('https://payment.q-gabon.com/payment', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('BEAR_TOKEN')}`
-            },
-            body: JSON.stringify(qGabonPayload)
-        })
-
-        const qGabonData = await qGabonResponse.json()
-        console.log('[Edge Function] Q-Gabon response:', { success: qGabonData.success, status: qGabonData.data?.status })
-
         // ===================================================================
-        // 6. INSERTION EN BASE (table transactions)
+        // 5. INSERTION EN BASE (Statut PENDING avant appel)
         // ===================================================================
 
         const { data: transaction, error: txError } = await supabaseClient
@@ -205,24 +173,16 @@ serve(async (req) => {
                 user_id: user.id,
                 phone: phone,
                 amount: baseAmount,
-                account_code: qGabonPayload.accountCode,
+                account_code: accountCode, // Use variable from scope
                 product: 'paiement',
-                agent: qGabonPayload.agent,
+                agent: Deno.env.get('AGENT'),
                 airtel_fees: fees.airtelFees,
                 pvit_fees: fees.pvitFees,
                 app_fees: fees.appFees,
                 total_amount: fees.totalAmount,
-                q_gabon_response: qGabonData,
-                transaction_id: qGabonData.data?.transactionId,
-                merchant_reference_id: qGabonData.data?.merchant_reference_id || qGabonData.data?.merchantReferenceId,
-                reference: qGabonData.reference,
-                operator: qGabonData.data?.operator || operator,
-                operator_fees: qGabonData.data?.operatorFees,
-                status: qGabonData.success ? 'PENDING' : 'FAILED',
-                status_code: String(qGabonData.data?.code || qGabonData.data?.status_code || ''),
-                charge_owner: qGabonData.data?.chargeOwner,
-                amount_credited: qGabonData.data?.amountCredited,
-                message: qGabonData.data?.message || (qGabonData.success ? 'Payment initiated' : 'Payment failed')
+                operator: operator,
+                status: 'PENDING', // Initial status before external call
+                created_at: new Date().toISOString()
             })
             .select()
             .single()
@@ -238,7 +198,80 @@ serve(async (req) => {
             )
         }
 
-        console.log('[Edge Function] Transaction created:', transaction.id)
+        console.log('[Edge Function] Transaction created (PENDING):', transaction.id)
+
+        // ===================================================================
+        // 6. APPEL API Q-GABON
+        // ===================================================================
+
+        // Détérminer l'URL de callback appropriée
+        const projectUrl = Deno.env.get('SUPABASE_URL') ?? ''
+        const baseUrl = projectUrl.replace(/\/$/, '')
+        const callbackEndpoint = isMoov ? 'moov-callback' : 'airtel-callback'
+        const callbackUrl = `${baseUrl}/functions/v1/${callbackEndpoint}`
+
+        console.log(`[Edge Function] Callback URL set to: ${callbackUrl}`)
+
+        const qGabonPayload = {
+            phone: phone,
+            accountCode: accountCode,
+            product: 'paiement',
+            amount: fees.totalAmount,
+            agent: Deno.env.get('AGENT'),
+            callbackUrl: callbackUrl
+        }
+
+        console.log('[Edge Function] Calling Q-Gabon API...')
+
+        let qGabonData;
+        let qGabonSuccess = false;
+
+        try {
+            const qGabonResponse = await fetch('https://payment.q-gabon.com/payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${Deno.env.get('BEAR_TOKEN')}`
+                },
+                body: JSON.stringify(qGabonPayload)
+            })
+            
+            qGabonData = await qGabonResponse.json()
+            qGabonSuccess = qGabonData.success
+            console.log('[Edge Function] Q-Gabon response:', { success: qGabonSuccess, status: qGabonData.data?.status })
+
+        } catch (fetchError) {
+            console.error('[Edge Function] Q-Gabon API call failed:', fetchError)
+            qGabonData = { error: fetchError }
+            qGabonSuccess = false
+        }
+
+        // ===================================================================
+        // 7. mise à jour TRANSACTION (Update with response)
+        // ===================================================================
+
+        const { data: updatedTransaction, error: updateError } = await supabaseClient
+            .from('transactions')
+            .update({
+                q_gabon_response: qGabonData,
+                transaction_id: qGabonData?.data?.transactionId,
+                merchant_reference_id: qGabonData?.data?.merchant_reference_id || qGabonData?.data?.merchantReferenceId,
+                reference: qGabonData?.reference,
+                operator_fees: qGabonData?.data?.operatorFees,
+                // Only mark as FAILED if explicitly failed, otherwise keep PENDING (waiting for callback or user action)
+                // If API call success=false, mark FAILED.
+                status: qGabonSuccess ? 'PENDING' : 'FAILED', 
+                status_code: String(qGabonData?.data?.code || qGabonData?.data?.status_code || ''),
+                message: qGabonData?.data?.message || (qGabonSuccess ? 'Payment initiated' : 'Payment init failed'),
+            })
+            .eq('id', transaction.id)
+            .select()
+            .single()
+
+        if (updateError) {
+            console.error('[Edge Function] Transaction update error:', updateError)
+            // Even if update fails, we should probably return the error, but the transaction exists.
+        }
 
         // ===================================================================
         // 7. NOTIFICATION TEMPS RÉEL (Supabase Realtime)
@@ -255,17 +288,18 @@ serve(async (req) => {
             JSON.stringify({
                 success: qGabonData.success,
                 data: {
-                    transactionId: transaction.id,
-                    qGabonReference: qGabonData.reference,
-                    totalAmount: fees.totalAmount,
+                    transaction: updatedTransaction, // Return full transaction object
+                    transactionId: updatedTransaction.id,
+                    qGabonReference: updatedTransaction.reference,
+                    totalAmount: updatedTransaction.total_amount,
                     fees: {
-                        airtel: fees.airtelFees,
-                        pvit: fees.pvitFees,
-                        app: fees.appFees,
-                        total: fees.airtelFees + fees.pvitFees + fees.appFees
+                        airtel: updatedTransaction.airtel_fees,
+                        pvit: updatedTransaction.pvit_fees,
+                        app: updatedTransaction.app_fees,
+                        total: updatedTransaction.airtel_fees + updatedTransaction.pvit_fees + updatedTransaction.app_fees
                     },
-                    status: transaction.status,
-                    message: transaction.message
+                    status: updatedTransaction.status,
+                    message: updatedTransaction.message
                 }
             }),
             {
