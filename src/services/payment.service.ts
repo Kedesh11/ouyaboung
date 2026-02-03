@@ -44,6 +44,7 @@ export interface PaymentInitiationResponse {
     };
     status: string;
     message: string;
+    transaction: any; // Full transaction object for flexibility
 }
 
 //============================================
@@ -196,7 +197,8 @@ export const initiateAirtelPayment = async (
                 totalAmount: data.data.totalAmount,
                 fees: data.data.fees,
                 status: data.data.status || 'PENDING',
-                message: data.data.message || 'Paiement initié avec succès'
+                message: data.data.message || 'Paiement initié avec succès',
+                transaction: data.data.transaction // Pass full object
             },
             error: null
         };
@@ -333,7 +335,8 @@ export const initiateMoovPayment = async (
                 totalAmount: data.data.totalAmount,
                 fees: data.data.fees,
                 status: data.data.status || 'PENDING',
-                message: data.data.message || 'Paiement Moov initié'
+                message: data.data.message || 'Paiement Moov initié',
+                transaction: data.data.transaction
             },
             error: null
         };

@@ -183,7 +183,8 @@ npx supabase migration up
 
 ```bash
 npx supabase functions deploy initiate-payment --no-verify-jwt
-npx supabase functions deploy payment-callback --no-verify-jwt
+npx supabase functions deploy airtel-callback --no-verify-jwt
+npx supabase functions deploy moov-callback --no-verify-jwt
 ```
 
 ## Démarrage
@@ -294,8 +295,16 @@ ouyaboung/
 
 Configurer dans le dashboard Q-Gabon :
 
+Configurer dans le dashboard Q-Gabon :
+
 ```text
-URL: https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/payment-callback
+# Airtel Money
+URL: https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/airtel-callback
+Method: POST
+Format: JSON
+
+# Moov Money
+URL: https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/moov-callback
 Method: POST
 Format: JSON
 ```
@@ -610,7 +619,10 @@ const response = await fetch(
 
 **Configuration Webhook**:
 
-- URL: `https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/payment-callback`
+**Configuration Webhook**:
+
+- Airtel URL: `https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/airtel-callback`
+- Moov URL: `https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/moov-callback`
 - Méthode: POST
 - Format: JSON
 
