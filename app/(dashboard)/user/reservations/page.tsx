@@ -207,6 +207,13 @@ export default function ReservationsPage() {
         loadReservations();
     }, []);
 
+    // Use ref to access current page inside effect without dependency
+    const currentPageRef = React.useRef(currentPage);
+    
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+    }, [currentPage]);
+
     // Realtime Subscription
     useEffect(() => {
         if (!supabaseClient) return;
@@ -225,7 +232,7 @@ export default function ReservationsPage() {
                     
                     // Handle INSERT - new reservation
                     if (payload.eventType === 'INSERT') {
-                        if (currentPage === 1) {
+                        if (currentPageRef.current === 1) {
                             // If on page 1, we could refetch, but for now just show notification
                             toast.info('Nouvelle réservation créée !');
                         } else {
@@ -262,7 +269,7 @@ export default function ReservationsPage() {
         return () => {
              supabaseClient.removeChannel(channel);
         };
-    }, [currentPage]);
+    }, []); // Subscribe only once on mount
 
     const handleCancel = async (reservationId: string) => {
         if (!confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) {
