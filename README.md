@@ -11,23 +11,24 @@
 
 ## Table des Matières
 
-- [Fonctionnalités](#-fonctionnalités)
-- [Architecture](#-architecture)
-- [Prérequis](#-prérequis)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Démarrage](#-démarrage)
-- [Structure du Projet](#-structure-du-projet)
-- [Technologies](#-technologies)
-- [Paiement Mobile](#-paiement-mobile)
-- [Déploiement](#-déploiement)
-- [Tests](#-tests)
-- [Contribution](#-contribution)
-- [License](#-license)
+- [Fonctionnalités](#fonctionnalités)
+- [Architecture](#architecture)
+- [Prérequis](#prérequis)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Démarrage](#démarrage)
+- [Structure du Projet](#structure-du-projet)
+- [Stack Technique](#stack-technique)
+- [Paiement Mobile](#paiement-mobile)
+- [Déploiement](#déploiement)
+- [Tests](#tests)
+- [Contribution](#contribution)
+- [License](#license)
 
 ## Fonctionnalités
 
 ### Pour les Utilisateurs
+
 - **Recherche intelligente** - Trouvez des produits disponibles près de chez vous
 - **Réservation en ligne** - Réservez vos produits en quelques clics
 - **Paiement Airtel Money** - Paiement mobile sécurisé via Q-Gabon
@@ -37,6 +38,8 @@
 - **Historique transactions** - Consultez vos paiements et économies
 
 ### Pour les Commerçants
+
+- **Gestion produits** - Ajoutez et gérez vos invendus facilement
 - **Gestion produits** - Ajoutez et gérez vos invendus facilement
 - **Statistiques** - Suivez vos ventes et votre impact
 - **Gestion revenus** - Tableau de bord financier complet
@@ -44,6 +47,8 @@
 - **Transactions** - Historique détaillé de tous les paiements
 
 ### Pour les Administrateurs
+
+- **Dashboard central** - Vue d'ensemble de la plateforme
 - **Dashboard central** - Vue d'ensemble de la plateforme
 - **Gestion utilisateurs** - Modération et support
 - **Validation commerces** - Approbation des nouveaux partenaires
@@ -52,7 +57,7 @@
 
 ## Architecture
 
-```
+```text
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
 │   Next.js   │────▶│   Supabase   │────▶│  PostgreSQL │
 │  Frontend   │     │   Backend    │     │  Database   │
@@ -73,26 +78,29 @@
 
 ### Stack Technique
 
-**Frontend**
+#### Frontend
+
 - Next.js 15 (App Router)
 - React 18 + TypeScript
 - Tailwind CSS + shadcn/ui
 - Framer Motion (animations)
 - React Query (state management)
 
-**Backend**
+#### Backend
+
 - Supabase (BaaS)
 - PostgreSQL (database)
 - Row Level Security (RLS)
 - Realtime subscriptions
 - Edge Functions (Deno)
 
-**Services**
+#### Services
+
 - Q-Gabon API (Airtel Money)
 - Vercel (hosting)
 - MapLibre GL (maps)
 
-## 🔧 Prérequis
+## Prérequis
 
 - Node.js 18+ ([installer](https://nodejs.org/))
 - npm ou yarn ou bun
@@ -127,7 +135,7 @@ npm install supabase --save-dev
 npx supabase init
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### 1. Variables d'environnement
 
@@ -195,7 +203,7 @@ npm run build
 npm start
 ```
 
-### Tests
+### Commandes de test
 
 ```bash
 # Tests unitaires
@@ -213,7 +221,7 @@ npm run test:ui
 
 ## Structure du Projet
 
-```
+```text
 ouyaboung/
 ├── app/                      # Next.js App Router
 │   ├── (public)/            # Routes publiques
@@ -274,6 +282,7 @@ ouyaboung/
 - **3% App** - Frais plateforme Ouyaboung
 
 **Exemple** : Produit à 1000 XAF
+
 - Base : 1000 XAF
 - Frais Airtel : 30 XAF
 - Frais PVIT : 30 XAF
@@ -285,7 +294,7 @@ ouyaboung/
 
 Configurer dans le dashboard Q-Gabon :
 
-```
+```text
 URL: https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/payment-callback
 Method: POST
 Format: JSON
@@ -296,19 +305,22 @@ Format: JSON
 ### Vercel (Recommandé)
 
 1. **Connecter à Vercel**
+
 ```bash
 npm install -g vercel
 vercel login
 vercel
 ```
 
-2. **Variables d'environnement**
+1. **Variables d'environnement**
+
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_URL
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
-3. **Déployer**
+1. **Déployer**
+
 ```bash
 vercel --prod
 ```
@@ -316,7 +328,8 @@ vercel --prod
 ### Configuration DNS
 
 Ajouter les enregistrements :
-```
+
+```text
 A     @     76.76.21.21
 CNAME www   cname.vercel-dns.com
 ```
@@ -373,7 +386,7 @@ Le système de paiement mobile utilise **Q-Gabon API** pour les transactions Air
 
 ### Architecture Paiement
 
-```
+```text
 User → PaymentModal → payment.service.ts → Edge Function → Q-Gabon API
                                                     ↓
                                             Supabase DB (transactions)
@@ -392,6 +405,7 @@ User → PaymentModal → payment.service.ts → Edge Function → Q-Gabon API
 **Auth**: Bearer Token (Header)
 
 **Request**:
+
 ```json
 {
   "phone": "077157904",           // Format: 9 chiffres
@@ -403,6 +417,7 @@ User → PaymentModal → payment.service.ts → Edge Function → Q-Gabon API
 ```
 
 **Response Success**:
+
 ```json
 {
   "success": true,
@@ -423,6 +438,7 @@ User → PaymentModal → payment.service.ts → Edge Function → Q-Gabon API
 ```
 
 **Response Error**:
+
 ```json
 {
   "success": false,
@@ -442,6 +458,7 @@ User → PaymentModal → payment.service.ts → Edge Function → Q-Gabon API
 **Format**: JSON
 
 **Payload**:
+
 ```json
 {
   "success": true,
@@ -460,12 +477,14 @@ User → PaymentModal → payment.service.ts → Edge Function → Q-Gabon API
 ### Validation Numéros
 
 #### Airtel Money (Gabon)
+
 - **Format**: 9 chiffres exactement
 - **Préfixes**: `074`, `076`, `077`, `74`, `76`, `77`
 - **Exemples valides**: `074123456`, `77157904`, `07 61 23 45 67`
 - **Exemples invalides**: `071234567` (Moov), `0741234` (trop court)
 
 #### Moov Money (Gabon) - À Implémenter
+
 - **Format**: 9 chiffres exactement
 - **Préfixes**: `061`, `062`, `065`, `066`, `61`, `62`, `65`, `66`
 - **Exemples valides**: `061234567`, `62053671`
@@ -503,6 +522,7 @@ export function calculatePaymentFees(baseAmount: number): PaymentFees {
 ```
 
 **Exemple**:
+
 ```typescript
 const fees = calculatePaymentFees(1000);
 // → { baseAmount: 1000, airtelFees: 30, pvitFees: 30, appFees: 30, totalFees: 90, finalAmount: 1090 }
@@ -545,6 +565,7 @@ export function formatPhone(phone: string): string {
 **URL**: `https://[PROJECT].supabase.co/functions/v1/initiate-payment`
 
 **Flux**:
+
 1. Authentification JWT
 2. Validation order ownership
 3. Calcul des frais
@@ -553,6 +574,7 @@ export function formatPhone(phone: string): string {
 6. Retour résultat
 
 **Appel depuis Frontend**:
+
 ```typescript
 const { data: { session } } = await supabase.auth.getSession();
 
@@ -579,6 +601,7 @@ const response = await fetch(
 **URL**: `https://[PROJECT].supabase.co/functions/v1/payment-callback`
 
 **Flux**:
+
 1. Réception webhook Q-Gabon
 2. Recherche transaction par référence
 3. Mise à jour statut
@@ -586,6 +609,7 @@ const response = await fetch(
 5. Notification Realtime
 
 **Configuration Webhook**:
+
 - URL: `https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/payment-callback`
 - Méthode: POST
 - Format: JSON
@@ -723,6 +747,7 @@ Pour ajouter Moov Money, suivre ces étapes :
 6. **Tests** : Tester avec numéro Moov réel
 
 **Détection automatique opérateur**:
+
 ```typescript
 export function detectOperator(phone: string): 'AIRTEL' | 'MOOV' | null {
   if (validateAirtelPhone(phone)) return 'AIRTEL';
@@ -734,6 +759,7 @@ export function detectOperator(phone: string): 'AIRTEL' | 'MOOV' | null {
 ### Documentation Complète
 
 Voir [`INTEGRATION_PAIEMENT.md`](file:///home/sevan/.gemini/antigravity/brain/2edab6ae-4eba-4c79-83a9-a15b150e4d30/INTEGRATION_PAIEMENT.md) pour :
+
 - Diagrammes de séquence détaillés
 - Tests unitaires recommandés
 - Troubleshooting complet
@@ -746,14 +772,10 @@ Ce projet est sous licence MIT. Voir [LICENSE](LICENSE) pour plus de détails.
 
 ## Contact & Support
 
-- **Email** : ouyaboung@gmail.com
+- **Email** : [ouyaboung@gmail.com](mailto:ouyaboung@gmail.com)
 - **GitHub Issues** : [Créer un ticket](https://github.com/Kedesh11/ouyaboung/issues)
 - **Documentation** : [docs/](docs/)
 
 ---
 
-<div align="center">
-
 **© 2026 Ifumb. Tous droits réservés.**
-
-</div>
