@@ -182,13 +182,13 @@ serve(async (req) => {
         if (updateError) console.error('[Airtel Function] Update Error:', updateError)
 
         // 8. Update Order Status to prevents double payment
-        const { error: updateError } = await supabaseClient
+        const { error: orderUpdateError } = await supabaseClient
             .from('orders')
             .update({ status: 'processing' })
             .eq('id', orderId)
 
-        if (updateError) {
-            console.error('[Airtel Function] Order Status Update Error:', updateError)
+        if (orderUpdateError) {
+            console.error('[Airtel Function] Order Status Update Error:', orderUpdateError)
         } else {
              console.log('[Airtel Function] Order status updated to processing')
         }
