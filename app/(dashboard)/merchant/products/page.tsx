@@ -185,19 +185,23 @@ const MerchantProductsContent = () => {
 
   const handleDelete = async (product: FoodItem) => {
     if (confirm(`Êtes-vous sûr de vouloir supprimer "${product.name}" ?`)) {
-      console.log("[ProductsPage] Deleting product:", product.id);
       try {
         const result = await deleteListing(product.id);
-        console.log("[ProductsPage] Delete result:", result);
+        
         if (result.success) {
           toast.success(`Produit "${product.name}" supprimé`);
           loadProducts();
         } else {
-          console.error("[ProductsPage] Delete failed:", result.error);
-          toast.error("Erreur lors de la suppression: " + (result.error?.message || "Inconnue"));
+          // Check for foreign key constraint violation (Postgres error 23503)
+          if (result.error?.code === '23503') {
+             toast.error("Impossible de supprimer le produit car il est lié à des commandes existantes. Veuillez le masquer à la place.");
+          } else {
+              console.error("Delete failed:", result.error);
+              toast.error("Erreur lors de la suppression: " + (result.error?.message || "Inconnue"));
+          }
         }
       } catch (error: any) {
-        console.error("[ProductsPage] Exception deleting product:", error);
+        console.error("Exception deleting product:", error);
         toast.error("Une erreur est survenue: " + error.message);
       }
     }
@@ -268,13 +272,6 @@ const MerchantProductsContent = () => {
                         Afficher
                       </>
                     )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => handleDelete(product)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Supprimer
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
