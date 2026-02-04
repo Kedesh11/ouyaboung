@@ -12,7 +12,7 @@ import { AuthRedirect } from "@/components/auth/AuthRedirect";
 
 export const metadata = {
     title: "Oyaboug - Anti-gaspillage alimentaire",
-    description: "Récupérez des invendus de qualité à petit prix près de chez vous.",
+    description: "Recuperez des invendus de qualite a petit prix pres de chez vous.",
 };
 
 import QueryProvider from "@/providers/QueryProvider";

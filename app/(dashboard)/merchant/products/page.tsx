@@ -37,7 +37,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getMerchantItems, formatPrice, isExpiringSoon, getCategoryName, getMyMerchantProfile } from "@/services";
+import { getMerchantItems, formatPrice, isExpiringSoon, getCategoryName, getMyMerchantProfile, updateListing, deleteListing } from "@/services";
 import type { FoodItem } from "@/types";
 import { toast } from "sonner";
 
@@ -53,10 +53,12 @@ const MerchantProductsContent = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("active");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<FoodItem | null>(null);
 
   useEffect(() => {
     // Check if we should open the add modal from query params
     if (action === "add") {
+      setEditingProduct(null);
       setIsAddModalOpen(true);
     }
   }, [action]);
@@ -119,15 +121,41 @@ const MerchantProductsContent = () => {
     return matchesSearch && matchesTab;
   });
 
-  const handleToggleVisibility = (product: FoodItem) => {
-    // Mock toggle
-    toast.success(
-      product.is_available ? "Produit masqué" : "Produit affiché"
-    );
+  const handleToggleVisibility = async (product: FoodItem) => {
+    try {
+      const result = await updateListing(product.id, {
+        isAvailable: !product.is_available
+      });
+      
+      if (result.success) {
+        toast.success(
+          product.is_available ? "Produit masqué" : "Produit affiché"
+        );
+        loadProducts();
+      } else {
+        toast.error("Erreur lors de la mise à jour");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Une erreur est survenue");
+    }
   };
 
-  const handleDelete = (product: FoodItem) => {
-    toast.success(`Produit "${product.name}" supprimé`);
+  const handleDelete = async (product: FoodItem) => {
+    if (confirm(`Êtes-vous sûr de vouloir supprimer "${product.name}" ?`)) {
+      try {
+        const result = await deleteListing(product.id);
+        if (result.success) {
+          toast.success(`Produit "${product.name}" supprimé`);
+          loadProducts();
+        } else {
+          toast.error("Erreur lors de la suppression");
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Une erreur est survenue");
+      }
+    }
   };
 
   const ProductCard = ({ product }: { product: FoodItem }) => {
@@ -154,7 +182,8 @@ const MerchantProductsContent = () => {
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
-            <div className="absolute top-2 right-2 flex gap-1">
+            {/* Badges container shifted left to right-12 to make room for menu button at right-2 */}
+            <div className="absolute top-2 right-12 flex gap-1 items-center">
               <Badge variant="secondary" className="text-xs">
                 -{discount}%
               </Badge>
@@ -165,37 +194,22 @@ const MerchantProductsContent = () => {
                 </Badge>
               )}
             </div>
-            {product.expiry_date && isExpiringSoon(product.expiry_date) && (
-              <div className="absolute top-2 left-2">
-                <Badge variant="destructive" className="text-xs">
-                  <AlertTriangle className="w-3 h-3 mr-1" />
-                  Expire bientôt
-                </Badge>
-              </div>
-            )}
-          </div>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <h3 className="font-semibold text-foreground line-clamp-1">
-                  {product.name}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {getCategoryName(product.category)}
-                </p>
-              </div>
+
+            {/* Menu Button moved to top-right of image */}
+            <div className="absolute top-2 right-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/20 hover:bg-black/40 text-white rounded-full">
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link href={`/merchant/products/${product.id}`}>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Modifier
-                    </Link>
+                  <DropdownMenuItem onClick={() => {
+                    setEditingProduct(product);
+                    setIsAddModalOpen(true);
+                  }}>
+                    <Edit className="w-4 h-4 mr-2" />
+                    Modifier
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleToggleVisibility(product)}>
                     {product.is_available ? (
@@ -219,6 +233,28 @@ const MerchantProductsContent = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+            </div>
+
+            {product.expiry_date && isExpiringSoon(product.expiry_date) && (
+              <div className="absolute top-2 left-2">
+                <Badge variant="destructive" className="text-xs">
+                  <AlertTriangle className="w-3 h-3 mr-1" />
+                  Expire bientôt
+                </Badge>
+              </div>
+            )}
+          </div>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <h3 className="font-semibold text-foreground line-clamp-1">
+                  {product.name}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {getCategoryName(product.category)}
+                </p>
+              </div>
+              {/* Removed Dropdown from here */}
             </div>
 
             <div className="flex items-center justify-between mb-3">
@@ -273,7 +309,10 @@ const MerchantProductsContent = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button className="gap-2" onClick={() => setIsAddModalOpen(true)}>
+            <Button className="gap-2" onClick={() => {
+              setEditingProduct(null);
+              setIsAddModalOpen(true);
+            }}>
               <Plus className="w-4 h-4" />
               Nouveau produit
             </Button>
@@ -326,7 +365,10 @@ const MerchantProductsContent = () => {
                     ? "Essayez une autre recherche"
                     : "Commencez par ajouter votre premier produit"}
                 </p>
-                <Button className="gap-2" onClick={() => setIsAddModalOpen(true)}>
+                <Button className="gap-2" onClick={() => {
+                  setEditingProduct(null);
+                  setIsAddModalOpen(true);
+                }}>
                   <Plus className="w-4 h-4" />
                   Ajouter un produit
                 </Button>
@@ -338,9 +380,13 @@ const MerchantProductsContent = () => {
           {merchantId && (
             <AddProductModal
               open={isAddModalOpen}
-              onOpenChange={setIsAddModalOpen}
+              onOpenChange={(open) => {
+                setIsAddModalOpen(open);
+                if (!open) setEditingProduct(null);
+              }}
               onProductCreated={loadProducts}
               merchantId={merchantId}
+              productToEdit={editingProduct}
             />
           )}
         </>
