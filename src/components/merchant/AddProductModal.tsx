@@ -3,7 +3,7 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -38,11 +38,12 @@ import {
   Upload,
   Camera,
   Loader2,
+  Edit,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { FoodCategory, CreateFoodItemInput, BasketItem } from "@/types";
+import type { FoodCategory, CreateFoodItemInput, BasketItem, FoodItem } from "@/types";
 import { formatPrice, getCategoryName } from "@/services";
-import { createListing } from "@/services/inventory.service";
+import { createListing, updateListing } from "@/services/inventory.service";
 import { compressImage, validateImageFile, formatFileSize, getBase64Size } from "@/utils/imageCompression";
 
 
@@ -52,6 +53,7 @@ interface AddProductModalProps {
   onOpenChange: (open: boolean) => void;
   onProductCreated?: () => void;
   merchantId: string;
+  productToEdit?: FoodItem | null;
 }
 
 const categories: { value: FoodCategory; label: string }[] = [
@@ -71,6 +73,7 @@ const AddProductModal = ({
   onOpenChange,
   onProductCreated,
   merchantId,
+  productToEdit,
 }: AddProductModalProps) => {
   const [mode, setMode] = useState<"single" | "basket">("single");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +115,41 @@ const AddProductModal = ({
     originalPrice: 0,
     quantity: 1,
   });
+
+  useEffect(() => {
+    if (open && productToEdit) {
+      if (productToEdit.category === "mixed_basket") {
+        setMode("basket");
+        setBasketName(productToEdit.name);
+        setBasketDescription(productToEdit.description || "");
+        setBasketQuantity(productToEdit.quantity_available);
+        setBasketPickupStart(productToEdit.pickup_start);
+        setBasketPickupEnd(productToEdit.pickup_end);
+        setBasketExpiryDate(productToEdit.expiry_date ? new Date(productToEdit.expiry_date).toISOString().slice(0, 16) : "");
+        setBasketImagePreview(productToEdit.image_url || null);
+        if (productToEdit.contents) {
+            setBasketItems(productToEdit.contents);
+        }
+      } else {
+        setMode("single");
+        setProductForm({
+          name: productToEdit.name,
+          description: productToEdit.description || "",
+          category: productToEdit.category,
+          original_price: productToEdit.original_price,
+          discounted_price: productToEdit.discounted_price,
+          quantity_available: productToEdit.quantity_available,
+          pickup_start: productToEdit.pickup_start,
+          pickup_end: productToEdit.pickup_end,
+          expiry_date: productToEdit.expiry_date ? new Date(productToEdit.expiry_date).toISOString().slice(0, 16) : "",
+          image_url: productToEdit.image_url || "",
+        });
+        setImagePreview(productToEdit.image_url || null);
+      }
+    } else if (open && !productToEdit) {
+        resetForm();
+    }
+  }, [open, productToEdit]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: "single" | "basket") => {
     const file = e.target.files?.[0];
@@ -251,32 +289,48 @@ const AddProductModal = ({
     console.log("Submitting single product...", productForm);
 
     try {
-      const response = await createListing(merchantId, {
-        name: productForm.name,
-        description: productForm.description,
-        category: productForm.category,
-        originalPrice: productForm.original_price,
-        discountedPrice: productForm.discounted_price,
-        quantity: productForm.quantity_available,
-        pickupStart: combineDateAndTime(productForm.pickup_start),
-        pickupEnd: combineDateAndTime(productForm.pickup_end),
-        expiryDate: productForm.expiry_date,
-        imageUrl: productForm.image_url,
-      });
+        let response;
+        if (productToEdit) {
+            response = await updateListing(productToEdit.id, {
+                name: productForm.name,
+                description: productForm.description,
+                category: productForm.category,
+                originalPrice: productForm.original_price,
+                discountedPrice: productForm.discounted_price,
+                quantity: productForm.quantity_available,
+                pickupStart: combineDateAndTime(productForm.pickup_start),
+                pickupEnd: combineDateAndTime(productForm.pickup_end),
+                expiryDate: productForm.expiry_date,
+                imageUrl: productForm.image_url,
+            });
+        } else {
+            response = await createListing(merchantId, {
+                name: productForm.name,
+                description: productForm.description,
+                category: productForm.category,
+                originalPrice: productForm.original_price,
+                discountedPrice: productForm.discounted_price,
+                quantity: productForm.quantity_available,
+                pickupStart: combineDateAndTime(productForm.pickup_start),
+                pickupEnd: combineDateAndTime(productForm.pickup_end),
+                expiryDate: productForm.expiry_date,
+                imageUrl: productForm.image_url,
+            });
+        }
 
-      console.log("Create listing response:", response);
+      console.log("Submit listing response:", response);
 
       if (response.success) {
-        toast.success(`Produit "${productForm.name}" créé avec succès`);
+        toast.success(productToEdit ? `Produit "${productForm.name}" modifié` : `Produit "${productForm.name}" créé`);
         onProductCreated?.();
         handleClose();
       } else {
-        toast.error(response.error?.message || "Erreur lors de la création du produit");
+        toast.error(response.error?.message || "Erreur lors de l'enregistrement du produit");
         console.error("API Error:", response.error);
       }
     } catch (error) {
-      console.error("Error creating product:", error);
-      toast.error("Une erreur est survenue lors de la création");
+      console.error("Error creating/updating product:", error);
+      toast.error("Une erreur est survenue");
     } finally {
       setIsSubmitting(false);
     }
@@ -296,33 +350,49 @@ const AddProductModal = ({
     console.log("Submitting basket...", { basketName, basketItems });
 
     try {
-      const response = await createListing(merchantId, {
-        name: basketName,
-        description: basketDescription,
-        category: "mixed_basket",
-        originalPrice: basketTotalOriginal,
-        discountedPrice: basketTotalDiscounted,
-        quantity: basketQuantity,
-        pickupStart: combineDateAndTime(basketPickupStart),
-        pickupEnd: combineDateAndTime(basketPickupEnd),
-        expiryDate: basketExpiryDate,
-        imageUrl: basketImagePreview || undefined,
-        contents: basketItems,
-      });
+        let response;
+        if (productToEdit) {
+             response = await updateListing(productToEdit.id, {
+                name: basketName,
+                description: basketDescription,
+                originalPrice: basketTotalOriginal,
+                discountedPrice: basketTotalDiscounted,
+                quantity: basketQuantity,
+                pickupStart: combineDateAndTime(basketPickupStart),
+                pickupEnd: combineDateAndTime(basketPickupEnd),
+                expiryDate: basketExpiryDate,
+                imageUrl: basketImagePreview || undefined,
+                contents: basketItems,
+            });
+        } else {
+             response = await createListing(merchantId, {
+                name: basketName,
+                description: basketDescription,
+                category: "mixed_basket",
+                originalPrice: basketTotalOriginal,
+                discountedPrice: basketTotalDiscounted,
+                quantity: basketQuantity,
+                pickupStart: combineDateAndTime(basketPickupStart),
+                pickupEnd: combineDateAndTime(basketPickupEnd),
+                expiryDate: basketExpiryDate,
+                imageUrl: basketImagePreview || undefined,
+                contents: basketItems,
+            });
+        }
 
-      console.log("Create basket response:", response);
+      console.log("Submit basket response:", response);
 
       if (response.success) {
-        toast.success(`Panier "${basketName}" créé avec succès`);
+        toast.success(productToEdit ? `Panier "${basketName}" modifié` : `Panier "${basketName}" créé`);
         onProductCreated?.();
         handleClose();
       } else {
-        toast.error(response.error?.message || "Erreur lors de la création du panier");
+        toast.error(response.error?.message || "Erreur lors de l'enregistrement du panier");
         console.error("API Error:", response.error);
       }
     } catch (error) {
-      console.error("Error creating basket:", error);
-      toast.error("Une erreur est survenue lors de la création");
+      console.error("Error creating/updating basket:", error);
+      toast.error("Une erreur est survenue");
     } finally {
       setIsSubmitting(false);
     }
@@ -342,25 +412,33 @@ const AddProductModal = ({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-primary" />
-            Ajouter un produit
+            {productToEdit ? (
+                <Edit className="w-5 h-5 text-primary" />
+            ) : (
+                <Plus className="w-5 h-5 text-primary" />
+            )}
+            {productToEdit ? "Modifier le produit" : "Ajouter un produit"}
           </DialogTitle>
           <DialogDescription>
-            Créez un produit individuel ou un panier composé de plusieurs articles
+             {productToEdit ? "Modifiez les informations de votre produit" : "Créez un produit individuel ou un panier composé de plusieurs articles"}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "basket")}>
-          <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="single" className="gap-2">
-              <Package className="w-4 h-4" />
-              Produit unique
-            </TabsTrigger>
-            <TabsTrigger value="basket" className="gap-2">
-              <ShoppingBasket className="w-4 h-4" />
-              Créer un panier
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={mode} onValueChange={(v) => {
+            if (!productToEdit) setMode(v as "single" | "basket");
+        }}>
+          {!productToEdit && (
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="single" className="gap-2">
+                  <Package className="w-4 h-4" />
+                  Produit unique
+                </TabsTrigger>
+                <TabsTrigger value="basket" className="gap-2">
+                  <ShoppingBasket className="w-4 h-4" />
+                  Créer un panier
+                </TabsTrigger>
+              </TabsList>
+          )}
 
           {/* Single Product Tab */}
           <TabsContent value="single" className="space-y-4 mt-4">
@@ -587,12 +665,12 @@ const AddProductModal = ({
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Création...
+                    {productToEdit ? "Modification..." : "Création..."}
                   </>
                 ) : (
                   <>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Créer le produit
+                    {productToEdit ? <Edit className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                    {productToEdit ? "Modifier" : "Créer le produit"}
                   </>
                 )}
               </Button>
@@ -795,7 +873,6 @@ const AddProductModal = ({
             </AnimatePresence>
 
             {/* Pricing & Pickup */}
-            {/* Pricing & Pickup */}
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="basket_discount">Réduction (%)</Label>
@@ -877,12 +954,12 @@ const AddProductModal = ({
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Création...
+                    {productToEdit ? "Modification..." : "Création..."}
                   </>
                 ) : (
                   <>
-                    <ShoppingBasket className="w-4 h-4 mr-2" />
-                    Créer le panier ({basketItems.length} articles)
+                    {productToEdit ? <Edit className="w-4 h-4 mr-2" /> : <ShoppingBasket className="w-4 h-4 mr-2" />}
+                    {productToEdit ? "Modifier" : <>{ "Créer le panier (" + basketItems.length + " articles)" }</>}
                   </>
                 )}
               </Button>
