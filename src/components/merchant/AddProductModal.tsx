@@ -116,6 +116,23 @@ const AddProductModal = ({
     quantity: 1,
   });
 
+  // Helper to extract HH:mm from various time formats
+  const extractTime = (timeStr?: string) => {
+    if (!timeStr) return "12:00";
+    // If it's a full ISO string or date
+    if (timeStr.includes('T')) {
+      const date = new Date(timeStr);
+      if (!isNaN(date.getTime())) {
+        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      }
+    }
+    // If it's HH:mm:ss
+    if (timeStr.split(':').length >= 2) {
+      return timeStr.slice(0, 5);
+    }
+    return timeStr;
+  };
+
   useEffect(() => {
     if (open && productToEdit) {
       if (productToEdit.category === "mixed_basket") {
@@ -123,8 +140,8 @@ const AddProductModal = ({
         setBasketName(productToEdit.name);
         setBasketDescription(productToEdit.description || "");
         setBasketQuantity(productToEdit.quantity_available);
-        setBasketPickupStart(productToEdit.pickup_start);
-        setBasketPickupEnd(productToEdit.pickup_end);
+        setBasketPickupStart(extractTime(productToEdit.pickup_start));
+        setBasketPickupEnd(extractTime(productToEdit.pickup_end));
         setBasketExpiryDate(productToEdit.expiry_date ? new Date(productToEdit.expiry_date).toISOString().slice(0, 16) : "");
         setBasketImagePreview(productToEdit.image_url || null);
         if (productToEdit.contents) {
@@ -139,8 +156,8 @@ const AddProductModal = ({
           original_price: productToEdit.original_price,
           discounted_price: productToEdit.discounted_price,
           quantity_available: productToEdit.quantity_available,
-          pickup_start: productToEdit.pickup_start,
-          pickup_end: productToEdit.pickup_end,
+          pickup_start: extractTime(productToEdit.pickup_start),
+          pickup_end: extractTime(productToEdit.pickup_end),
           expiry_date: productToEdit.expiry_date ? new Date(productToEdit.expiry_date).toISOString().slice(0, 16) : "",
           image_url: productToEdit.image_url || "",
         });
@@ -269,14 +286,28 @@ const AddProductModal = ({
   );
 
   // Helper to combine date and time for pickup window
+  // Helper to combine date and time for pickup window
   const combineDateAndTime = (timeStr: string) => {
-    if (!timeStr) return new Date().toISOString();
+    try {
+      if (!timeStr) return new Date().toISOString();
 
-    const today = new Date();
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const date = new Date(today);
-    date.setHours(hours, minutes, 0, 0);
-    return date.toISOString();
+      const today = new Date();
+      // Ensure we have HH:mm format
+      const cleanTime = extractTime(timeStr);
+      const [hours, minutes] = cleanTime.split(':').map(Number);
+      
+      if (isNaN(hours) || isNaN(minutes)) {
+        console.warn("Invalid time format:", timeStr);
+        return new Date().toISOString();
+      }
+
+      const date = new Date(today);
+      date.setHours(hours, minutes, 0, 0);
+      return date.toISOString();
+    } catch (e) {
+      console.error("Error combining date and time:", e);
+      return new Date().toISOString();
+    }
   };
 
   const handleSubmitSingle = async () => {

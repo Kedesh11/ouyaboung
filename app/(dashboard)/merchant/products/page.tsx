@@ -40,6 +40,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getMerchantItems, formatPrice, isExpiringSoon, getCategoryName, getMyMerchantProfile, updateListing, deleteListing } from "@/services";
 import type { FoodItem } from "@/types";
 import { toast } from "sonner";
+import { supabaseClient } from "@/api/supabaseClient";
 
 const MerchantProductsContent = () => {
   const { user } = useAuth();
@@ -79,6 +80,47 @@ const MerchantProductsContent = () => {
       loadProducts();
     }
   }, [merchantId]);
+
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+
+  const handleCreateProfile = async () => {
+    if (!user) return;
+    setIsCreatingProfile(true);
+    try {
+      // Create a default merchant profile based on user metadata or defaults
+      const businessName = user.user_metadata?.full_name || "Mon Commerce";
+      
+      const { data, error } = await supabaseClient
+        .from('merchants')
+        .insert({
+          user_id: user.id,
+          business_name: businessName,
+          business_type: 'other', // Default
+          is_active: true,
+          is_verified: false,
+          rating: 0,
+          total_reviews: 0,
+          // Generate a simple slug
+          slug: (businessName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.floor(Math.random() * 10000)).slice(0, 50)
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        toast.success("Profil commerçant créé avec succès !");
+        setMerchantId(data.id);
+        // Refresh full page to update context if needed
+        window.location.reload();
+      }
+    } catch (error: any) {
+      console.error("Error creating profile:", error);
+      toast.error("Erreur lors de la création du profil: " + error.message);
+    } finally {
+      setIsCreatingProfile(false);
+    }
+  };
 
   const loadMerchantProfile = async () => {
     if (!user) return;
@@ -143,17 +185,20 @@ const MerchantProductsContent = () => {
 
   const handleDelete = async (product: FoodItem) => {
     if (confirm(`Êtes-vous sûr de vouloir supprimer "${product.name}" ?`)) {
+      console.log("[ProductsPage] Deleting product:", product.id);
       try {
         const result = await deleteListing(product.id);
+        console.log("[ProductsPage] Delete result:", result);
         if (result.success) {
           toast.success(`Produit "${product.name}" supprimé`);
           loadProducts();
         } else {
-          toast.error("Erreur lors de la suppression");
+          console.error("[ProductsPage] Delete failed:", result.error);
+          toast.error("Erreur lors de la suppression: " + (result.error?.message || "Inconnue"));
         }
-      } catch (error) {
-        console.error(error);
-        toast.error("Une erreur est survenue");
+      } catch (error: any) {
+        console.error("[ProductsPage] Exception deleting product:", error);
+        toast.error("Une erreur est survenue: " + error.message);
       }
     }
   };
@@ -288,13 +333,22 @@ const MerchantProductsContent = () => {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : !merchantId ? (
-        <div className="flex flex-col items-center justify-center h-64">
+        <div className="flex flex-col items-center justify-center h-64 text-center max-w-md mx-auto">
           <AlertTriangle className="w-12 h-12 text-warning mb-4" />
           <h3 className="text-xl font-semibold mb-2">Profil commerçant non trouvé</h3>
-          <p className="text-muted-foreground mb-4">
-            Impossible de charger vos informations. Veuillez vérifier votre connexion ou votre compte.
+          <p className="text-muted-foreground mb-6">
+            Il semble que vous ayez le rôle "Commerçant" mais votre profil business n'a pas encore été créé.
           </p>
-          <Button onClick={() => window.location.reload()}>Réessayer</Button>
+          <Button onClick={handleCreateProfile} disabled={isCreatingProfile}>
+            {isCreatingProfile ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Création du profil...
+              </>
+            ) : (
+              "Créer mon profil commerçant maintenant"
+            )}
+          </Button>
         </div>
       ) : (
         <>
