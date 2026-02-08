@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ouyaboung - Hors ligne</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(180deg, #faf8f5 0%, #e8f5ed 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        color: #1a4d2e;
+      }
+
+      .container {
+        text-align: center;
+        max-width: 480px;
+        background: white;
+        padding: 48px 32px;
+        border-radius: 24px;
+        box-shadow: 0 10px 40px rgba(59, 155, 103, 0.1);
+      }
+
+      .icon {
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 24px;
+        background: linear-gradient(135deg, #3b9b67, #4ea876);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 64px;
+      }
+
+      h1 {
+        font-size: 28px;
+        margin-bottom: 16px;
+        color: #3b9b67;
+      }
+
+      p {
+        font-size: 16px;
+        line-height: 1.6;
+        color: #557565;
+        margin-bottom: 32px;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 14px 32px;
+        background: linear-gradient(135deg, #3b9b67, #4ea876);
+        color: white;
+        text-decoration: none;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 16px;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(59, 155, 103, 0.3);
+      }
+
+      .status {
+        margin-top: 24px;
+        padding: 12px 20px;
+        background: #fef3e8;
+        border-left: 4px solid #f27a2d;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #c85e1a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">🌿</div>
+      <h1>Vous êtes hors ligne</h1>
+      <p>
+        Il semble que vous n'ayez pas de connexion Internet pour le moment.
+        Certaines fonctionnalités ne sont pas disponibles hors ligne.
+      </p>
+      <a
+        href="/"
+        class="btn"
+        onclick="
+          window.location.reload();
+          return false;
+        "
+      >
+        Réessayer
+      </a>
+      <div class="status">
+        💡 Astuce : Les pages que vous avez déjà visitées peuvent être
+        disponibles hors ligne.
+      </div>
+    </div>
+
+    <script>
+      // Auto-reload when back online
+      window.addEventListener("online", () => {
+        window.location.reload();
+      });
+    </script>
+  </body>
+</html>
