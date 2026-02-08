@@ -1,4 +1,5 @@
 import Navbar from "../_components/Navbar";
+import { ouyaboungOrganizationSchema, ouyaboungWebSiteSchema } from "@/lib/seo/schemas";
 
 export default function PublicLayout({
     children,
@@ -9,6 +10,20 @@ export default function PublicLayout({
         <div className="min-h-screen">
             <Navbar />
             {children}
+            
+            {/* Structured Data for SEO */}
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(ouyaboungOrganizationSchema),
+                }}
+            />
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(ouyaboungWebSiteSchema),
+                }}
+            />
         </div>
     );
 }

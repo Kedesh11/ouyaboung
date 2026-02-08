@@ -32,6 +32,10 @@ import { useAuth } from "@/hooks/useAuth";
 import type { FoodItem } from "@/types";
 import { toast } from "sonner";
 import { createReservation } from "@/services";
+import { generateProductSchema } from "@/lib/seo/schemas";
+
+// ISR: Revalidate every 10 minutes
+export const revalidate = 600;
 
 const ProductDetailPage = () => {
     const params = useParams();
@@ -104,10 +108,30 @@ const ProductDetailPage = () => {
     if (!product) return null;
 
     const savingsPercent = Math.round((1 - product.discounted_price / product.original_price) * 100);
+    
+    // Generate Product schema for SEO
+    const productSchema = product ? generateProductSchema({
+        name: product.name,
+        description: product.description || "",
+        image: [product.image_url || "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800"],
+        offers: {
+            price: product.discounted_price,
+            priceCurrency: "XAF",
+            availability: product.quantity_available > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            seller: { name: product.merchant?.business_name || "Ouyaboung" },
+        },
+    }) : null;
 
     return (
         <div className="min-h-screen bg-background pb-20">
             <Navbar />
+            
+            {productSchema && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+                />
+            )}
 
             <main className="container mx-auto px-4 pt-28">
                 <Button
@@ -133,7 +157,7 @@ const ProductDetailPage = () => {
                                 fill
                                 className="object-cover"
                                 sizes="(max-width: 768px) 100vw, 50vw"
-                                priority
+                                priority  // LCP optimization - preload hero image
                             />
                             <div className="absolute top-6 left-6 flex flex-wrap gap-2">
                                 <Badge className="bg-primary hover:bg-primary shadow-lg text-lg px-4 py-1.5 rounded-full">

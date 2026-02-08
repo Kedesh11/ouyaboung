@@ -6,6 +6,7 @@
 // ============================================
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 
 import KPICard from "@/components/admin/KPICard";
 import ActivityFeed from "@/components/admin/ActivityFeed";
@@ -14,6 +15,7 @@ import MerchantValidationModal from "@/components/admin/MerchantValidationModal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Store,
   Users,
@@ -29,8 +31,13 @@ import {
 import Link from "next/link";
 import { adminService } from "@/services/admin.service";
 import type { AdminKPIs, MerchantRegistration, AdminActivity, TopMerchant, GeoDistribution } from "@/types/admin.types";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
+
+// Dynamic import for Recharts - heavy library (~32kb)
+const SalesChart = dynamic(() => import('@/components/charts/SalesChart'), {
+  loading: () => <div className="h-[250px] w-full"><Skeleton className="h-full w-full" /></div>,
+  ssr: false, // Charts don't need SSR
+});
 
 const AdminDashboardPage = () => {
   const [topMerchants, setTopMerchants] = useState<TopMerchant[]>([]);
@@ -233,30 +240,7 @@ const AdminDashboardPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={salesStats}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis
-                    dataKey="period"
-                    className="text-xs fill-muted-foreground"
-                  />
-                  <YAxis className="text-xs fill-muted-foreground" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--background))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar
-                    dataKey="sales"
-                    fill="hsl(var(--primary))"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <SalesChart data={salesStats} />
           </CardContent>
         </Card>
 
