@@ -7,12 +7,33 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthRedirect } from "@/components/auth/AuthRedirect";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 
 // const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
     title: "Oyaboug - Anti-gaspillage alimentaire",
     description: "Recuperez des invendus de qualite a petit prix pres de chez vous.",
+    manifest: "/manifest.json",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "default",
+        title: "Ouyaboung",
+    },
+    icons: {
+        icon: "/favicon.svg",
+        apple: "/apple-touch-icon.png",
+    },
+};
+
+export const viewport = {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+    viewportFit: "cover",
+    themeColor: "#3B9B67",
 };
 
 import QueryProvider from "@/providers/QueryProvider";
@@ -39,6 +60,8 @@ export default function RootLayout({
                         >
                             <AuthRedirect />
                             <TooltipProvider>
+                                <OfflineIndicator />
+                                <InstallPrompt />
                                 {children}
                                 <Toaster />
                                 <Sonner />
