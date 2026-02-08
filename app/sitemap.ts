@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://ouyaboung.com'; // Update with actual domain
+  const baseUrl = 'https://ouyaboung-eight.vercel.app'; // Update with actual domain
 
   // Static pages with high priority
   const staticPages: MetadataRoute.Sitemap = [

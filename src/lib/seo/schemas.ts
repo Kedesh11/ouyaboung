@@ -159,8 +159,8 @@ export function generateWebSiteSchema(url: string, searchUrl: string) {
 export const ouyaboungOrganizationSchema = generateOrganizationSchema({
   name: 'Ouyaboung',
   description: 'Plateforme anti-gaspillage alimentaire au Gabon',
-  url: 'https://ouyaboung.com',
-  logo: 'https://ouyaboung.com/icons/icon-512x512.png',
+  url: 'https://ouyaboung-eight.vercel.app',
+  logo: 'https://ouyaboung-eight.vercel.app/icons/icon-512x512.png',
   sameAs: [
     // Add social media links when available
     // 'https://www.facebook.com/ouyaboung',
@@ -174,6 +174,6 @@ export const ouyaboungOrganizationSchema = generateOrganizationSchema({
 });
 
 export const ouyaboungWebSiteSchema = generateWebSiteSchema(
-  'https://ouyaboung.com',
-  'https://ouyaboung.com/search'
+  'https://ouyaboung-eight.vercel.app',
+  'https://ouyaboung-eight.vercel.app/search'
 );

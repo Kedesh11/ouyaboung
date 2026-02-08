@@ -20,6 +20,7 @@ import * as merchantService from "@/services/merchant.service";
 import * as inventoryService from "@/services/inventory.service";
 import type { Merchant, FoodItem } from "@/types";
 import { toast } from "sonner";
+import { generateLocalBusinessSchema } from "@/lib/seo/schemas";
 
 const MerchantPublicPage = () => {
     const params = useParams();
@@ -68,10 +69,31 @@ const MerchantPublicPage = () => {
     }
 
     if (!merchant) return null;
+    
+    // Generate LocalBusiness schema for SEO
+    const businessSchema = merchant ? generateLocalBusinessSchema({
+        name: merchant.business_name,
+        description: merchant.description || "",
+        url: `https://ouyaboung-eight.vercel.app/m/${merchant.slug}`,
+        logo: merchant.logo_url || "",
+        telephone: merchant.phone,
+        priceRange: "XAF 1000-20000",
+        address: {
+            addressCountry: "GA",
+            addressLocality: merchant.city,
+        },
+    }) : null;
 
     return (
         <div className="min-h-screen bg-background">
             <Navbar />
+            
+            {businessSchema && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(businessSchema) }}
+                />
+            )}
 
             {/* Cover Image */}
             <div className="relative h-64 md:h-80 w-full overflow-hidden pt-16">
