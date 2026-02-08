@@ -1,7 +1,4 @@
-@import "@fontsource/outfit/400.css";
-@import "@fontsource/outfit/500.css";
-@import "@fontsource/outfit/600.css";
-@import "@fontsource/outfit/700.css";
+/* Fonts now loaded via next/font in layout.tsx for better performance */
 
 @tailwind base;
 @tailwind components;
@@ -52,15 +49,33 @@
     --radius: 1rem;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(145 65% 42%), hsl(160 60% 45%));
-    --gradient-hero: linear-gradient(180deg, hsl(40 30% 98%) 0%, hsl(145 40% 95%) 100%);
-    --gradient-card-hover: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(145 40% 98%) 100%);
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(145 65% 42%),
+      hsl(160 60% 45%)
+    );
+    --gradient-hero: linear-gradient(
+      180deg,
+      hsl(40 30% 98%) 0%,
+      hsl(145 40% 95%) 100%
+    );
+    --gradient-card-hover: linear-gradient(
+      180deg,
+      hsl(0 0% 100%) 0%,
+      hsl(145 40% 98%) 100%
+    );
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 hsl(145 25% 15% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(145 25% 15% / 0.08), 0 2px 4px -2px hsl(145 25% 15% / 0.05);
-    --shadow-lg: 0 10px 15px -3px hsl(145 25% 15% / 0.1), 0 4px 6px -4px hsl(145 25% 15% / 0.05);
-    --shadow-xl: 0 20px 25px -5px hsl(145 25% 15% / 0.12), 0 8px 10px -6px hsl(145 25% 15% / 0.05);
+    --shadow-md:
+      0 4px 6px -1px hsl(145 25% 15% / 0.08),
+      0 2px 4px -2px hsl(145 25% 15% / 0.05);
+    --shadow-lg:
+      0 10px 15px -3px hsl(145 25% 15% / 0.1),
+      0 4px 6px -4px hsl(145 25% 15% / 0.05);
+    --shadow-xl:
+      0 20px 25px -5px hsl(145 25% 15% / 0.12),
+      0 8px 10px -6px hsl(145 25% 15% / 0.05);
     --shadow-glow: 0 0 40px hsl(145 65% 42% / 0.2);
     --shadow-card: 0 2px 8px hsl(145 25% 15% / 0.06);
 
@@ -106,14 +121,29 @@
     --input: 145 20% 20%;
     --ring: 145 55% 50%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(145 55% 50%), hsl(160 50% 55%));
-    --gradient-hero: linear-gradient(180deg, hsl(145 20% 8%) 0%, hsl(145 25% 12%) 100%);
-    --gradient-card-hover: linear-gradient(180deg, hsl(145 20% 12%) 0%, hsl(145 25% 15%) 100%);
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(145 55% 50%),
+      hsl(160 50% 55%)
+    );
+    --gradient-hero: linear-gradient(
+      180deg,
+      hsl(145 20% 8%) 0%,
+      hsl(145 25% 12%) 100%
+    );
+    --gradient-card-hover: linear-gradient(
+      180deg,
+      hsl(145 20% 12%) 0%,
+      hsl(145 25% 15%) 100%
+    );
 
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
-    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -2px hsl(0 0% 0% / 0.2);
-    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.35), 0 4px 6px -4px hsl(0 0% 0% / 0.2);
-    --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.4), 0 8px 10px -6px hsl(0 0% 0% / 0.25);
+    --shadow-md:
+      0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -2px hsl(0 0% 0% / 0.2);
+    --shadow-lg:
+      0 10px 15px -3px hsl(0 0% 0% / 0.35), 0 4px 6px -4px hsl(0 0% 0% / 0.2);
+    --shadow-xl:
+      0 20px 25px -5px hsl(0 0% 0% / 0.4), 0 8px 10px -6px hsl(0 0% 0% / 0.25);
     --shadow-glow: 0 0 40px hsl(145 55% 50% / 0.25);
     --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.2);
 
@@ -216,7 +246,8 @@
 }
 
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {

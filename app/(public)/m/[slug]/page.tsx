@@ -20,6 +20,10 @@ import * as merchantService from "@/services/merchant.service";
 import * as inventoryService from "@/services/inventory.service";
 import type { Merchant, FoodItem } from "@/types";
 import { toast } from "sonner";
+import { generateLocalBusinessSchema } from "@/lib/seo/schemas";
+
+// ISR: Revalidate every 10 minutes
+export const revalidate = 600;
 
 const MerchantPublicPage = () => {
     const params = useParams();
@@ -68,20 +72,41 @@ const MerchantPublicPage = () => {
     }
 
     if (!merchant) return null;
+    
+    // Generate LocalBusiness schema for SEO
+    const businessSchema = merchant ? generateLocalBusinessSchema({
+        name: merchant.business_name,
+        description: merchant.description || "",
+        url: `https://ouyaboung-eight.vercel.app/m/${merchant.slug}`,
+        logo: merchant.logo_url || "",
+        telephone: merchant.phone,
+        priceRange: "XAF 1000-20000",
+        address: {
+            addressCountry: "GA",
+            addressLocality: merchant.city,
+        },
+    }) : null;
 
     return (
         <div className="min-h-screen bg-background">
             <Navbar />
+            
+            {businessSchema && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(businessSchema) }}
+                />
+            )}
 
             {/* Cover Image */}
             <div className="relative h-64 md:h-80 w-full overflow-hidden pt-16">
                 <Image
                     src={merchant.cover_image_url || "https://images.unsplash.com/photo-1517248135467-4c7ed9d42339?w=1200&h=400&fit=crop"}
-                    alt={merchant.business_name}
+                    alt={`Couverture ${merchant.business_name}`}
                     fill
                     className="object-cover"
                     sizes="100vw"
-                    priority
+                    priority  // LCP optimization - preload cover image
                 />
                 <div className="absolute inset-0 bg-black/30" />
                 <div className="absolute bottom-6 left-6 right-6 container mx-auto px-4">
