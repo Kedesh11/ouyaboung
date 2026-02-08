@@ -34,6 +34,9 @@ import { toast } from "sonner";
 import { createReservation } from "@/services";
 import { generateProductSchema } from "@/lib/seo/schemas";
 
+// ISR: Revalidate every 10 minutes
+export const revalidate = 600;
+
 const ProductDetailPage = () => {
     const params = useParams();
     const router = useRouter();

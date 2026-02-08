@@ -22,6 +22,9 @@ import type { Merchant, FoodItem } from "@/types";
 import { toast } from "sonner";
 import { generateLocalBusinessSchema } from "@/lib/seo/schemas";
 
+// ISR: Revalidate every 10 minutes
+export const revalidate = 600;
+
 const MerchantPublicPage = () => {
     const params = useParams();
     const router = useRouter();
