@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,12 @@ import { cancelOrderViaRPC } from "@/api";
 import PaymentModal from "@/components/payment/PaymentModal";
 import { supabaseClient } from "@/api/supabaseClient";
 import { toast } from "sonner";
-import QRCodeModal from "@/components/QRCodeModal";
+
+// Dynamic import for QRCodeModal - only loads when needed
+const QRCodeModal = dynamic(() => import('@/components/QRCodeModal'), {
+  loading: () => <div className="h-64 w-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>,
+  ssr: false, // QR generation is client-side only
+});
 
 const getStatusBadge = (status: string) => {
     switch (status) {

@@ -99,11 +99,11 @@ const MerchantPublicPage = () => {
             <div className="relative h-64 md:h-80 w-full overflow-hidden pt-16">
                 <Image
                     src={merchant.cover_image_url || "https://images.unsplash.com/photo-1517248135467-4c7ed9d42339?w=1200&h=400&fit=crop"}
-                    alt={merchant.business_name}
+                    alt={`Couverture ${merchant.business_name}`}
                     fill
                     className="object-cover"
                     sizes="100vw"
-                    priority
+                    priority  // LCP optimization - preload cover image
                 />
                 <div className="absolute inset-0 bg-black/30" />
                 <div className="absolute bottom-6 left-6 right-6 container mx-auto px-4">

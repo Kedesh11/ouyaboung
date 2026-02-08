@@ -154,7 +154,7 @@ const ProductDetailPage = () => {
                                 fill
                                 className="object-cover"
                                 sizes="(max-width: 768px) 100vw, 50vw"
-                                priority
+                                priority  // LCP optimization - preload hero image
                             />
                             <div className="absolute top-6 left-6 flex flex-wrap gap-2">
                                 <Badge className="bg-primary hover:bg-primary shadow-lg text-lg px-4 py-1.5 rounded-full">

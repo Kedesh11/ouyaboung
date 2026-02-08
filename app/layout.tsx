@@ -10,6 +10,7 @@ import { AuthRedirect } from "@/components/auth/AuthRedirect";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { SkipToContent } from "@/components/seo/AccessibilityHelpers";
+import { WebVitalsReporter } from "@/components/WebVitalsReporter";
 
 // const inter = Inter({ subsets: ["latin"] });
 
@@ -52,6 +53,7 @@ export default function RootLayout({
             {/* Fallback to standard sans-serif font to avoid build timeout with Google Fonts */}
             <body className={"font-sans antialiased"} suppressHydrationWarning>
                 <SkipToContent />
+                <WebVitalsReporter />
                 <QueryProvider>
                     <AuthProvider>
                         <ThemeProvider
