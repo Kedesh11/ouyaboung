@@ -31,3 +31,9 @@ dist-ssr
 
 # env
 .env*
+
+# PWA
+/public/sw.js
+/public/workbox-*.js
+/public/sw.js.map
+/public/worker-*.js
