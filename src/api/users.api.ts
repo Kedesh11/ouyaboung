@@ -3,8 +3,8 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
-import { DB_TABLES, API_ROUTES } from './routes';
+import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { DB_TABLES } from './routes';
 
 import type { ApiResponse, UserProfile, UserPreferences, UserImpact } from '@/types';
 
@@ -14,9 +14,37 @@ import type { ApiResponse, UserProfile, UserPreferences, UserImpact } from '@/ty
 export const getUserProfile = async (
   userId: string
 ): Promise<ApiResponse<UserProfile>> => {
-
+  if (!isSupabaseConfigured()) {
+    return {
+      data: null,
+      error: { code: 'NOT_CONFIGURED', message: 'Supabase is not configured' },
+      success: false,
+    };
+  }
 
   const client = requireSupabaseClient();
+  const { data: profileByUserId, error: userIdError } = await client
+    .from(DB_TABLES.PROFILES)
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (userIdError) {
+    return {
+      data: null,
+      error: { code: userIdError.code, message: userIdError.message },
+      success: false,
+    };
+  }
+
+  if (profileByUserId) {
+    return {
+      data: profileByUserId as UserProfile,
+      error: null,
+      success: true,
+    };
+  }
+
   const { data, error } = await client
     .from(DB_TABLES.PROFILES)
     .select('*')
@@ -45,11 +73,36 @@ export const updateUserProfile = async (
   userId: string,
   updates: Partial<UserProfile>
 ): Promise<ApiResponse<UserProfile>> => {
+  if (!isSupabaseConfigured()) {
+    return {
+      data: null,
+      error: { code: 'NOT_CONFIGURED', message: 'Supabase is not configured' },
+      success: false,
+    };
+  }
 
   const client = requireSupabaseClient();
+  const { data: existingProfile, error: profileCheckError } = await client
+    .from(DB_TABLES.PROFILES)
+    .select('id, user_id, email, role')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (profileCheckError) {
+    return {
+      data: null,
+      error: { code: profileCheckError.code, message: profileCheckError.message },
+      success: false,
+    };
+  }
+
   const { data: authUser } = await client.auth.getUser();
-  const email = authUser?.user?.email || updates.email || '';
-  const role = (updates.role as UserProfile['role']) || 'user';
+  const email = updates.email || existingProfile?.email || authUser?.user?.email || '';
+  const role =
+    (updates.role as UserProfile['role']) ||
+    (existingProfile?.role as UserProfile['role']) ||
+    (authUser?.user?.user_metadata?.role as UserProfile['role']) ||
+    'user';
 
   // Prepare payload without id first
   const payload = {
@@ -60,13 +113,6 @@ export const updateUserProfile = async (
     updated_at: new Date().toISOString(),
   } as Partial<UserProfile> & { user_id: string; email: string; role: UserProfile['role'] };
 
-  // First, check if profile exists for this user_id
-  const { data: existingProfile } = await client
-    .from(DB_TABLES.PROFILES)
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
-
   let data, error;
 
   if (existingProfile?.id) {
@@ -74,7 +120,7 @@ export const updateUserProfile = async (
     const result = await client
       .from(DB_TABLES.PROFILES)
       .update(payload)
-      .eq('id', existingProfile.id)
+      .eq('user_id', userId)
       .select('*')
       .maybeSingle();
     data = result.data;

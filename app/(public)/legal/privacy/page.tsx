@@ -16,7 +16,7 @@ const PrivacyPolicy = () => {
         <div className="prose prose-green max-w-none space-y-6 text-muted-foreground">
           <section>
             <h2 className="text-xl font-semibold text-foreground">1. Collecte des données</h2>
-            <p>Nous collectons les données nécessaires au fonctionnement du service : nom, prénom, email, téléphone, date de naissance et historique des transactions.</p>
+            <p>Nous collectons les données nécessaires au fonctionnement du service : nom, prénom, email, téléphone et historique des transactions.</p>
           </section>
 
           <section>

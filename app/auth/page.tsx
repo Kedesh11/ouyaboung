@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Leaf, User, Store, Mail, Lock, Phone, ArrowLeft, Loader2, Calendar, UserCircle, X, Eye, EyeOff } from "lucide-react";
+import { Leaf, User, Store, Mail, Lock, Phone, ArrowLeft, Loader2, UserCircle, X, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { login, register, loginWithOtp, verifyOtpCode } from "@/services";
@@ -60,7 +60,6 @@ const AuthContent = () => {
     const [signupPhone, setSignupPhone] = useState("");
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
-    const [birthDate, setBirthDate] = useState("");
     const [businessName, setBusinessName] = useState("");
 
     const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -176,7 +175,6 @@ const AuthContent = () => {
                 setSignupPhone("");
                 setFirstName("");
                 setLastName("");
-                setBirthDate("");
                 setBusinessName("");
                 setAcceptedTerms(false);
                 // Rediriger vers la page de connexion
@@ -481,21 +479,6 @@ const AuthContent = () => {
                                                     required
                                                 />
                                             </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="birth-date">Date de naissance</Label>
-                                        <div className="relative">
-                                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                            <Input
-                                                id="birth-date"
-                                                type="date"
-                                                className="pl-10"
-                                                value={birthDate}
-                                                onChange={(e) => setBirthDate(e.target.value)}
-                                                disabled={isLoading}
-                                                max={new Date().toISOString().split('T')[0]}
-                                            />
                                         </div>
                                     </div>
                                     <div className="space-y-2">

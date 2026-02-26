@@ -301,10 +301,15 @@ export const getOrdersByMerchant = async (
       const { data: profiles } = await client
         .from(DB_TABLES.PROFILES)
         .select('*')
-        .in('id', userIds);
+        .in('user_id', userIds);
 
       if (profiles) {
-        profilesMap = profiles.reduce((acc, p) => ({ ...acc, [p.id]: p }), {});
+        profilesMap = profiles.reduce((acc, p) => {
+          if (p.user_id) {
+            acc[p.user_id] = p;
+          }
+          return acc;
+        }, {} as Record<string, any>);
       }
     }
   }
