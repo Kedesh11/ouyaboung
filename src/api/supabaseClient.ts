@@ -9,9 +9,10 @@ import { SupabaseClient } from '@supabase/supabase-js';
 // Environment variables for Supabase connection
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const isDev = process.env.NODE_ENV !== 'production';
 
 // Debug logging
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && isDev) {
   console.log('🔍 [Supabase Client Debug]', {
     urlProvided: !!SUPABASE_URL,
     keyProvided: !!SUPABASE_ANON_KEY,
@@ -30,7 +31,9 @@ export const getSupabaseClient = (): SupabaseClient | null => {
   }
 
   if (!supabaseInstance) {
-    console.log('🔧 Creating Supabase Browser Client (SSR-compatible)...');
+    if (isDev) {
+      console.log('🔧 Creating Supabase Browser Client (SSR-compatible)...');
+    }
 
     // createBrowserClient from @supabase/ssr automatically handles cookies
     supabaseInstance = createBrowserClient(
@@ -38,7 +41,9 @@ export const getSupabaseClient = (): SupabaseClient | null => {
       SUPABASE_ANON_KEY
     );
 
-    console.log('✅ Supabase Browser Client created successfully');
+    if (isDev) {
+      console.log('✅ Supabase Browser Client created successfully');
+    }
   }
 
   return supabaseInstance;

@@ -220,16 +220,34 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+[auth.email.template.confirmation]
+subject = "Confirmez votre inscription à Ouyaboung"
+content_path = "./supabase/templates/confirm_signup.html"
 
-# Uncomment to customize notification email template
-# [auth.email.notification.password_changed]
-# enabled = true
-# subject = "Your password has been changed"
-# content_path = "./templates/password_changed_notification.html"
+[auth.email.template.recovery]
+subject = "Réinitialisez votre mot de passe Ouyaboung"
+content_path = "./supabase/templates/reset_password.html"
+
+[auth.email.template.magic_link]
+subject = "Votre lien de connexion Ouyaboung"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirmez votre changement d'adresse email"
+content_path = "./supabase/templates/change_email.html"
+
+[auth.email.template.invite]
+subject = "Vous êtes invité sur Ouyaboung"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.reauthentication]
+subject = "Vérification de sécurité Ouyaboung"
+content_path = "./supabase/templates/reauthentication.html"
+
+[auth.email.notification.password_changed]
+enabled = true
+subject = "Votre mot de passe Ouyaboung a été modifié"
+content_path = "./supabase/templates/password_changed_notification.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

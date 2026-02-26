@@ -6,9 +6,8 @@
 // ============================================
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session, AuthError } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { supabaseClient } from '@/api/supabaseClient';
-import { getCurrentUser, onAuthStateChange } from '@/api/auth.api';
 import type { UserRole } from '@/types';
 
 interface AuthContextType {
@@ -35,6 +34,18 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const isDev = process.env.NODE_ENV !== 'production';
+  const debugLog = (...args: unknown[]) => {
+    if (isDev) {
+      console.log(...args);
+    }
+  };
+  const debugWarn = (...args: unknown[]) => {
+    if (isDev) {
+      console.warn(...args);
+    }
+  };
+
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,8 +60,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const initializeAuth = async () => {
       try {
-        console.log('=== INITIALISATION AUTH CONTEXT ===');
-        console.time('Auth Init Total');
+        if (isDev) {
+          console.log('=== INITIALISATION AUTH CONTEXT ===');
+          console.time('Auth Init Total');
+        }
 
         if (!supabaseClient) {
           console.error('Client Supabase non disponible');
@@ -58,9 +71,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return;
         }
 
-        console.log('Fetching session...');
+        debugLog('Fetching session...');
         const { data: { session: initialSession }, error } = await supabaseClient.auth.getSession();
-        console.log('Session fetched:', !!initialSession);
+        debugLog('Session fetched:', !!initialSession);
 
         if (error) {
           console.error('Error getting session:', error);
@@ -71,14 +84,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(initialSession.user);
 
           // Fetch user profile from database
-          console.log('[AuthContext] Fetching profile for user:', initialSession.user.id);
+          debugLog('[AuthContext] Fetching profile for user:', initialSession.user.id);
           const { data: profile, error: profileError } = await supabaseClient
             .from('profiles')
             .select('role')
             .eq('user_id', initialSession.user.id)
             .single();
 
-          console.log('[AuthContext] Profile fetch result:', {
+          debugLog('[AuthContext] Profile fetch result:', {
             profile,
             profileError,
             hasProfile: !!profile,
@@ -91,10 +104,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const role = initialSession.user.user_metadata?.role ||
               initialSession.user.app_metadata?.role ||
               'user';
-            console.log('[AuthContext] Using fallback role from metadata:', role);
+            debugLog('[AuthContext] Using fallback role from metadata:', role);
             setUserRole(role as UserRole);
           } else if (profile) {
-            console.log('[AuthContext] Setting role from profile:', profile.role);
+            debugLog('[AuthContext] Setting role from profile:', profile.role);
             setUserRole(profile.role as UserRole);
 
             // If merchant, check verification status
@@ -111,7 +124,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const role = initialSession.user.user_metadata?.role ||
               initialSession.user.app_metadata?.role ||
               'user';
-            console.log('[AuthContext] No profile found, using metadata role:', role);
+            debugLog('[AuthContext] No profile found, using metadata role:', role);
             setUserRole(role as UserRole);
           }
         }
@@ -124,8 +137,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } finally {
         if (mounted) {
           clearTimeout(safetyTimeout);
-          console.timeEnd('Auth Init Total');
-          console.log('Auth initialization complete, setting loading=false');
+          if (isDev) {
+            console.timeEnd('Auth Init Total');
+          }
+          debugLog('Auth initialization complete, setting loading=false');
           setLoading(false);
         }
       }
@@ -134,7 +149,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Set safety timeout before initialization
     safetyTimeout = setTimeout(() => {
       if (mounted) {
-        console.warn('SAFETY TIMEOUT REACHED - Force setting loading=false');
+        debugWarn('SAFETY TIMEOUT REACHED - Force setting loading=false');
         setLoading(false);
       }
     }, 5000); // Increased back to 5000ms to avoid race conditions on slower connections
@@ -148,7 +163,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            console.log('[AuthContext] Auth state change: fetching profile for', session.user.id);
+            debugLog('[AuthContext] Auth state change: fetching profile for', session.user.id);
             const { data: profile, error: profileError } = await supabaseClient
               .from('profiles')
               .select('role')
@@ -156,20 +171,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               .single();
 
             if (profileError) {
-              console.warn('[AuthContext] Error fetching profile on auth change:', profileError);
+              debugWarn('[AuthContext] Error fetching profile on auth change:', profileError);
               const role = session.user.user_metadata?.role ||
                 session.user.app_metadata?.role ||
                 'user';
-              console.log('[AuthContext] Using fallback role:', role);
+              debugLog('[AuthContext] Using fallback role:', role);
               setUserRole(role as UserRole);
             } else if (profile) {
-              console.log('[AuthContext] Role updated from profile:', profile.role);
+              debugLog('[AuthContext] Role updated from profile:', profile.role);
               setUserRole(profile.role as UserRole);
             } else {
               const role = session.user.user_metadata?.role ||
                 session.user.app_metadata?.role ||
                 'user';
-              console.log('[AuthContext] No profile found on auth change, using fallback:', role);
+              debugLog('[AuthContext] No profile found on auth change, using fallback:', role);
               setUserRole(role as UserRole);
             }
 
@@ -209,7 +224,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
-      console.log('[AuthContext] Starting sign out process...');
+      debugLog('[AuthContext] Starting sign out process...');
 
       // Clear local state immediately for better UX
       setUser(null);
@@ -228,9 +243,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       try {
         await Promise.race([signOutPromise, timeoutPromise]);
-        console.log('[AuthContext] Remote sign out successful');
+        debugLog('[AuthContext] Remote sign out successful');
       } catch (timeoutError) {
-        console.warn('[AuthContext] Remote sign out timed out or failed, but local state cleared:', timeoutError);
+        debugWarn('[AuthContext] Remote sign out timed out or failed, but local state cleared:', timeoutError);
       }
     } catch (error) {
       console.error('[AuthContext] Error in signOut function:', error);

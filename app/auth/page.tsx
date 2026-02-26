@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -13,38 +13,14 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Leaf, User, Store, Mail, Lock, Phone, ArrowLeft, Loader2, UserCircle, X, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { login, register, loginWithOtp, verifyOtpCode } from "@/services";
 import type { UserRole } from "@/types";
-import { requireSupabaseClient } from "@/api/supabaseClient";
 
 const AuthContent = () => {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { toast } = useToast();
-    const { isAuthenticated, loading, user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
-
-    // Diagnostic de l'état de connexion au chargement
-    useEffect(() => {
-        console.log('=== DIAGNOSTIC AUTH PAGE ===');
-        console.log('État de connexion:', {
-            isAuthenticated,
-            loading,
-            user: user ? 'connecté' : 'non connecté',
-            userId: user?.id,
-            userEmail: user?.email,
-            userRole: user?.user_metadata?.role
-        });
-
-        // Diagnostic du client Supabase - Safe check for env vars in Next.js
-        try {
-            const supabaseClient = requireSupabaseClient();
-            console.log('Client Supabase:', supabaseClient ? 'OK' : 'ERREUR');
-        } catch (error) {
-            console.error('Erreur client Supabase:', error);
-        }
-    }, [isAuthenticated, loading, user]);
 
     // Role is handled by AuthRedirectHandler or initial state
     const initialRole = searchParams.get("role") === "merchant" ? "merchant" : "user";
@@ -76,10 +52,6 @@ const AuthContent = () => {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        console.log('=== TENTATIVE DE CONNEXION ===');
-        console.log('Email:', loginEmail);
-        console.log('Password provided:', !!loginPassword);
 
         if (!loginEmail || !loginPassword) {
             toast({

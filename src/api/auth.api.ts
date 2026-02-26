@@ -3,9 +3,43 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
-import { API_ROUTES } from './routes';
-import type { AuthCredentials, SignUpData, ApiResponse, User, UserRole } from '@/types';
+import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import type { AuthCredentials, SignUpData, ApiResponse, User } from '@/types';
+
+const isDev = process.env.NODE_ENV !== 'production';
+
+const debugLog = (...args: unknown[]) => {
+  if (isDev) {
+    console.log(...args);
+  }
+};
+
+const getBaseAppUrl = (): string | null => {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configuredUrl) {
+    try {
+      return new URL(configuredUrl).origin;
+    } catch {
+      return configuredUrl.replace(/\/+$/, '');
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return null;
+};
+
+const buildRedirectUrl = (path: string): string | undefined => {
+  const baseUrl = getBaseAppUrl();
+  return baseUrl ? `${baseUrl}${path}` : undefined;
+};
+
+const isRedirectRelatedError = (message?: string): boolean => {
+  if (!message) return false;
+  return /redirect|redirect_to|allowed|invalid.*url|site url/i.test(message);
+};
 
 /**
  * Sign in with email and password
@@ -13,8 +47,8 @@ import type { AuthCredentials, SignUpData, ApiResponse, User, UserRole } from '@
 export const signInWithEmail = async (
   credentials: AuthCredentials
 ): Promise<ApiResponse<{ user: User; session: unknown }>> => {
-  console.log('=== AUTH.API SIGNINWITHEMAIL ===');
-  console.log('Credentials:', { email: credentials.email, password: '***' });
+  debugLog('=== AUTH.API SIGNINWITHEMAIL ===');
+  debugLog('Credentials:', { email: credentials.email, password: '***' });
 
   if (!isSupabaseConfigured()) {
     console.error('Supabase non configuré');
@@ -27,7 +61,7 @@ export const signInWithEmail = async (
 
   try {
     const client = requireSupabaseClient();
-    console.log('Client Supabase obtenu, tentative de connexion...');
+    debugLog('Client Supabase obtenu, tentative de connexion...');
 
     // Wrapper pour ajouter un timeout
     const signInPromise = client.auth.signInWithPassword({
@@ -40,7 +74,7 @@ export const signInWithEmail = async (
     );
 
     const { data, error } = await Promise.race([signInPromise, timeoutPromise]) as any;
-    console.log('Réponse Supabase reçue:', { data: !!data, error: error?.message });
+    debugLog('Réponse Supabase reçue:', { data: !!data, error: error?.message });
 
     if (error) {
       console.error('Erreur Supabase:', error);
@@ -51,7 +85,7 @@ export const signInWithEmail = async (
       };
     }
 
-    console.log('Connexion réussie, utilisateur:', data.user?.email);
+    debugLog('Connexion réussie, utilisateur:', data.user?.email);
     return {
       data: {
         user: data.user as unknown as User,
@@ -85,14 +119,14 @@ export const signUpWithEmail = async (
   }
 
   const client = requireSupabaseClient();
-  const redirectUrl = `${process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:3000' : window.location.origin}/auth`;
+  const redirectUrl = buildRedirectUrl('/auth');
 
   try {
     const { data, error } = await client.auth.signUp({
       email: signUpData.email,
       password: signUpData.password,
       options: {
-        emailRedirectTo: redirectUrl,
+        ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
         data: {
           full_name: signUpData.full_name,
           phone: signUpData.phone,
@@ -197,14 +231,34 @@ export const resetPassword = async (
   }
 
   const client = requireSupabaseClient();
-  const { error } = await client.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/auth/reset`,
-  });
+  const redirectUrl = buildRedirectUrl('/auth/reset');
+  const resetOptions = redirectUrl ? { redirectTo: redirectUrl } : undefined;
+
+  let { error } = await client.auth.resetPasswordForEmail(email, resetOptions);
+
+  const errorStatus = (error as { status?: number } | null)?.status;
+  const shouldRetryWithoutRedirect = !!error && !!redirectUrl && (
+    isRedirectRelatedError(error.message) || errorStatus === 500
+  );
+
+  if (shouldRetryWithoutRedirect) {
+    const fallbackResult = await client.auth.resetPasswordForEmail(email);
+    error = fallbackResult.error;
+  }
 
   if (error) {
+    const status = (error as { status?: number }).status;
+    let message = error.message;
+
+    if (isRedirectRelatedError(message)) {
+      message = "Configuration de redirection invalide. Vérifiez NEXT_PUBLIC_APP_URL et les Redirect URLs autorisées dans Supabase.";
+    } else if (status === 500) {
+      message = "Le service de réinitialisation est temporairement indisponible. Réessayez dans quelques instants.";
+    }
+
     return {
       data: null,
-      error: { code: error.name, message: error.message },
+      error: { code: error.name, message },
       success: false,
     };
   }

@@ -12,16 +12,19 @@ export function AuthRedirect() {
     const { isAuthenticated, userRole, loading } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
+    const isDev = process.env.NODE_ENV !== 'production';
 
     useEffect(() => {
         if (loading) return;
 
-        console.log('🔄 [AuthRedirect] State:', {
-            isAuthenticated,
-            userRole,
-            loading,
-            pathname
-        });
+        if (isDev) {
+            console.log('🔄 [AuthRedirect] State:', {
+                isAuthenticated,
+                userRole,
+                loading,
+                pathname
+            });
+        }
 
         // Redirect authenticated users from auth pages to their dashboards
         if (isAuthenticated && userRole && (pathname === '/auth' || pathname === '/forgot-password')) {
@@ -31,7 +34,9 @@ export function AuthRedirect() {
                 'user': '/user',
             };
             const redirectPath = redirectMap[userRole];
-            console.log('🚀 [AuthRedirect] Redirecting to:', redirectPath);
+            if (isDev) {
+                console.log('🚀 [AuthRedirect] Redirecting to:', redirectPath);
+            }
             if (redirectPath) {
                 router.push(redirectPath);
             }
@@ -45,10 +50,12 @@ export function AuthRedirect() {
         if (!isAuthenticated && isProtectedRoute) {
             const role = pathname?.startsWith('/merchant') ? 'merchant' : undefined;
             const authUrl = role ? `/auth?role=${role}` : '/auth';
-            console.log('🔒 [AuthRedirect] Redirecting to auth:', authUrl);
+            if (isDev) {
+                console.log('🔒 [AuthRedirect] Redirecting to auth:', authUrl);
+            }
             router.push(authUrl);
         }
-    }, [isAuthenticated, userRole, loading, pathname, router]);
+    }, [isAuthenticated, userRole, loading, pathname, router, isDev]);
 
     return null; // This component renders nothing
 }

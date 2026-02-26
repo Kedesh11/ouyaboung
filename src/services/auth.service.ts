@@ -25,21 +25,8 @@ export const login = async (
   email: string,
   password: string
 ): Promise<ApiResponse<{ user: User; session: unknown }>> => {
-  console.log('=== AUTH.SERVICE LOGIN ===');
-  console.log('Email:', email);
-  console.log('Password provided:', !!password);
-
   const credentials: AuthCredentials = { email, password };
-
-  try {
-    console.log('Appel de signInWithEmail()...');
-    const result = await signInWithEmail(credentials);
-    console.log('Résultat de signInWithEmail():', result);
-    return result;
-  } catch (error) {
-    console.error('Exception dans login():', error);
-    throw error;
-  }
+  return signInWithEmail(credentials);
 };
 
 /**

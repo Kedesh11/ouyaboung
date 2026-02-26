@@ -15,30 +15,19 @@ export const useAuthActions = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    console.log('=== USEAUTHACTIONS SIGNIN ===');
-    console.log('Email:', email);
-    console.log('Password provided:', !!password);
-    
     setIsLoading(true);
     try {
-      console.log('Appel de login()...');
       const response = await login(email, password);
-      console.log('Réponse de login():', response);
 
       if (response.success) {
-        console.log('Login réussi, rafraîchissement utilisateur...');
         toast({
           title: "Connexion réussie",
           description: "Bienvenue sur Oyaboung !",
         });
-        
-        console.log('Appel de refreshUser()...');
         await refreshUser();
-        console.log('refreshUser() terminé');
-        
+
         return { success: true };
       } else {
-        console.error('Login échoué:', response.error);
         toast({
           title: "Erreur de connexion",
           description: response.error?.message || "Une erreur est survenue",
@@ -55,7 +44,6 @@ export const useAuthActions = () => {
       });
       return { success: false, error };
     } finally {
-      console.log('signIn terminé, isLoading = false');
       setIsLoading(false);
     }
   }, [refreshUser, toast]);
