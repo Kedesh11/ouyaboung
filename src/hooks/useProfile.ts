@@ -21,6 +21,12 @@ export const useProfile = () => {
       return;
     }
 
+    if (!supabaseClient) {
+      setError('Supabase client indisponible');
+      setLoading(false);
+      return;
+    }
+
     const fetchProfile = async () => {
       try {
         setLoading(true);
@@ -30,8 +36,8 @@ export const useProfile = () => {
         const { data: existingProfile, error: fetchError } = await supabaseClient
           .from('profiles')
           .select('*')
-          .eq('id', user.id)
-          .single();
+          .eq('user_id', user.id)
+          .maybeSingle();
 
         if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
           throw fetchError;
@@ -44,7 +50,7 @@ export const useProfile = () => {
 
         // If no profile exists, create one
         const newProfile = {
-          id: user.id,
+          user_id: user.id,
           email: user.email,
           full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
           phone: user.user_metadata?.phone || null,
@@ -81,9 +87,9 @@ export const useProfile = () => {
       const { data, error } = await supabaseClient
         .from('profiles')
         .update(updates)
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 

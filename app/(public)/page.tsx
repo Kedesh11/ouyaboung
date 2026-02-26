@@ -47,14 +47,14 @@ export default function Home() {
                             </Link>
                         </motion.div>
 
-                        <motion.p
+                        {/* <motion.p
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.5 }}
                             className="text-sm text-muted-foreground mt-6"
                         >
                             Déjà +1800 commerces partenaires • +89 000 utilisateurs actifs
-                        </motion.p>
+                        </motion.p> */}
                     </div>
                 </div>
             </section>

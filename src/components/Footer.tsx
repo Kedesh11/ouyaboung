@@ -47,10 +47,10 @@ const Footer = () => {
           <div>
             <h4 className="font-semibold text-foreground mb-4">Légal</h4>
             <ul className="space-y-2">
-              <li><Link href="/cgu" className="text-sm text-muted-foreground hover:text-primary transition-colors">Conditions d'utilisation</Link></li>
-              <li><Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">Politique de confidentialité</Link></li>
-              <li><Link href="/faq" className="text-sm text-muted-foreground hover:text-primary transition-colors">FAQ</Link></li>
-              <li><Link href="/help" className="text-sm text-muted-foreground hover:text-primary transition-colors">Centre d'aide</Link></li>
+              <li><Link href="/legal/cgu" className="text-sm text-muted-foreground hover:text-primary transition-colors">Conditions d'utilisation</Link></li>
+              <li><Link href="/legal/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">Politique de confidentialité</Link></li>
+              <li><Link href="/about" className="text-sm text-muted-foreground hover:text-primary transition-colors">FAQ</Link></li>
+              <li><Link href="/legal/help" className="text-sm text-muted-foreground hover:text-primary transition-colors">Centre d'aide</Link></li>
             </ul>
           </div>
 
@@ -64,7 +64,7 @@ const Footer = () => {
               </li>
               <li className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone className="w-4 h-4 text-primary" />
-                +241 077 77 77 77
+                077 17 28 20
               </li>
               <li className="flex items-start gap-2 text-sm text-muted-foreground">
                 <MapPin className="w-4 h-4 text-primary mt-0.5" />
@@ -78,7 +78,6 @@ const Footer = () => {
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>© {new Date().getFullYear()} ouyaboung. Tous droits réservés.</p>
-          <p>Fait avec 💚 pour la planète</p>
         </div>
       </div>
     </footer>

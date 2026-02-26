@@ -23,7 +23,7 @@
 - [Structure du Projet](#-structure-du-projet)
 - [Documentation](#-documentation)
 - [Lighthouse Scores](#-lighthouse-scores)
-- [Roadmap](#-roadmap)
+- [Roadmap](#roadmap)
 - [Licence](#-licence)
 
 ---
@@ -73,11 +73,11 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 
 ### Lighthouse Scores (Production)
 
-| Métrique | Homepage | Moyenne | Cible |
-|----------|----------|---------|-------|
-| **SEO** | 🟢 **100%** | 🟢 **100%** | > 95% ✅ |
-| Performance | 🟢 **93%** | 🟡 58% | > 90% |
-| Accessibility | 🟡 87% | 🟡 87% | > 95% |
+|Métrique|Homepage|Moyenne|Cible|
+|--------|--------|-------|-----|
+|**SEO**|🟢 **100%**|🟢 **100%**|> 95% ✅|
+|Performance|🟢 **93%**|🟡 58%|> 90%|
+|Accessibility|🟡 87%|🟡 87%|> 95%|
 
 > 📊 [Voir les résultats détaillés](https://pagespeed.web.dev/analysis?url=https://ouyaboung-eight.vercel.app)
 
@@ -131,12 +131,12 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 
 ### Bundle Sizes
 
-| Route | Size | First Load | Status |
-|-------|------|------------|--------|
-| Homepage | 3.23 KB | **154 KB** | ✅ Optimal |
-| Admin | 7.55 KB | **217 KB** | ✅ -100KB |
-| Search | 13.9 KB | 262 KB | ✅ Map split |
-| Shared | - | **103 KB** | ✅ -31% |
+|Route|Size|First Load|Status|
+|-----|----|----------|------|
+|Homepage|3.23 KB|**154 KB**|✅ Optimal|
+|Admin|7.55 KB|**217 KB**|✅ -100KB|
+|Search|13.9 KB|262 KB|✅ Map split|
+|Shared|-|**103 KB**|✅ -31%|
 
 **Total Savings**: **-225KB** (JS + Images)
 
@@ -190,7 +190,7 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 
 ### Prérequis
 
-- Node.js 18+ 
+- Node.js 18+
 - npm 9+
 - Compte Supabase (gratuit)
 
@@ -238,14 +238,14 @@ npm run type-check       # TypeScript check
 ./scripts/lighthouse-audit.sh  # Lighthouse CI (5 routes)
 
 # Optimisation
-node scripts/optimize-icons.js # Optimiser PWA icons
+node scripts/optimize-icons.mjs # Optimiser PWA icons
 ```
 
 ---
 
 ## 📁 Structure du Projet
 
-```
+```text
 ouyaboung/
 ├── app/                          # Next.js App Router
 │   ├── (public)/                 # Routes publiques
@@ -310,7 +310,7 @@ ouyaboung/
 
 **SEO: 100% sur toutes les pages** ✅
 
-```
+```text
 Homepage    : Performance 93% | A11y 87% | SEO 100% ✅
 Search      : Performance 48% | A11y 89% | SEO 100% ✅
 About       : Performance 67% | A11y 85% | SEO 100% ✅
@@ -319,17 +319,21 @@ Merchant    : Performance 51% | A11y 89% | SEO 100% ✅
 ```
 
 **Points forts** :
+
 - ✅ SEO parfait (meta tags, structured data, sitemap)
 - ✅ Homepage rapide (93%)
 - ✅ Bundle optimisé (-225KB)
 - ✅ PWA offline-ready
 
 **Améliorations futures** :
+
 - Database indexes (Phase 8)
 - Static params pour top produits
 - Lazy load maps
 
 ---
+
+<a id="roadmap"></a>
 
 ## 🗺️ Roadmap
 
@@ -404,14 +408,10 @@ Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de 
 
 - **Website**: [ouyaboung-eight.vercel.app](https://ouyaboung-eight.vercel.app)
 - **Issues**: [GitHub Issues](https://github.com/Kedesh11/ouyaboung/issues)
-- **Email**: contact@ouyaboung.com
+- **Email**: [contact@ouyaboung.com](mailto:contact@ouyaboung.com)
 
 ---
 
-<div align="center">
-
-**Made with ❤️ for Gabon**
+### Made with love for Gabon
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Kedesh11/ouyaboung)
-
-</div>

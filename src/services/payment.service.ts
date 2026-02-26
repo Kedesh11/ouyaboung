@@ -22,6 +22,15 @@ import {
 } from '@/lib/phone-validation';
 import type { QGabonPaymentResponse } from '@/types/qgabon';
 
+const SUPABASE_FUNCTIONS_BASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, '')}/functions/v1`
+    : null;
+
+const getFunctionUrl = (name: string): string | null => {
+    if (!SUPABASE_FUNCTIONS_BASE_URL) return null;
+    return `${SUPABASE_FUNCTIONS_BASE_URL}/${name}`;
+};
+
 // ============================================
 // REQUEST/RESPONSE TYPES
 // ============================================
@@ -74,6 +83,18 @@ export type { PaymentFees };
 export const initiateAirtelPayment = async (
     request: PaymentInitiationRequest
 ): Promise<ApiResponse<PaymentInitiationResponse>> => {
+    if (!supabaseClient) {
+        return {
+            success: false,
+            data: null,
+            error: {
+                message: 'Supabase non configure.',
+                code: 'NOT_CONFIGURED',
+                details: null
+            }
+        };
+    }
+
     console.log('[Payment Service] Initiating payment:', {
         orderId: request.orderId,
         baseAmount: request.baseAmount,
@@ -146,7 +167,18 @@ export const initiateAirtelPayment = async (
 
         console.log('[Payment Service] Calling Edge Function: initiate-airtel (via fetch)...');
 
-        const functionUrl = 'https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/initiate-airtel';
+        const functionUrl = getFunctionUrl('initiate-airtel');
+        if (!functionUrl) {
+            return {
+                success: false,
+                data: null,
+                error: {
+                    message: "URL d'Edge Function non configuree.",
+                    code: 'NOT_CONFIGURED',
+                    details: null
+                }
+            };
+        }
         
         const response = await fetch(functionUrl, {
             method: 'POST',
@@ -226,6 +258,18 @@ export const initiateAirtelPayment = async (
 export const initiateMoovPayment = async (
     request: PaymentInitiationRequest
 ): Promise<ApiResponse<PaymentInitiationResponse>> => {
+    if (!supabaseClient) {
+        return {
+            success: false,
+            data: null,
+            error: {
+                message: 'Supabase non configure.',
+                code: 'NOT_CONFIGURED',
+                details: null
+            }
+        };
+    }
+
     console.log('[Payment Service] Initiating Moov payment:', {
         orderId: request.orderId,
         baseAmount: request.baseAmount,
@@ -287,7 +331,18 @@ export const initiateMoovPayment = async (
 
         console.log('[Payment Service] Calling Edge Function: initiate-moov (via fetch)...');
 
-        const functionUrl = 'https://geqvbpghvmcglzfkqmvj.supabase.co/functions/v1/initiate-moov';
+        const functionUrl = getFunctionUrl('initiate-moov');
+        if (!functionUrl) {
+            return {
+                success: false,
+                data: null,
+                error: {
+                    message: "URL d'Edge Function non configuree.",
+                    code: 'NOT_CONFIGURED',
+                    details: null
+                }
+            };
+        }
         
         const response = await fetch(functionUrl, {
             method: 'POST',

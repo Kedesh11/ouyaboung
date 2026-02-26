@@ -51,17 +51,17 @@ const Footer = () => {
                         <h3 className="font-semibold text-foreground">Informations</h3>
                         <ul className="space-y-2">
                             <li>
-                                <Link href="/help" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                                <Link href="/legal/help" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                                     Centre d'aide
                                 </Link>
                             </li>
                             <li>
-                                <Link href="/cgu" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                                <Link href="/legal/cgu" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                                     CGU & Mentions légales
                                 </Link>
                             </li>
                             <li>
-                                <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                                <Link href="/legal/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                                     Politique de confidentialité
                                 </Link>
                             </li>

@@ -1,6 +1,30 @@
 // @ts-check
 import withPWA from 'next-pwa';
 
+const supabaseImageHost = (() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl) return null;
+    try {
+        return new URL(supabaseUrl).hostname;
+    } catch {
+        return null;
+    }
+})();
+
+const remoteImagePatterns = [
+    {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+    },
+];
+
+if (supabaseImageHost) {
+    remoteImagePatterns.push({
+        protocol: 'https',
+        hostname: supabaseImageHost,
+    });
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     // Temporarily disabled due to Leaflet map library incompatibility
@@ -9,12 +33,7 @@ const nextConfig = {
 
     // Necessary for generic Supabase image hosting if used, or other external domains
     images: {
-        remotePatterns: [
-            {
-                protocol: 'https',
-                hostname: '**',
-            },
-        ],
+        remotePatterns: remoteImagePatterns,
         formats: ['image/webp', 'image/avif'],
         deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
         imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
