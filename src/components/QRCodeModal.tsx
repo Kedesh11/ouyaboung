@@ -22,7 +22,7 @@ interface QRCodeModalProps {
 export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) {
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="w-[min(92vw,1100px)] max-h-[88vh] overflow-y-auto p-4 sm:p-6 lg:p-7">
+            <DialogContent className="w-[min(94vw,1210px)] max-h-[88vh] overflow-y-auto p-4 sm:p-6 lg:p-7">
                 <DialogHeader>
                     <DialogTitle className="text-center text-lg sm:text-xl">Votre QR Code de Retrait</DialogTitle>
                 </DialogHeader>

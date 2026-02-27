@@ -2,6 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabaseClient } from "@/api/supabaseClient";
 
 const TOKEN_REFRESH_GRACE_MS = 60 * 1000;
+const AUTH_TIMEOUT_MS = 7000;
 
 interface EdgeFunctionErrorPayload {
   success?: boolean;
@@ -25,19 +26,31 @@ const isTokenExpiringSoon = (session: Session): boolean => {
 export const getFreshSession = async (): Promise<Session | null> => {
   if (!supabaseClient) return null;
 
-  const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
-  const currentSession = sessionData.session;
+  try {
+    const { data: sessionData, error: sessionError } = await withTimeout(
+      supabaseClient.auth.getSession(),
+      AUTH_TIMEOUT_MS,
+      "AUTH_TIMEOUT_GET_SESSION"
+    );
+    const currentSession = sessionData.session;
 
-  if (!sessionError && currentSession?.access_token && !isTokenExpiringSoon(currentSession)) {
-    return currentSession;
-  }
+    if (!sessionError && currentSession?.access_token && !isTokenExpiringSoon(currentSession)) {
+      return currentSession;
+    }
 
-  const { data: refreshedData, error: refreshError } = await supabaseClient.auth.refreshSession();
-  if (refreshError || !refreshedData.session?.access_token) {
+    const { data: refreshedData, error: refreshError } = await withTimeout(
+      supabaseClient.auth.refreshSession(),
+      AUTH_TIMEOUT_MS,
+      "AUTH_TIMEOUT_REFRESH_SESSION"
+    );
+    if (refreshError || !refreshedData.session?.access_token) {
+      return null;
+    }
+
+    return refreshedData.session;
+  } catch {
     return null;
   }
-
-  return refreshedData.session;
 };
 
 const parseJsonSafely = async <T>(response: Response): Promise<T | null> => {
@@ -45,6 +58,18 @@ const parseJsonSafely = async <T>(response: Response): Promise<T | null> => {
     return (await response.json()) as T;
   } catch {
     return null;
+  }
+};
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, code: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(code)), timeoutMs);
+    });
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 };
 
@@ -137,25 +162,41 @@ export const callEdgeFunctionWithAuth = async <T>({
   }
 
   if (response.status === 401 && retryOnUnauthorized) {
-    const { data: refreshedData, error: refreshError } = await supabaseClient.auth.refreshSession();
-    if (!refreshError && refreshedData.session?.access_token) {
-      session = refreshedData.session;
-      try {
-        ({ response, payload } = await execute(session.access_token));
-      } catch (error) {
-        const isAbortError = (error as { name?: string } | null)?.name === "AbortError";
-        return {
-          ok: false,
-          status: 0,
-          data: null,
-          error: {
-            code: isAbortError ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
-            error: isAbortError
-              ? "La requete a expire. Verifiez la connexion et reessayez."
-              : "Erreur reseau lors de l'appel Edge Function.",
-          },
-        };
+    try {
+      const { data: refreshedData, error: refreshError } = await withTimeout(
+        supabaseClient.auth.refreshSession(),
+        AUTH_TIMEOUT_MS,
+        "AUTH_TIMEOUT_REFRESH_SESSION"
+      );
+      if (!refreshError && refreshedData.session?.access_token) {
+        session = refreshedData.session;
+        try {
+          ({ response, payload } = await execute(session.access_token));
+        } catch (error) {
+          const isAbortError = (error as { name?: string } | null)?.name === "AbortError";
+          return {
+            ok: false,
+            status: 0,
+            data: null,
+            error: {
+              code: isAbortError ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
+              error: isAbortError
+                ? "La requete a expire. Verifiez la connexion et reessayez."
+                : "Erreur reseau lors de l'appel Edge Function.",
+            },
+          };
+        }
       }
+    } catch {
+      return {
+        ok: false,
+        status: 0,
+        data: null,
+        error: {
+          code: "AUTH_TIMEOUT_REFRESH_SESSION",
+          error: "La session n'a pas pu etre rafraichie a temps. Reessayez.",
+        },
+      };
     }
   }
 
