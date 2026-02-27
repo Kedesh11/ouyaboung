@@ -54,25 +54,87 @@ export default function ScanQRPage() {
             scannerRef.current = scanner;
             scannerInitialized.current = true;
         }
-
-        return () => {
-            // Cleanup on unmount
-            if (scannerRef.current && isScanning) {
-                scannerRef.current.stop().catch(console.error);
-            }
-        };
     }, [mode]);
 
+    useEffect(() => {
+        return () => {
+            // Cleanup on unmount
+            if (scannerRef.current) {
+                scannerRef.current.stop().catch(() => undefined);
+            }
+        };
+    }, []);
+
+    const getCameraErrorMessage = (err: unknown): string => {
+        const name = (err as { name?: string })?.name || "";
+
+        if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+            return "Acces camera refuse. Autorisez la camera dans le navigateur puis reessayez.";
+        }
+        if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+            return "Aucune camera detectee sur cet appareil.";
+        }
+        if (name === "NotReadableError" || name === "TrackStartError") {
+            return "Camera deja utilisee par une autre application. Fermez-la puis reessayez.";
+        }
+        if (name === "OverconstrainedError") {
+            return "Configuration camera non compatible. Essayez avec une autre camera.";
+        }
+        if (name === "AbortError") {
+            return "Le demarrage de la camera a ete interrompu. Reessayez.";
+        }
+        return "Impossible d'acceder a la camera. Verifiez les permissions.";
+    };
+
+    const requestCameraPermission = async (): Promise<boolean> => {
+        if (typeof window !== 'undefined' && !window.isSecureContext) {
+            setCameraError("La camera requiert une connexion securisee (HTTPS).");
+            return false;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setCameraError("Votre navigateur ne supporte pas l'acces camera.");
+            return false;
+        }
+
+        try {
+            // Explicitly trigger permission prompt before starting QR scanner.
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: "environment" } },
+                audio: false,
+            });
+            stream.getTracks().forEach((track) => track.stop());
+            return true;
+        } catch (err) {
+            setCameraError(getCameraErrorMessage(err));
+            return false;
+        }
+    };
+
     const startCameraScanning = async () => {
-        if (!scannerRef.current) return;
+        if (!scannerRef.current || isScanning || isValidating) return;
 
         try {
             setCameraError(null);
             setResult(null);
-            setIsScanning(true);
+
+            const hasPermission = await requestCameraPermission();
+            if (!hasPermission) {
+                return;
+            }
+
+            const cameras = await Html5Qrcode.getCameras();
+            if (!cameras.length) {
+                setCameraError("Aucune camera detectee. Verifiez votre appareil puis reessayez.");
+                return;
+            }
+
+            const preferredCameraId =
+                cameras.find((camera) => /back|rear|environment|arriere/i.test(camera.label))?.id ??
+                cameras[0].id;
 
             await scannerRef.current.start(
-                { facingMode: "environment" }, // Use back camera
+                preferredCameraId,
                 {
                     fps: 10,
                     qrbox: { width: 250, height: 250 }
@@ -87,26 +149,32 @@ export default function ScanQRPage() {
                     // Scanning error (ignore, these are normal during scanning)
                 }
             );
+            setIsScanning(true);
         } catch (err) {
             console.error("[Scan] Camera error:", err);
-            setCameraError("Impossible d'accéder à la caméra. Vérifiez les permissions.");
+            setCameraError(getCameraErrorMessage(err));
             setIsScanning(false);
         }
     };
 
     const stopCameraScanning = async () => {
-        if (scannerRef.current && isScanning) {
+        if (scannerRef.current) {
             try {
                 await scannerRef.current.stop();
-                setIsScanning(false);
             } catch (err) {
-                console.error("[Scan] Stop error:", err);
+                const stopMessage = (err as Error)?.message?.toLowerCase() || "";
+                if (!stopMessage.includes("not running")) {
+                    console.error("[Scan] Stop error:", err);
+                }
+            } finally {
+                setIsScanning(false);
             }
         }
     };
 
     const validateCode = async (pickup_code: string) => {
-        if (!pickup_code.trim()) return;
+        const normalizedPickupCode = pickup_code.trim();
+        if (!normalizedPickupCode) return;
 
         setIsValidating(true);
         setResult(null);
@@ -116,38 +184,70 @@ export default function ScanQRPage() {
                 throw new Error("Supabase client not initialized");
             }
 
-            // Get auth token
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (!session) {
-                throw new Error("Non authentifié");
+            const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+            if (userError || !userData.user) {
+                setResult({
+                    success: false,
+                    error: "Session expiree. Veuillez vous reconnecter puis reessayer.",
+                    code: "SESSION_EXPIRED",
+                });
+                return;
             }
 
-            // Call validate-qr API
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/validate-qr`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${session.access_token}`
-                    },
-                    body: JSON.stringify({ pickup_code })
+            const { data, error } = await supabaseClient.functions.invoke("validate-qr", {
+                body: { pickup_code: normalizedPickupCode },
+            });
+
+            if (error) {
+                const functionError = error as {
+                    message?: string;
+                    context?: Response;
+                };
+                let statusCode: number | undefined;
+                let errorPayload: { error?: string; code?: string } | null = null;
+
+                if (functionError.context instanceof Response) {
+                    statusCode = functionError.context.status;
+                    try {
+                        errorPayload = (await functionError.context.clone().json()) as {
+                            error?: string;
+                            code?: string;
+                        };
+                    } catch {
+                        errorPayload = null;
+                    }
                 }
-            );
 
-            const data = await response.json();
+                const defaultError =
+                    statusCode === 401
+                        ? "Acces non autorise. Reconnectez-vous puis reessayez."
+                        : statusCode === 403
+                            ? "Compte marchand non autorise pour valider cette commande."
+                            : "Erreur lors de la validation du code.";
 
-            if (data.success) {
+                setResult({
+                    success: false,
+                    error: errorPayload?.error || functionError.message || defaultError,
+                    code:
+                        errorPayload?.code ||
+                        (statusCode === 401 ? "UNAUTHORIZED" : statusCode === 403 ? "FORBIDDEN" : "VALIDATION_ERROR"),
+                });
+                return;
+            }
+
+            const payload = data as ValidationResult | null;
+
+            if (payload?.success) {
                 setResult({
                     success: true,
-                    message: data.message,
-                    order: data.order
+                    message: payload.message,
+                    order: payload.order
                 });
             } else {
                 setResult({
                     success: false,
-                    error: data.error,
-                    code: data.code
+                    error: payload?.error || "Code invalide ou commande non eligible.",
+                    code: payload?.code || "VALIDATION_ERROR"
                 });
             }
         } catch (err) {
