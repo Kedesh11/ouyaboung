@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Camera, Keyboard, CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { supabaseClient } from "@/api/supabaseClient";
-import type { Session } from "@supabase/supabase-js";
+import { callEdgeFunctionWithAuth } from "@/lib/auth/edge-function-client";
 
 type ScanMode = 'camera' | 'manual';
 
@@ -28,6 +28,47 @@ interface ValidationResult {
         consumedAt: string;
     };
 }
+
+type ValidateQrApiResponse = ValidationResult & {
+    error?: string;
+    code?: string;
+};
+
+const extractPickupCode = (rawValue: string): string => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return "";
+
+    // Support QR payload as URL: /merchant/scan?pickup_code=ABC123
+    try {
+        const url = new URL(trimmed);
+        const queryCode = url.searchParams.get("pickup_code") || url.searchParams.get("code");
+        if (queryCode) {
+            return queryCode.replace(/\s+/g, "").toUpperCase();
+        }
+    } catch {
+        // not a URL, continue
+    }
+
+    // Support JSON payload: {"pickup_code":"ABC123"}
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        try {
+            const parsed = JSON.parse(trimmed) as { pickup_code?: unknown; code?: unknown };
+            const rawCode =
+                typeof parsed.pickup_code === "string"
+                    ? parsed.pickup_code
+                    : typeof parsed.code === "string"
+                        ? parsed.code
+                        : "";
+            if (rawCode) {
+                return rawCode.replace(/\s+/g, "").toUpperCase();
+            }
+        } catch {
+            // not valid JSON payload, continue
+        }
+    }
+
+    return trimmed.replace(/\s+/g, "").toUpperCase();
+};
 
 export default function ScanQRPage() {
     const router = useRouter();
@@ -176,7 +217,7 @@ export default function ScanQRPage() {
     };
 
     const validateCode = async (pickup_code: string) => {
-        const normalizedPickupCode = pickup_code.trim();
+        const normalizedPickupCode = extractPickupCode(pickup_code);
         if (!normalizedPickupCode) return;
 
         setIsValidating(true);
@@ -187,57 +228,14 @@ export default function ScanQRPage() {
                 throw new Error("Supabase client not initialized");
             }
 
-            const resolveValidSession = async (): Promise<Session | null> => {
-                const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
-                if (!sessionError && sessionData.session?.access_token) {
-                    return sessionData.session;
-                }
-
-                const { data: refreshedData, error: refreshError } = await supabaseClient.auth.refreshSession();
-                if (refreshError || !refreshedData.session?.access_token) {
-                    return null;
-                }
-                return refreshedData.session;
-            };
-
-            const session = await resolveValidSession();
-            if (!session) {
-                setResult({
-                    success: false,
-                    error: "Session expiree. Veuillez vous reconnecter puis reessayer.",
-                    code: "SESSION_EXPIRED",
-                });
-                router.push("/auth?role=merchant&redirect=/merchant/scan");
-                return;
-            }
-
-            const { data, error } = await supabaseClient.functions.invoke("validate-qr", {
+            const edgeResult = await callEdgeFunctionWithAuth<ValidateQrApiResponse>({
+                functionName: "validate-qr",
                 body: { pickup_code: normalizedPickupCode },
-                headers: {
-                    Authorization: `Bearer ${session.access_token}`,
-                },
+                retryOnUnauthorized: true,
             });
 
-            if (error) {
-                const functionError = error as {
-                    message?: string;
-                    context?: Response;
-                };
-                let statusCode: number | undefined;
-                let errorPayload: { error?: string; code?: string } | null = null;
-
-                if (functionError.context instanceof Response) {
-                    statusCode = functionError.context.status;
-                    try {
-                        errorPayload = (await functionError.context.clone().json()) as {
-                            error?: string;
-                            code?: string;
-                        };
-                    } catch {
-                        errorPayload = null;
-                    }
-                }
-
+            if (!edgeResult.ok) {
+                const statusCode = edgeResult.status;
                 const defaultError =
                     statusCode === 401
                         ? "Acces non autorise. Reconnectez-vous puis reessayez."
@@ -247,15 +245,18 @@ export default function ScanQRPage() {
 
                 setResult({
                     success: false,
-                    error: errorPayload?.error || functionError.message || defaultError,
+                    error: edgeResult.error?.error || edgeResult.error?.message || defaultError,
                     code:
-                        errorPayload?.code ||
+                        edgeResult.error?.code ||
                         (statusCode === 401 ? "UNAUTHORIZED" : statusCode === 403 ? "FORBIDDEN" : "VALIDATION_ERROR"),
                 });
+                if (statusCode === 401) {
+                    router.push("/auth?role=merchant&redirect=/merchant/scan");
+                }
                 return;
             }
 
-            const payload = data as ValidationResult | null;
+            const payload = edgeResult.data;
 
             if (payload?.success) {
                 setResult({
@@ -372,9 +373,9 @@ export default function ScanQRPage() {
                         <form onSubmit={handleManualSubmit} className="space-y-4">
                             <Input
                                 type="text"
-                                placeholder="QR_abc123..."
+                                placeholder="Ex: ABC123"
                                 value={manualCode}
-                                onChange={(e) => setManualCode(e.target.value)}
+                                onChange={(e) => setManualCode(extractPickupCode(e.target.value))}
                                 className="font-mono"
                                 disabled={isValidating}
                             />
