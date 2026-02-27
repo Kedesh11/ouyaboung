@@ -22,7 +22,7 @@ interface QRCodeModalProps {
 export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) {
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-[96vw] sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-center">Votre QR Code de Retrait</DialogTitle>
                 </DialogHeader>
@@ -32,7 +32,7 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                     <div className="flex justify-center p-6 bg-white rounded-lg">
                         <QRCodeSVG 
                             value={order.pickup_code} 
-                            size={220}
+                            size={300}
                             level="H"
                             includeMargin={true}
                         />
