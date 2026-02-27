@@ -11,7 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import FoodCard, { FoodItem as FoodCardItem } from "../../_components/FoodCard";
 import { Search as SearchIcon, MapPin, Grid, Map, SlidersHorizontal, Store, Loader2, LocateFixed } from "lucide-react";
-import { searchInventory, getCategoryName, formatPrice, getAuthUser, getActiveOrders, createReservation } from "@/services";
+import {
+    searchInventory,
+    getCategoryName,
+    formatPrice,
+    getAuthUser,
+    getActiveOrders,
+    createReservation,
+    resolveUserLocation,
+    getCachedUserLocation,
+} from "@/services";
 import { useToast } from "@/hooks/use-toast";
 import type { FoodItem, FoodCategory, GabonCity, MerchantType } from "@/types";
 
@@ -59,8 +68,6 @@ const FOOD_CATEGORIES: FoodCategory[] = [
     'mixed_basket',
 ];
 
-const GEOLOCATION_STORAGE_KEY = "ouyaboung_user_location";
-
 const isValidCoord = (lat?: number | null, lng?: number | null): lat is number =>
     typeof lat === "number" &&
     typeof lng === "number" &&
@@ -99,7 +106,7 @@ const SearchPage = () => {
     const [items, setItems] = useState<FoodItem[]>([]);
     const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [isLocating, setIsLocating] = useState(false);
-    const [geoStatus, setGeoStatus] = useState<"idle" | "granted" | "denied" | "unavailable">("idle");
+    const [geoStatus, setGeoStatus] = useState<"idle" | "granted" | "approximate" | "denied" | "unavailable">("idle");
     const [userId, setUserId] = useState<string | null>(null);
     const [reservedCountMap, setReservedCountMap] = useState<Record<string, number>>({});
     const [reservingItemId, setReservingItemId] = useState<string | null>(null);
@@ -111,50 +118,51 @@ const SearchPage = () => {
     const [sortBy, setSortBy] = useState<"distance" | "price" | "discount" | "rating">("distance");
     const [searchQuery, setSearchQuery] = useState("");
 
-    const requestUserLocation = useCallback(async (showErrorFeedback: boolean = false) => {
-        if (!navigator.geolocation) {
-            setGeoStatus("unavailable");
-            return;
+    const requestUserLocation = useCallback(async (showErrorFeedback: boolean = false, forceRefresh: boolean = false) => {
+        setIsLocating(true);
+        const result = await resolveUserLocation({
+            forceRefresh,
+            timeoutMs: 12000,
+            maximumAgeMs: 300000,
+            enableHighAccuracy: true,
+            fallbackToIp: true,
+        });
+
+        if (result.success && result.data) {
+            setUserLocation({
+                latitude: result.data.latitude,
+                longitude: result.data.longitude,
+            });
+            setGeoStatus(result.data.isApproximate ? "approximate" : "granted");
+
+            if (showErrorFeedback && result.data.isApproximate) {
+                toast({
+                    title: "Position approximative activée",
+                    description: "Nous utilisons une geolocalisation IP temporaire. Autorisez le GPS pour plus de precision.",
+                });
+            }
+        } else {
+            if (result.error?.code === "GEO_PERMISSION_DENIED") {
+                setGeoStatus("denied");
+                if (showErrorFeedback) {
+                    toast({
+                        title: "Localisation refusée",
+                        description: "Autorisez la localisation pour trier les boutiques autour de vous.",
+                        variant: "destructive",
+                    });
+                }
+            } else {
+                setGeoStatus("unavailable");
+                if (showErrorFeedback) {
+                    toast({
+                        title: "Position indisponible",
+                        description: "Impossible d'obtenir votre position actuelle.",
+                        variant: "destructive",
+                    });
+                }
+            }
         }
 
-        setIsLocating(true);
-        await new Promise<void>((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const nextLocation = {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
-                    };
-                    setUserLocation(nextLocation);
-                    setGeoStatus("granted");
-                    localStorage.setItem(GEOLOCATION_STORAGE_KEY, JSON.stringify(nextLocation));
-                    resolve();
-                },
-                (error) => {
-                    if (error.code === error.PERMISSION_DENIED) {
-                        setGeoStatus("denied");
-                        if (showErrorFeedback) {
-                            toast({
-                                title: "Localisation refusée",
-                                description: "Autorisez la localisation pour trier les boutiques autour de vous.",
-                                variant: "destructive",
-                            });
-                        }
-                    } else {
-                        setGeoStatus("unavailable");
-                        if (showErrorFeedback) {
-                            toast({
-                                title: "Position indisponible",
-                                description: "Impossible d'obtenir votre position actuelle.",
-                                variant: "destructive",
-                            });
-                        }
-                    }
-                    resolve();
-                },
-                { enableHighAccuracy: true, timeout: 12000, maximumAge: 300000 }
-            );
-        });
         setIsLocating(false);
     }, [toast]);
 
@@ -164,21 +172,14 @@ const SearchPage = () => {
     }, [selectedCity, selectedCategory, selectedMerchantType, priceRange, sortBy]);
 
     useEffect(() => {
-        const saved = localStorage.getItem(GEOLOCATION_STORAGE_KEY);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved) as { latitude: number; longitude: number };
-                if (isValidCoord(parsed.latitude, parsed.longitude)) {
-                    setUserLocation(parsed);
-                    setGeoStatus("granted");
-                }
-            } catch {
-                localStorage.removeItem(GEOLOCATION_STORAGE_KEY);
-            }
+        const cached = getCachedUserLocation();
+        if (cached && isValidCoord(cached.latitude, cached.longitude)) {
+            setUserLocation({ latitude: cached.latitude, longitude: cached.longitude });
+            setGeoStatus(cached.isApproximate ? "approximate" : "granted");
         }
 
         // Active by default: trigger geolocation request as soon as page loads.
-        requestUserLocation(false);
+        requestUserLocation(false, true);
     }, [requestUserLocation]);
 
     useEffect(() => {
@@ -459,6 +460,10 @@ const SearchPage = () => {
                                         <span>
                                             Localisation active: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
                                         </span>
+                                    ) : geoStatus === "approximate" && userLocation ? (
+                                        <span>
+                                            Position approximative (IP): {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+                                        </span>
                                     ) : geoStatus === "denied" ? (
                                         <span>Localisation refusée. Les résultats ne sont pas triés autour de vous.</span>
                                     ) : (
@@ -470,7 +475,7 @@ const SearchPage = () => {
                                     variant="ghost"
                                     size="sm"
                                     className="h-7 gap-1.5"
-                                    onClick={() => requestUserLocation(true)}
+                                    onClick={() => requestUserLocation(true, true)}
                                     disabled={isLocating}
                                 >
                                     {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LocateFixed className="w-3.5 h-3.5" />}

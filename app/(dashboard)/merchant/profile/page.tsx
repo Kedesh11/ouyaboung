@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import type { MerchantType, GabonCity, DayHours, OpeningHours } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { getMyMerchantProfile, updateMerchantProfile } from "@/services/merchant.service";
+import { resolveUserLocation } from "@/services";
 import { supabaseClient } from "@/api/supabaseClient";
 
 const MERCHANT_TYPES: { value: MerchantType; label: string }[] = [
@@ -302,66 +303,45 @@ const MerchantProfilePage = () => {
   };
 
   const handleGeolocation = async () => {
-    if (!navigator.geolocation) {
-      toast.error("La géolocalisation n'est pas supportée par votre navigateur");
-      return;
-    }
-
     setIsLocating(true);
     toast.info("Acquisition de la position...");
 
     try {
-      if (navigator.permissions?.query) {
-        const permission = await navigator.permissions.query({
-          name: "geolocation" as PermissionName,
+      const result = await resolveUserLocation({
+        forceRefresh: true,
+        timeoutMs: 15000,
+        maximumAgeMs: 0,
+        enableHighAccuracy: true,
+        fallbackToIp: true,
+      });
+
+      if (result.success && result.data) {
+        const nextLatitude = result.data.latitude;
+        const nextLongitude = result.data.longitude;
+
+        setProfile((prev) => ({
+          ...prev,
+          latitude: nextLatitude,
+          longitude: nextLongitude,
+        }));
+
+        console.info("[MerchantProfile] Geolocation acquired", {
+          latitude: nextLatitude,
+          longitude: nextLongitude,
+          source: result.data.source,
+          approximate: result.data.isApproximate,
+          accuracy: result.data.accuracy,
         });
-        if (permission.state === "denied") {
-          toast.error("Permission de géolocalisation refusée dans le navigateur.");
-          setIsLocating(false);
-          return;
+
+        if (result.data.isApproximate) {
+          toast.warning("Position approximative récupérée. Activez le GPS pour une précision maximale.");
+        } else {
+          toast.success("Position récupérée. Enregistrez pour la sauvegarder.");
         }
+        return;
       }
 
-      await new Promise<void>((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const nextLatitude = position.coords.latitude;
-            const nextLongitude = position.coords.longitude;
-
-            setProfile((prev) => ({
-              ...prev,
-              latitude: nextLatitude,
-              longitude: nextLongitude,
-            }));
-
-            console.info("[MerchantProfile] Geolocation acquired", {
-              latitude: nextLatitude,
-              longitude: nextLongitude,
-              accuracy: position.coords.accuracy,
-            });
-            toast.success("Position récupérée. Enregistrez pour la sauvegarder.");
-            resolve();
-          },
-          (error) => {
-            console.error("[MerchantProfile] Geolocation failed", error);
-            if (error.code === 1) {
-              toast.error("Accès à la position refusé. Activez la permission de localisation.");
-            } else if (error.code === 2) {
-              toast.error("Position indisponible. Vérifiez votre réseau GPS.");
-            } else if (error.code === 3) {
-              toast.error("La géolocalisation a expiré. Réessayez.");
-            } else {
-              toast.error("Impossible d'obtenir votre position.");
-            }
-            resolve();
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0,
-          }
-        );
-      });
+      toast.error(result.error?.message || "Impossible d'obtenir votre position.");
     } finally {
       setIsLocating(false);
     }

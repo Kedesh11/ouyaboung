@@ -5,8 +5,9 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,8 +33,17 @@ import {
   Phone,
   Calendar,
   Hash,
+  QrCode,
 } from "lucide-react";
-import { getMerchantOrders, formatPrice, formatOrderForDisplay, getMyMerchantProfile } from "@/services";
+import {
+  getMerchantOrders,
+  formatPrice,
+  formatOrderForDisplay,
+  getMyMerchantProfile,
+  confirmOrder,
+  markOrderReady,
+  cancelOrder as cancelOrderService,
+} from "@/services";
 import type { Order, OrderStatus } from "@/types";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +57,8 @@ const MerchantOrdersPage = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (user) {
@@ -91,19 +103,189 @@ const MerchantOrdersPage = () => {
     return matchesSearch && matchesTab;
   });
 
-  const handleConfirm = (order: Order) => {
-    toast.success(`Réservation ${order.pickup_code} confirmée`);
-    setIsDialogOpen(false);
+  const mergeOrderUpdate = (updatedOrder: Order) => {
+    setOrders((prev) =>
+      prev.map((order) =>
+        order.id === updatedOrder.id
+          ? { ...order, ...updatedOrder, user: order.user ?? updatedOrder.user }
+          : order
+      )
+    );
+    setSelectedOrder((prev) =>
+      prev && prev.id === updatedOrder.id
+        ? { ...prev, ...updatedOrder, user: prev.user ?? updatedOrder.user }
+        : prev
+    );
   };
 
-  const handleComplete = (order: Order) => {
-    toast.success(`Réservation ${order.pickup_code} récupérée`);
-    setIsDialogOpen(false);
+  const withAction = async (
+    order: Order,
+    action: "confirm" | "ready" | "cancel",
+    callback: () => Promise<any>,
+    successMessage: string
+  ) => {
+    const actionKey = `${order.id}:${action}`;
+    setActiveActionKey(actionKey);
+    try {
+      const result = await callback();
+      if (result?.success && result.data) {
+        mergeOrderUpdate(result.data as Order);
+        toast.success(successMessage);
+        return true;
+      }
+
+      toast.error(result?.error?.message || "La mise a jour du statut a echoue.");
+      return false;
+    } catch (error) {
+      console.error("[MerchantOrders] Status transition failed", {
+        orderId: order.id,
+        action,
+        error,
+      });
+      toast.error("Une erreur est survenue pendant la mise a jour.");
+      return false;
+    } finally {
+      setActiveActionKey(null);
+    }
   };
 
-  const handleCancel = (order: Order) => {
-    toast.success(`Réservation ${order.pickup_code} annulée`);
+  const handleConfirm = async (order: Order) => {
+    const done = await withAction(
+      order,
+      "confirm",
+      () => confirmOrder(order.id),
+      `Reservation ${order.pickup_code} confirmee`
+    );
+    if (done) {
+      setIsDialogOpen(false);
+    }
+  };
+
+  const handleMarkReady = async (order: Order) => {
+    const done = await withAction(
+      order,
+      "ready",
+      () => markOrderReady(order.id),
+      `Reservation ${order.pickup_code} marquee comme prete`
+    );
+    if (done) {
+      setIsDialogOpen(false);
+    }
+  };
+
+  const handleCancel = async (order: Order) => {
+    const done = await withAction(
+      order,
+      "cancel",
+      () => cancelOrderService(order.id, "Annulee par le marchand"),
+      `Reservation ${order.pickup_code} annulee`
+    );
+    if (done) {
+      setIsDialogOpen(false);
+    }
+  };
+
+  const handleScanOrder = (order: Order) => {
     setIsDialogOpen(false);
+    router.push(`/merchant/scan?pickup_code=${encodeURIComponent(order.pickup_code)}`);
+  };
+
+  const isActionLoading = (orderId: string, action: "confirm" | "ready" | "cancel") =>
+    activeActionKey === `${orderId}:${action}`;
+  
+  const isAnyActionLoadingForOrder = (orderId: string) =>
+    typeof activeActionKey === "string" && activeActionKey.startsWith(`${orderId}:`);
+  
+  const isActionDisabled = (orderId: string) => isAnyActionLoadingForOrder(orderId);
+
+  const LoadingIcon = () => <Loader2 className="w-4 h-4 mr-2 animate-spin" />;
+
+  const ActionButtonLabel = ({
+    loading,
+    icon,
+    label,
+  }: {
+    loading: boolean;
+    icon: ReactNode;
+    label: string;
+  }) => (
+    <>
+      {loading ? <LoadingIcon /> : icon}
+      {label}
+    </>
+  );
+
+  const ActionButtons = ({ order }: { order: Order }) => {
+    if (order.status === "pending") {
+      const cancelLoading = isActionLoading(order.id, "cancel");
+      const confirmLoading = isActionLoading(order.id, "confirm");
+      return (
+        <>
+          <Button
+            variant="outline"
+            className="text-destructive"
+            onClick={() => handleCancel(order)}
+            disabled={isActionDisabled(order.id)}
+          >
+            <ActionButtonLabel
+              loading={cancelLoading}
+              icon={<XCircle className="w-4 h-4 mr-2" />}
+              label="Annuler"
+            />
+          </Button>
+          <Button
+            onClick={() => handleConfirm(order)}
+            disabled={isActionDisabled(order.id)}
+          >
+            <ActionButtonLabel
+              loading={confirmLoading}
+              icon={<CheckCircle className="w-4 h-4 mr-2" />}
+              label="Confirmer"
+            />
+          </Button>
+        </>
+      );
+    }
+
+    if (order.status === "confirmed") {
+      const readyLoading = isActionLoading(order.id, "ready");
+      return (
+        <>
+          <Button
+            onClick={() => handleMarkReady(order)}
+            disabled={isActionDisabled(order.id)}
+          >
+            <ActionButtonLabel
+              loading={readyLoading}
+              icon={<Package className="w-4 h-4 mr-2" />}
+              label="Marquer comme pret"
+            />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleScanOrder(order)}
+            disabled={isActionDisabled(order.id)}
+          >
+            <QrCode className="w-4 h-4 mr-2" />
+            Scanner le QR
+          </Button>
+        </>
+      );
+    }
+
+    if (order.status === "ready") {
+      return (
+        <Button
+          onClick={() => handleScanOrder(order)}
+          disabled={isActionDisabled(order.id)}
+        >
+          <QrCode className="w-4 h-4 mr-2" />
+          Scanner pour valider la commande
+        </Button>
+      );
+    }
+
+    return null;
   };
 
   const getStatusIcon = (status: OrderStatus) => {
@@ -319,34 +501,7 @@ const MerchantOrdersPage = () => {
               </div>
 
               <DialogFooter className="flex-col sm:flex-row gap-2">
-                {selectedOrder.status === "pending" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="text-destructive"
-                      onClick={() => handleCancel(selectedOrder)}
-                    >
-                      <XCircle className="w-4 h-4 mr-2" />
-                      Annuler
-                    </Button>
-                    <Button onClick={() => handleConfirm(selectedOrder)}>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Confirmer
-                    </Button>
-                  </>
-                )}
-                {selectedOrder.status === "confirmed" && (
-                  <Button onClick={() => handleComplete(selectedOrder)}>
-                    <Package className="w-4 h-4 mr-2" />
-                    Marquer comme prêt
-                  </Button>
-                )}
-                {selectedOrder.status === "ready" && (
-                  <Button onClick={() => handleComplete(selectedOrder)}>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Valider la récupération
-                  </Button>
-                )}
+                <ActionButtons order={selectedOrder} />
               </DialogFooter>
             </>
           )}

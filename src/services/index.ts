@@ -136,3 +136,9 @@ export {
   sendOrderNotification,
   sendQRCodeNotification,
 } from './notification.service';
+
+// Geolocation Service
+export {
+  resolveUserLocation,
+  getCachedUserLocation,
+} from './geolocation.service';
