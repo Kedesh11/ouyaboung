@@ -59,6 +59,10 @@ export interface Merchant {
   total_reviews: number;
   is_verified: boolean;
   is_active: boolean;
+  is_refused?: boolean;
+  validated_at?: string;
+  refused_at?: string;
+  refusal_reason?: string;
   slug: string;
   created_at: string;
   updated_at: string;

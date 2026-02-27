@@ -222,32 +222,32 @@ otp_expiry = 3600
 
 [auth.email.template.confirmation]
 subject = "Confirmez votre inscription à Ouyaboung"
-content_path = "./supabase/templates/confirm_signup.html"
+content_path = "supabase/templates/confirm_signup.html"
 
 [auth.email.template.recovery]
 subject = "Réinitialisez votre mot de passe Ouyaboung"
-content_path = "./supabase/templates/reset_password.html"
+content_path = "supabase/templates/reset_password.html"
 
 [auth.email.template.magic_link]
 subject = "Votre lien de connexion Ouyaboung"
-content_path = "./supabase/templates/magic_link.html"
+content_path = "supabase/templates/magic_link.html"
 
 [auth.email.template.email_change]
 subject = "Confirmez votre changement d'adresse email"
-content_path = "./supabase/templates/change_email.html"
+content_path = "supabase/templates/change_email.html"
 
 [auth.email.template.invite]
 subject = "Vous êtes invité sur Ouyaboung"
-content_path = "./supabase/templates/invite.html"
+content_path = "supabase/templates/invite.html"
 
 [auth.email.template.reauthentication]
 subject = "Vérification de sécurité Ouyaboung"
-content_path = "./supabase/templates/reauthentication.html"
+content_path = "supabase/templates/reauthentication.html"
 
 [auth.email.notification.password_changed]
 enabled = true
 subject = "Votre mot de passe Ouyaboung a été modifié"
-content_path = "./supabase/templates/password_changed_notification.html"
+content_path = "templates/password_changed_notification.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

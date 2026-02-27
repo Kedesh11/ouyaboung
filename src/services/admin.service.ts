@@ -215,19 +215,28 @@ export const adminService = {
       throw new Error('Supabase not configured');
     }
 
+    const refusalReason = action.reason?.trim();
+    if (action.action === 'refuse' && !refusalReason) {
+      throw new Error('Le motif du refus est obligatoire.');
+    }
+
     const client = requireSupabaseClient();
     const updates = action.action === 'validate'
       ? {
         is_verified: true,
         is_refused: false,
+        is_active: true,
         validated_at: new Date().toISOString(),
+        refused_at: null,
+        refusal_reason: null,
         updated_at: new Date().toISOString(),
       }
       : {
         is_verified: false,
         is_refused: true,
+        is_active: false,
         refused_at: new Date().toISOString(),
-        refusal_reason: action.reason,
+        refusal_reason: refusalReason,
         updated_at: new Date().toISOString(),
       };
 
@@ -252,6 +261,26 @@ export const adminService = {
       });
     } catch (err) {
       console.warn('Failed to log activity:', err);
+    }
+
+    if (data.user_id) {
+      try {
+        await client.from(DB_TABLES.NOTIFICATIONS).insert({
+          user_id: data.user_id,
+          type: action.action === 'validate' ? 'merchant_verified' : 'merchant_refused',
+          title: action.action === 'validate' ? 'Boutique approuvée' : 'Boutique refusée',
+          message: action.action === 'validate'
+            ? `Votre boutique "${data.business_name}" est approuvée. Vous pouvez désormais ajouter des produits.`
+            : `Votre boutique "${data.business_name}" a été refusée.${refusalReason ? ` Motif: ${refusalReason}` : ''}`,
+          data: {
+            merchant_id: action.merchantId,
+            action: action.action,
+            reason: refusalReason || null,
+          },
+        });
+      } catch (err) {
+        console.warn('Failed to notify merchant after status update:', err);
+      }
     }
 
     return transformMerchant(data);

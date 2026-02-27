@@ -86,18 +86,17 @@ const businessTypes = [
   { value: "bakery", label: "Boulangerie / Pâtisserie" },
   { value: "supermarket", label: "Supermarché" },
   { value: "grocery", label: "Épicerie" },
-  { value: "butcher", label: "Boucherie" },
   { value: "hotel", label: "Hôtel" },
   { value: "caterer", label: "Traiteur" },
   { value: "other", label: "Autre" },
 ];
 
 const cities = [
-  { value: "libreville", label: "Libreville" },
-  { value: "port-gentil", label: "Port-Gentil" },
-  { value: "franceville", label: "Franceville" },
-  { value: "oyem", label: "Oyem" },
-  { value: "moanda", label: "Moanda" },
+  { value: "Libreville", label: "Libreville" },
+  { value: "Port-Gentil", label: "Port-Gentil" },
+  { value: "Franceville", label: "Franceville" },
+  { value: "Oyem", label: "Oyem" },
+  { value: "Moanda", label: "Moanda" },
 ];
 
 const MerchantRegisterPage = () => {
@@ -391,7 +390,7 @@ const MerchantRegisterPage = () => {
         // Logo URL will be updated later if immediate upload is possible
       };
 
-      // 1. Register User (Trigger will create Merchant Record)
+      // 1. Register User
       console.log("Step 1: Registering User with Metadata...");
       const authResult = await register(data.email, data.password, {
         role: 'merchant',
@@ -407,8 +406,87 @@ const MerchantRegisterPage = () => {
       console.log("Step 1 Success. User created.");
       const session = authResult.data.session;
       const user = authResult.data.user;
+      let merchantId: string | null = null;
 
-      // 2. Upload Files (Only if we have a session/auto-login)
+      const slugBase = data.business_name
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 36);
+      const slug = `${slugBase || "commerce"}-${Math.floor(Math.random() * 100000)}`;
+
+      // 2. Ensure merchant row exists in pending state
+      if (session) {
+        const { data: existingMerchant } = await supabase
+          .from("merchants")
+          .select("id, is_verified")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (existingMerchant?.id) {
+          merchantId = existingMerchant.id;
+
+          // Keep already approved merchants unchanged, otherwise enforce pending state.
+          if (!existingMerchant.is_verified) {
+            const { error: updateError } = await supabase
+              .from("merchants")
+              .update({
+                business_name: data.business_name,
+                business_type: data.business_type,
+                description: data.description,
+                address: data.address,
+                city: data.city,
+                quartier: data.quartier,
+                phone: data.phone,
+                email: data.email,
+                latitude: data.latitude ?? null,
+                longitude: data.longitude ?? null,
+                is_verified: false,
+                is_active: false,
+                is_refused: false,
+              })
+              .eq("id", existingMerchant.id);
+
+            if (updateError) {
+              console.warn("[MerchantRegister] Failed to refresh pending merchant", updateError);
+            }
+          }
+        } else {
+          const { data: merchantRow, error: createMerchantError } = await supabase
+            .from("merchants")
+            .insert({
+              user_id: user.id,
+              business_name: data.business_name,
+              business_type: data.business_type,
+              description: data.description,
+              address: data.address,
+              city: data.city,
+              quartier: data.quartier,
+              phone: data.phone,
+              email: data.email,
+              latitude: data.latitude ?? null,
+              longitude: data.longitude ?? null,
+              is_verified: false,
+              is_active: false,
+              is_refused: false,
+              rating: 0,
+              total_reviews: 0,
+              slug,
+            })
+            .select("id")
+            .single();
+
+          if (createMerchantError) {
+            console.warn("[MerchantRegister] Failed to create merchant row", createMerchantError);
+          } else {
+            merchantId = merchantRow.id;
+          }
+        }
+      }
+
+      // 3. Upload Files (Only if we have a session/auto-login)
       if (session) {
         console.log("Session active, attempting file upload...");
         let logoUrl = null;
@@ -424,10 +502,26 @@ const MerchantRegisterPage = () => {
           }
         }
 
-        // 3. Update Merchant Record with Logo if uploaded
+        // 4. Update Merchant Record with Logo if uploaded
         if (logoUrl) {
           console.log("Updating merchant with Logo URL...");
           await supabase.from('merchants').update({ logo_url: logoUrl }).eq('user_id', user.id);
+        }
+
+        // 5. Notify admins (internal notification + email)
+        if (merchantId) {
+          const notifyResponse = await fetch("/api/merchant/onboarding-notify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ merchantId }),
+          });
+
+          if (!notifyResponse.ok) {
+            const notifyResult = await notifyResponse.json().catch(() => null);
+            console.warn("[MerchantRegister] Admin notification failed", notifyResult);
+          }
         }
       } else {
         console.log("No active session (Email confirmation required). Skipping file upload.");
@@ -439,7 +533,9 @@ const MerchantRegisterPage = () => {
       }
 
       toast.success("Compte créé avec succès!", {
-        description: "Votre inscription est enregistrée. " + (session ? "Bienvenue !" : "Veuillez vérifier votre email."),
+        description: session
+          ? "Votre boutique a été créée avec le statut En attente de validation admin."
+          : "Votre inscription est enregistrée. Veuillez vérifier votre email.",
         duration: 8000,
       });
 

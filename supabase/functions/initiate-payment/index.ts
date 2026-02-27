@@ -17,11 +17,22 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+const PAYMENT_FLOW_ENABLED = false
 
 serve(async (req) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
+    }
+
+    if (!PAYMENT_FLOW_ENABLED) {
+        return new Response(
+            JSON.stringify({
+                success: false,
+                error: { message: 'Payment flow disabled', code: 'PAYMENT_DISABLED' }
+            }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
     }
 
     try {

@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { QRCodeSVG } from "qrcode.react";
-import { MapPin, Package, CreditCard, Clock, X } from "lucide-react";
+import { MapPin, Package, CreditCard, Clock } from "lucide-react";
 
 interface QRCodeModalProps {
     open: boolean;
@@ -45,9 +45,10 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                         </p>
                         <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
                             <li>Rendez-vous chez le marchand</li>
-                            <li>Présentez ce QR Code</li>
-                            <li>Le marchand scanne le code</li>
-                            <li>Récupérez votre commande !</li>
+                            <li>Reglez votre commande sur place</li>
+                            <li>Presentez ce QR Code au marchand</li>
+                            <li>Le scan confirme le paiement et le retrait</li>
+                            <li>Recuperez votre commande</li>
                         </ol>
                     </div>
 
@@ -81,7 +82,7 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                         <div className="flex items-start gap-3">
                             <CreditCard className="w-4 h-4 text-muted-foreground mt-0.5" />
                             <div className="flex-1">
-                                <p className="text-xs text-muted-foreground">Montant payé</p>
+                                <p className="text-xs text-muted-foreground">Montant a regler sur place</p>
                                 <p className="text-sm font-medium">{order.totalPrice} FCFA</p>
                             </div>
                         </div>

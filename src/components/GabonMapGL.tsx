@@ -66,6 +66,7 @@ const generateCityCoords = (cityName: string, itemId: string): { latitude: numbe
 interface GabonMapGLProps {
     items: FoodItem[];
     selectedCity?: GabonCity | "";
+    userLocation?: { latitude: number; longitude: number } | null;
     onItemSelect?: (item: FoodItem) => void;
     className?: string;
 }
@@ -73,6 +74,7 @@ interface GabonMapGLProps {
 const GabonMapGL = ({
     items,
     selectedCity,
+    userLocation,
     onItemSelect,
     className = "",
 }: GabonMapGLProps) => {
@@ -90,12 +92,19 @@ const GabonMapGL = ({
                 zoom: 12,
             };
         }
+        if (userLocation) {
+            return {
+                longitude: userLocation.longitude,
+                latitude: userLocation.latitude,
+                zoom: 11,
+            };
+        }
         return {
             longitude: GABON_CENTER.longitude,
             latitude: GABON_CENTER.latitude,
             zoom: 6,
         };
-    }, [selectedCity]);
+    }, [selectedCity, userLocation]);
 
     // Fly to city when selectedCity changes
     useEffect(() => {
@@ -110,6 +119,18 @@ const GabonMapGL = ({
             });
         }
     }, [selectedCity, isMapLoaded]);
+
+    useEffect(() => {
+        if (!mapRef.current || !isMapLoaded) return;
+        if (selectedCity) return;
+        if (!userLocation) return;
+
+        mapRef.current.flyTo({
+            center: [userLocation.longitude, userLocation.latitude],
+            zoom: 11,
+            duration: 1200,
+        });
+    }, [userLocation, selectedCity, isMapLoaded]);
 
     // Generate coordinates for items
     const itemsWithCoords = useMemo(() => {
@@ -209,6 +230,17 @@ const GabonMapGL = ({
                         </div>
                     </Marker>
                 ))}
+
+                {/* User location marker */}
+                {userLocation && (
+                    <Marker
+                        longitude={userLocation.longitude}
+                        latitude={userLocation.latitude}
+                        anchor="center"
+                    >
+                        <div className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow" />
+                    </Marker>
+                )}
 
                 {/* Popup */}
                 {popupInfo && (

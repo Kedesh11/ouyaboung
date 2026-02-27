@@ -120,6 +120,7 @@ export const signUpWithEmail = async (
 
   const client = requireSupabaseClient();
   const redirectUrl = buildRedirectUrl('/auth');
+  const safeRole = signUpData.role === 'merchant' ? 'merchant' : 'user';
 
   try {
     const { data, error } = await client.auth.signUp({
@@ -130,7 +131,7 @@ export const signUpWithEmail = async (
         data: {
           full_name: signUpData.full_name,
           phone: signUpData.phone,
-          role: signUpData.role,
+          role: safeRole,
           business_name: signUpData.business_name,
           ...signUpData.metadata,
         },

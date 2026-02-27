@@ -57,6 +57,22 @@ export const createOrder = async (
     };
   }
 
+  if (
+    !foodItem.is_available ||
+    !foodItem.merchants?.is_verified ||
+    !foodItem.merchants?.is_active ||
+    foodItem.merchants?.is_refused
+  ) {
+    return {
+      data: null,
+      error: {
+        code: 'MERCHANT_NOT_APPROVED',
+        message: 'Ce commerce n’est pas encore approuvé ou n’est plus actif.',
+      },
+      success: false,
+    };
+  }
+
   // Check availability
   if (foodItem.quantity_available < orderData.quantity) {
     return {

@@ -189,8 +189,8 @@ export const createMerchant = async (
       ...merchantData,
       rating: 0,
       total_reviews: 0,
-      is_verified: false,
-      is_active: true,
+      is_verified: merchantData.is_verified ?? false,
+      is_active: merchantData.is_active ?? false,
     })
     .select()
     .single();
@@ -281,7 +281,8 @@ export const getNearbyMerchants = async (
     .lte('latitude', latitude + latDelta)
     .gte('longitude', longitude - lonDelta)
     .lte('longitude', longitude + lonDelta)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .eq('is_verified', true);
 
   if (error) {
     return {
@@ -372,7 +373,8 @@ export const searchMerchants = async (
     .from(DB_TABLES.MERCHANTS)
     .select('*')
     .or(`business_name.ilike.%${query}%,quartier.ilike.%${query}%`)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .eq('is_verified', true);
 
   if (city) {
     dbQuery = dbQuery.eq('city', city);

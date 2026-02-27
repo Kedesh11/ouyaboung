@@ -7,14 +7,13 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +27,6 @@ import {
   Search,
   MoreVertical,
   Edit,
-  Trash2,
   Eye,
   EyeOff,
   Clock,
@@ -37,7 +35,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getMerchantItems, formatPrice, isExpiringSoon, getCategoryName, getMyMerchantProfile, updateListing, deleteListing } from "@/services";
+import { getMerchantItems, formatPrice, isExpiringSoon, getCategoryName, getMyMerchantProfile, updateListing } from "@/services";
 import type { FoodItem } from "@/types";
 import { toast } from "sonner";
 import { supabaseClient } from "@/api/supabaseClient";
@@ -46,23 +44,29 @@ const MerchantProductsContent = () => {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const action = searchParams.get("action");
-  const [showAddForm, setShowAddForm] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [products, setProducts] = useState<FoodItem[]>([]);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [merchantStatus, setMerchantStatus] = useState<"pending" | "approved" | "rejected">("pending");
+  const [refusalReason, setRefusalReason] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("active");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<FoodItem | null>(null);
+  const canManageProducts = merchantStatus === "approved";
 
   useEffect(() => {
     // Check if we should open the add modal from query params
     if (action === "add") {
-      setEditingProduct(null);
-      setIsAddModalOpen(true);
+      if (canManageProducts) {
+        setEditingProduct(null);
+        setIsAddModalOpen(true);
+      } else {
+        toast.error("Votre boutique doit être approuvée avant l'ajout de produits.");
+      }
     }
-  }, [action]);
+  }, [action, canManageProducts]);
 
   useEffect(() => {
     if (user) {
@@ -84,7 +88,7 @@ const MerchantProductsContent = () => {
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
 
   const handleCreateProfile = async () => {
-    if (!user) return;
+    if (!user || !supabaseClient) return;
     setIsCreatingProfile(true);
     try {
       // Create a default merchant profile based on user metadata or defaults
@@ -96,8 +100,15 @@ const MerchantProductsContent = () => {
           user_id: user.id,
           business_name: businessName,
           business_type: 'other', // Default
-          is_active: true,
+          description: '',
+          address: 'À compléter',
+          city: 'Libreville',
+          quartier: 'À compléter',
+          phone: user.user_metadata?.phone || 'À compléter',
+          email: user.email || '',
+          is_active: false,
           is_verified: false,
+          is_refused: false,
           rating: 0,
           total_reviews: 0,
           // Generate a simple slug
@@ -109,10 +120,18 @@ const MerchantProductsContent = () => {
       if (error) throw error;
 
       if (data) {
-        toast.success("Profil commerçant créé avec succès !");
+        toast.success("Profil commerçant créé. En attente de validation admin.");
         setMerchantId(data.id);
-        // Refresh full page to update context if needed
-        window.location.reload();
+        setMerchantStatus("pending");
+        setRefusalReason(null);
+
+        await fetch("/api/merchant/onboarding-notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ merchantId: data.id }),
+        }).catch((notifyError) => {
+          console.warn("[MerchantProducts] Failed to notify admins for new merchant", notifyError);
+        });
       }
     } catch (error: any) {
       console.error("Error creating profile:", error);
@@ -128,8 +147,16 @@ const MerchantProductsContent = () => {
       const result = await getMyMerchantProfile(user.id);
       if (result.success && result.data) {
         setMerchantId(result.data.id);
+        setMerchantStatus(
+          result.data.is_verified
+            ? "approved"
+            : result.data.is_refused
+              ? "rejected"
+              : "pending"
+        );
+        setRefusalReason(result.data.refusal_reason || null);
       } else {
-        toast.error("Impossible de charger le profil commerçant");
+        setMerchantId(null);
       }
     } catch (error) {
       console.error(error);
@@ -145,8 +172,19 @@ const MerchantProductsContent = () => {
     const result = await getMerchantItems(merchantId, true);
     if (result.success && result.data) {
       setProducts(result.data);
+    } else if (!result.success) {
+      console.warn("[MerchantProducts] Failed to load products", result.error);
     }
     setIsLoading(false);
+  };
+
+  const openAddModal = () => {
+    if (!canManageProducts) {
+      toast.error("Ajout bloqué: votre boutique est en attente de validation admin.");
+      return;
+    }
+    setEditingProduct(null);
+    setIsAddModalOpen(true);
   };
 
   const filteredProducts = products.filter((product) => {
@@ -180,30 +218,6 @@ const MerchantProductsContent = () => {
     } catch (error) {
       console.error(error);
       toast.error("Une erreur est survenue");
-    }
-  };
-
-  const handleDelete = async (product: FoodItem) => {
-    if (confirm(`Êtes-vous sûr de vouloir supprimer "${product.name}" ?`)) {
-      try {
-        const result = await deleteListing(product.id);
-        
-        if (result.success) {
-          toast.success(`Produit "${product.name}" supprimé`);
-          loadProducts();
-        } else {
-          // Check for foreign key constraint violation (Postgres error 23503)
-          if (result.error?.code === '23503') {
-             toast.error("Impossible de supprimer le produit car il est lié à des commandes existantes. Veuillez le masquer à la place.");
-          } else {
-              console.error("Delete failed:", result.error);
-              toast.error("Erreur lors de la suppression: " + (result.error?.message || "Inconnue"));
-          }
-        }
-      } catch (error: any) {
-        console.error("Exception deleting product:", error);
-        toast.error("Une erreur est survenue: " + error.message);
-      }
     }
   };
 
@@ -245,37 +259,39 @@ const MerchantProductsContent = () => {
             </div>
 
             {/* Menu Button moved to top-right of image */}
-            <div className="absolute top-2 right-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/20 hover:bg-black/40 text-white rounded-full">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => {
-                    setEditingProduct(product);
-                    setIsAddModalOpen(true);
-                  }}>
-                    <Edit className="w-4 h-4 mr-2" />
-                    Modifier
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleToggleVisibility(product)}>
-                    {product.is_available ? (
-                      <>
-                        <EyeOff className="w-4 h-4 mr-2" />
-                        Masquer
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-4 h-4 mr-2" />
-                        Afficher
-                      </>
-                    )}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            {canManageProducts && (
+              <div className="absolute top-2 right-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/20 hover:bg-black/40 text-white rounded-full">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => {
+                      setEditingProduct(product);
+                      setIsAddModalOpen(true);
+                    }}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Modifier
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleToggleVisibility(product)}>
+                      {product.is_available ? (
+                        <>
+                          <EyeOff className="w-4 h-4 mr-2" />
+                          Masquer
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-4 h-4 mr-2" />
+                          Afficher
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
 
             {product.expiry_date && isExpiringSoon(product.expiry_date) && (
               <div className="absolute top-2 left-2">
@@ -350,6 +366,30 @@ const MerchantProductsContent = () => {
       ) : (
         <>
           {/* Actions Bar */}
+          {!canManageProducts && (
+            <Card className="mb-6 border-amber-300/60 bg-amber-50/40">
+              <CardContent className="p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 mt-0.5 text-amber-600" />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground">
+                    {merchantStatus === "rejected"
+                      ? "Boutique refusée"
+                      : "Boutique en attente de validation"}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {merchantStatus === "rejected"
+                      ? "Vous ne pouvez pas publier de produits tant que la boutique n'est pas réactivée."
+                      : "Vous pourrez ajouter des produits dès qu'un administrateur aura approuvé votre boutique."}
+                  </p>
+                  {merchantStatus === "rejected" && refusalReason && (
+                    <p className="mt-2 text-destructive">
+                      Motif: {refusalReason}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -360,10 +400,7 @@ const MerchantProductsContent = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button className="gap-2" onClick={() => {
-              setEditingProduct(null);
-              setIsAddModalOpen(true);
-            }}>
+            <Button className="gap-2" onClick={openAddModal} disabled={!canManageProducts}>
               <Plus className="w-4 h-4" />
               Nouveau produit
             </Button>
@@ -416,10 +453,7 @@ const MerchantProductsContent = () => {
                     ? "Essayez une autre recherche"
                     : "Commencez par ajouter votre premier produit"}
                 </p>
-                <Button className="gap-2" onClick={() => {
-                  setEditingProduct(null);
-                  setIsAddModalOpen(true);
-                }}>
+                <Button className="gap-2" onClick={openAddModal} disabled={!canManageProducts}>
                   <Plus className="w-4 h-4" />
                   Ajouter un produit
                 </Button>

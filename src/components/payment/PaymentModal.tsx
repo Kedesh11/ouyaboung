@@ -3,8 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Loader2, Phone, CheckCircle2, CreditCard } from "lucide-react";
-import { initiateAirtelPayment, initiateMoovPayment } from '@/services/payment.service';
+import { Loader2, Phone, CheckCircle2, CreditCard, MapPin, ExternalLink, Info } from "lucide-react";
+import { initiateAirtelPayment, initiateMoovPayment, PAYMENT_FLOW_ENABLED } from '@/services/payment.service';
 import { calculatePaymentFees, type PaymentFees } from '@/lib/payment-fees';
 import { detectOperator, getAirtelPhoneError, getMoovPhoneError } from '@/lib/phone-validation';
 import { toast } from "sonner";
@@ -16,16 +16,27 @@ interface PaymentModalProps {
     amount: number;
     orderId: string;
     onSuccess: (transactionId: string) => void;
+    merchant?: {
+        name?: string;
+        address?: string;
+        phone?: string;
+        latitude?: number | null;
+        longitude?: number | null;
+    };
 }
 
 type Operator = 'AIRTEL' | 'MOOV';
 
-const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess }: PaymentModalProps) => {
+const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }: PaymentModalProps) => {
     const [phoneNumber, setPhoneNumber] = useState('');
     const [operator, setOperator] = useState<Operator>('AIRTEL');
     const [isLoading, setIsLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [fees, setFees] = useState<PaymentFees | null>(null);
+    const hasCoordinates = Number.isFinite(merchant?.latitude) && Number.isFinite(merchant?.longitude);
+    const mapUrl = hasCoordinates
+        ? `https://www.google.com/maps?q=${merchant?.latitude},${merchant?.longitude}`
+        : null;
 
     // Détection automatique de l'opérateur selon le numéro
     useEffect(() => {
@@ -42,6 +53,11 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess }: PaymentMo
     }, [amount]);
 
     const handlePayment = async () => {
+        if (!PAYMENT_FLOW_ENABLED) {
+            onClose();
+            return;
+        }
+
         if (!phoneNumber) {
             toast.error("Veuillez entrer un numéro de téléphone");
             return;
@@ -88,12 +104,64 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess }: PaymentMo
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        Paiement Mobile (Q-Gabon)
+                        {PAYMENT_FLOW_ENABLED ? (
+                            <>
+                                <CreditCard className="w-5 h-5" />
+                                Paiement Mobile (Q-Gabon)
+                            </>
+                        ) : (
+                            <>
+                                <Info className="w-5 h-5" />
+                                Paiement Sur Place (Temporaire)
+                            </>
+                        )}
                     </DialogTitle>
                 </DialogHeader>
 
-                {!success ? (
+                {!PAYMENT_FLOW_ENABLED ? (
+                    <div className="flex flex-col gap-4 py-4">
+                        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                            Le paiement mobile est temporairement indisponible. Veuillez regler votre commande directement chez le marchand.
+                        </div>
+
+                        <div className="rounded-md border bg-muted/40 p-4 space-y-2">
+                            <p className="text-sm text-muted-foreground">Montant a regler sur place</p>
+                            <p className="text-2xl font-bold text-primary">{amount.toLocaleString()} XAF</p>
+                        </div>
+
+                        <div className="space-y-3 rounded-md border p-4">
+                            <div>
+                                <p className="text-xs text-muted-foreground">Marchand</p>
+                                <p className="font-medium">{merchant?.name || 'Marchand'}</p>
+                            </div>
+
+                            <div className="flex items-start gap-2 text-sm">
+                                <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                                <span>{merchant?.address || 'Adresse indisponible'}</span>
+                            </div>
+
+                            <div className="flex items-start gap-2 text-sm">
+                                <Phone className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                                <span>{merchant?.phone || 'Telephone indisponible'}</span>
+                            </div>
+
+                            {hasCoordinates && (
+                                <div className="rounded-md bg-background p-2 text-xs text-muted-foreground">
+                                    Coordonnees: {merchant?.latitude}, {merchant?.longitude}
+                                </div>
+                            )}
+
+                            {mapUrl && (
+                                <Button type="button" variant="outline" className="w-full" asChild>
+                                    <a href={mapUrl} target="_blank" rel="noreferrer">
+                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                        Ouvrir la position
+                                    </a>
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                ) : !success ? (
                     <div className="flex flex-col gap-6 py-4">
                         {/* Summary & Fees */}
                         {fees && (
@@ -178,7 +246,12 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess }: PaymentMo
                 )}
 
                 <DialogFooter className="sm:justify-start">
-                    {!success && fees && (
+                    {!PAYMENT_FLOW_ENABLED && (
+                        <Button type="button" onClick={onClose} className="w-full">
+                            J&apos;ai compris
+                        </Button>
+                    )}
+                    {PAYMENT_FLOW_ENABLED && !success && fees && (
                         <Button
                             type="button"
                             onClick={handlePayment}

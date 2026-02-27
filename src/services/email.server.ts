@@ -9,6 +9,8 @@ import { randomUUID } from 'node:crypto';
 import tls from 'node:tls';
 import {
   approvalHtml,
+  buildAdminValidationUrl,
+  newMerchantAdminHtml,
   rejectionHtml,
 } from './email.shared';
 
@@ -306,4 +308,26 @@ export const sendMerchantRejectionEmail = async (
 ): Promise<SmtpResult> => {
   const subject = `${businessName} - Mise a jour de votre demande`;
   return sendWithSmtp(email, subject, rejectionHtml(businessName, reason));
+};
+
+export const sendAdminNewMerchantEmail = async (params: {
+  adminEmail: string;
+  adminName?: string;
+  merchantName: string;
+  merchantEmail: string;
+  businessType: string;
+  city: string;
+  createdAt: string;
+}): Promise<SmtpResult> => {
+  const subject = `Nouvelle boutique a valider - ${params.merchantName}`;
+  const html = newMerchantAdminHtml({
+    adminName: params.adminName,
+    merchantName: params.merchantName,
+    merchantEmail: params.merchantEmail,
+    businessType: params.businessType,
+    city: params.city,
+    createdAt: params.createdAt,
+    adminUrl: buildAdminValidationUrl(),
+  });
+  return sendWithSmtp(params.adminEmail, subject, html);
 };
