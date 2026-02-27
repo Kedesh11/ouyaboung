@@ -44,6 +44,11 @@ const MerchantPublicPage = () => {
         try {
             const result = await merchantService.getMerchantBySlugName(merchantSlug);
             if (result.success && result.data) {
+                if (!result.data.is_verified || !result.data.is_active || result.data.is_refused) {
+                    toast.error("Ce commerce n'est pas disponible");
+                    router.push("/search");
+                    return;
+                }
                 setMerchant(result.data);
 
                 // Load merchant's food items

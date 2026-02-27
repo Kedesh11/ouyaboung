@@ -23,10 +23,12 @@ import { Clock, CheckCircle, Search, Store } from "lucide-react";
 import { adminService } from "@/services/admin.service";
 import type { MerchantRegistration } from "@/types/admin.types";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ITEMS_PER_PAGE = 3;
 
 const AdminValidationsPage = () => {
+  const { user } = useAuth();
   const [pendingMerchants, setPendingMerchants] = useState<MerchantRegistration[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +99,14 @@ const AdminValidationsPage = () => {
 
   const handleConfirmAction = async (reason?: string) => {
     if (!selectedMerchant) return;
+    if (!user?.id) {
+      toast.error("Session admin invalide. Rechargez la page.");
+      return;
+    }
+    if (modalMode === 'refuse' && !reason?.trim()) {
+      toast.error("Le motif du refus est obligatoire.");
+      return;
+    }
 
     setIsProcessing(true);
     try {
@@ -104,13 +114,37 @@ const AdminValidationsPage = () => {
         merchantId: selectedMerchant.id,
         action: modalMode === 'validate' ? 'validate' : 'refuse',
         reason,
-        adminId: 'admin-1',
+        adminId: user.id,
       });
+
+      const { sendMerchantApprovalEmail, sendMerchantRejectionEmail, logEmailToConsole } =
+        await import('@/services/email.service');
+
+      if (modalMode === 'validate') {
+        const emailResult = await sendMerchantApprovalEmail(
+          selectedMerchant.email,
+          selectedMerchant.businessName
+        );
+        if (!emailResult.success) {
+          logEmailToConsole('approval', selectedMerchant.email, selectedMerchant.businessName);
+          console.warn('Approval email failed:', emailResult.error);
+        }
+      } else {
+        const emailResult = await sendMerchantRejectionEmail(
+          selectedMerchant.email,
+          selectedMerchant.businessName,
+          reason
+        );
+        if (!emailResult.success) {
+          logEmailToConsole('rejection', selectedMerchant.email, selectedMerchant.businessName, reason);
+          console.warn('Rejection email failed:', emailResult.error);
+        }
+      }
 
       toast.success(
         modalMode === 'validate'
-          ? `Commerce validé avec succès. Email d'invitation envoyé à ${selectedMerchant.email}`
-          : 'Commerce refusé'
+          ? `Commerce validé avec succès. Email envoyé à ${selectedMerchant.email}`
+          : 'Commerce refusé. Le marchand a été notifié.'
       );
 
       loadPendingMerchants();

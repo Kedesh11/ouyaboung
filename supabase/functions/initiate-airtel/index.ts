@@ -6,10 +6,21 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+const PAYMENT_FLOW_ENABLED = false
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
+    }
+
+    if (!PAYMENT_FLOW_ENABLED) {
+        return new Response(
+            JSON.stringify({
+                success: false,
+                error: { message: 'Payment flow disabled', code: 'PAYMENT_DISABLED' }
+            }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
     }
 
     try {
@@ -180,18 +191,6 @@ serve(async (req) => {
             .single()
         
         if (updateError) console.error('[Airtel Function] Update Error:', updateError)
-
-        // 8. Update Order Status to prevents double payment
-        const { error: orderUpdateError } = await supabaseClient
-            .from('orders')
-            .update({ status: 'processing' })
-            .eq('id', orderId)
-
-        if (orderUpdateError) {
-            console.error('[Airtel Function] Order Status Update Error:', orderUpdateError)
-        } else {
-             console.log('[Airtel Function] Order status updated to processing')
-        }
 
         return new Response(
             JSON.stringify({

@@ -18,19 +18,59 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+const PAYMENT_FLOW_ENABLED = false
+
+const getProvidedWebhookSecret = (req: Request): string => {
+    const bearer = req.headers.get('authorization')
+    const bearerToken = bearer?.toLowerCase().startsWith('bearer ')
+        ? bearer.slice(7).trim()
+        : null
+
+    return (
+        req.headers.get('x-qgabon-secret')
+        || req.headers.get('x-webhook-secret')
+        || req.headers.get('x-callback-secret')
+        || bearerToken
+        || ''
+    )
+}
+
+const isWebhookAuthorized = (req: Request): boolean => {
+    const expectedSecret = Deno.env.get('QGABON_WEBHOOK_SECRET')
+    if (!expectedSecret) {
+        return true
+    }
+
+    const providedSecret = getProvidedWebhookSecret(req)
+    return !!providedSecret && providedSecret === expectedSecret
+}
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    if (!PAYMENT_FLOW_ENABLED) {
+        return new Response(
+            JSON.stringify({ error: 'Payment flow disabled' }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+    }
+
     try {
+        if (!isWebhookAuthorized(req)) {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized webhook' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
         // ===================================================================
         // 1. PARSE PAYLOAD CALLBACK
         // ===================================================================
 
         const payload = await req.json()
-        console.log('[Payment Callback] Received:', payload)
+        console.log('[Payment Callback] Received callback')
 
         const { success, data, reference } = payload
 

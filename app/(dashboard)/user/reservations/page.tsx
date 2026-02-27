@@ -80,6 +80,31 @@ const getStatusIcon = (status: string) => {
     }
 };
 
+interface SelectedReservation {
+    id: string;
+    amount: number;
+    merchantName?: string;
+    merchantAddress?: string;
+    merchantPhone?: string;
+    merchantLatitude?: number | null;
+    merchantLongitude?: number | null;
+}
+
+const parseCoordinate = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() !== "") {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+};
+
+const extractMerchantLatitude = (merchant: any): number | null =>
+    parseCoordinate(merchant?.latitude ?? merchant?.lat ?? merchant?.location_lat ?? merchant?.location?.lat);
+
+const extractMerchantLongitude = (merchant: any): number | null =>
+    parseCoordinate(merchant?.longitude ?? merchant?.lng ?? merchant?.location_lng ?? merchant?.location?.lng);
+
 export default function ReservationsPage() {
     const [activeTab, setActiveTab] = useState("all");
     const [reservations, setReservations] = useState<any[]>([]);
@@ -90,7 +115,7 @@ export default function ReservationsPage() {
 
     // Payment Modal State
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [selectedReservation, setSelectedReservation] = useState<{ id: string, amount: number } | null>(null);
+    const [selectedReservation, setSelectedReservation] = useState<SelectedReservation | null>(null);
     
     // QR Code Modal State
     const [isQRModalOpen, setIsQRModalOpen] = useState(false);
@@ -102,7 +127,15 @@ export default function ReservationsPage() {
     const itemsPerPage = 3;
 
     const openPaymentModal = (reservation: any) => {
-        setSelectedReservation({ id: reservation.id, amount: reservation.price });
+        setSelectedReservation({
+            id: reservation.id,
+            amount: reservation.price,
+            merchantName: reservation.merchantName,
+            merchantAddress: reservation.merchantAddress,
+            merchantPhone: reservation.merchantPhone,
+            merchantLatitude: extractMerchantLatitude(reservation.merchant),
+            merchantLongitude: extractMerchantLongitude(reservation.merchant),
+        });
         setIsPaymentModalOpen(true);
     };
 
@@ -460,7 +493,7 @@ export default function ReservationsPage() {
                                                     <p className="text-2xl font-bold text-primary">{reservation.price.toLocaleString()} FCFA</p>
                                                     <p className="text-sm text-muted-foreground line-through">{reservation.originalPrice.toLocaleString()} FCFA</p>
 
-                                                    {reservation.status === "confirmed" && reservation.pk && (
+                                                    {["pending", "confirmed", "ready"].includes(reservation.status) && reservation.pk && (
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 
@@ -594,6 +627,13 @@ export default function ReservationsPage() {
                 orderId={selectedReservation?.id || ''}
                 amount={selectedReservation?.amount || 0}
                 onSuccess={handlePaymentSuccess}
+                merchant={{
+                    name: selectedReservation?.merchantName,
+                    address: selectedReservation?.merchantAddress,
+                    phone: selectedReservation?.merchantPhone,
+                    latitude: selectedReservation?.merchantLatitude,
+                    longitude: selectedReservation?.merchantLongitude,
+                }}
             />
 
             {/* QR Code Modal */}

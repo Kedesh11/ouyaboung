@@ -11,19 +11,70 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+const PAYMENT_FLOW_ENABLED = false
+
+const getProvidedWebhookSecret = (req: Request): string => {
+    const bearer = req.headers.get('authorization')
+    const bearerToken = bearer?.toLowerCase().startsWith('bearer ')
+        ? bearer.slice(7).trim()
+        : null
+
+    return (
+        req.headers.get('x-qgabon-secret')
+        || req.headers.get('x-webhook-secret')
+        || req.headers.get('x-callback-secret')
+        || bearerToken
+        || ''
+    )
+}
+
+const isWebhookAuthorized = (req: Request): boolean => {
+    const expectedSecret = Deno.env.get('QGABON_WEBHOOK_SECRET')
+    if (!expectedSecret) {
+        return true
+    }
+
+    const providedSecret = getProvidedWebhookSecret(req)
+    return !!providedSecret && providedSecret === expectedSecret
+}
+
+const redactHeaders = (headers: Headers): Record<string, string> => {
+    const sensitive = new Set(['authorization', 'apikey', 'x-api-key', 'proxy-authorization'])
+    const result: Record<string, string> = {}
+
+    for (const [key, value] of headers.entries()) {
+        result[key] = sensitive.has(key.toLowerCase()) ? '[REDACTED]' : value
+    }
+
+    return result
+}
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    if (!PAYMENT_FLOW_ENABLED) {
+        return new Response(
+            JSON.stringify({ success: false, error: 'Payment flow disabled' }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+    }
+
     try {
+        if (!isWebhookAuthorized(req)) {
+            return new Response(
+                JSON.stringify({ success: false, error: 'Unauthorized webhook' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
         // ===================================================================
         // 1. PARSE PAYLOAD (Structure Q-Gabon réelle)
         // ===================================================================
 
         const payload = await req.json()
-        console.log('[Airtel Callback] Received:', JSON.stringify(payload))
+        console.log('[Airtel Callback] Received callback')
 
         // ===================================================================
         // 2. LOG TO WEBHOOK_LOGS
@@ -37,7 +88,7 @@ serve(async (req) => {
         const logId = await supabaseClient.from('webhook_logs').insert({
             provider: 'AIRTEL',
             payload: payload,
-            headers: Object.fromEntries(req.headers.entries()),
+            headers: redactHeaders(req.headers),
             ip_address: req.headers.get('x-forwarded-for') || 'unknown'
         }).select('id').single()
 

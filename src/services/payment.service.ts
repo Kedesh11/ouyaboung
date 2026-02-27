@@ -31,6 +31,20 @@ const getFunctionUrl = (name: string): string | null => {
     return `${SUPABASE_FUNCTIONS_BASE_URL}/${name}`;
 };
 
+// Flow de paiement temporairement desactive.
+// Garder a false pour reactiver sans supprimer l'implementation existante.
+export const PAYMENT_FLOW_ENABLED = false;
+
+const paymentDisabledResponse = (): ApiResponse<PaymentInitiationResponse> => ({
+    success: false,
+    data: null,
+    error: {
+        message: 'Paiement temporairement desactive par administration.',
+        code: 'PAYMENT_DISABLED',
+        details: null,
+    },
+});
+
 // ============================================
 // REQUEST/RESPONSE TYPES
 // ============================================
@@ -83,6 +97,10 @@ export type { PaymentFees };
 export const initiateAirtelPayment = async (
     request: PaymentInitiationRequest
 ): Promise<ApiResponse<PaymentInitiationResponse>> => {
+    if (!PAYMENT_FLOW_ENABLED) {
+        return paymentDisabledResponse();
+    }
+
     if (!supabaseClient) {
         return {
             success: false,
@@ -258,6 +276,10 @@ export const initiateAirtelPayment = async (
 export const initiateMoovPayment = async (
     request: PaymentInitiationRequest
 ): Promise<ApiResponse<PaymentInitiationResponse>> => {
+    if (!PAYMENT_FLOW_ENABLED) {
+        return paymentDisabledResponse();
+    }
+
     if (!supabaseClient) {
         return {
             success: false,

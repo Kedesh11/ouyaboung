@@ -32,6 +32,7 @@ import Link from "next/link";
 import { adminService } from "@/services/admin.service";
 import type { AdminKPIs, MerchantRegistration, AdminActivity, TopMerchant, GeoDistribution } from "@/types/admin.types";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Dynamic import for Recharts - heavy library (~32kb)
 const SalesChart = dynamic(() => import('@/components/charts/SalesChart'), {
@@ -40,6 +41,7 @@ const SalesChart = dynamic(() => import('@/components/charts/SalesChart'), {
 });
 
 const AdminDashboardPage = () => {
+  const { user } = useAuth();
   const [topMerchants, setTopMerchants] = useState<TopMerchant[]>([]);
   const [geoDistribution, setGeoDistribution] = useState<GeoDistribution[]>([]);
 
@@ -104,6 +106,14 @@ const AdminDashboardPage = () => {
 
   const handleConfirmAction = async (reason?: string) => {
     if (!selectedMerchant) return;
+    if (!user?.id) {
+      toast.error("Session admin invalide. Rechargez la page.");
+      return;
+    }
+    if (modalMode === 'refuse' && !reason?.trim()) {
+      toast.error("Le motif du refus est obligatoire.");
+      return;
+    }
 
     setIsProcessing(true);
     try {
@@ -113,7 +123,7 @@ const AdminDashboardPage = () => {
         merchantId: selectedMerchant.id,
         action,
         reason,
-        adminId: 'admin-1', // Will be replaced with actual admin ID
+        adminId: user.id,
       });
 
       // Import email service dynamically

@@ -1,6 +1,6 @@
 /**
  * Edge Function: Validate QR Code
- * 
+ *
  * Vérifie et consomme un QR Code scanné par un marchand
  */
 
@@ -18,10 +18,6 @@ serve(async (req) => {
     }
 
     try {
-        // ===================================================================
-        // 1. AUTHENTIFICATION MARCHAND
-        // ===================================================================
-
         const authHeader = req.headers.get('Authorization')
         if (!authHeader) {
             return new Response(
@@ -49,12 +45,6 @@ serve(async (req) => {
             )
         }
 
-        console.log('[Validate QR] Merchant:', user.id)
-
-        // ===================================================================
-        // 2. PARSE PAYLOAD
-        // ===================================================================
-
         const { pickup_code } = await req.json()
 
         if (!pickup_code) {
@@ -64,23 +54,38 @@ serve(async (req) => {
             )
         }
 
-        console.log('[Validate QR] Code:', pickup_code)
+        // Resolve merchant ownership from authenticated user.
+        const { data: merchant, error: merchantError } = await supabaseClient
+            .from('merchants')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('is_verified', true)
+            .eq('is_active', true)
+            .eq('is_refused', false)
+            .maybeSingle()
 
-        // ===================================================================
-        // 3. RECHERCHER LA COMMANDE
-        // ===================================================================
+        if (merchantError || !merchant) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Compte marchand non autorisé',
+                    code: 'MERCHANT_NOT_AUTHORIZED'
+                }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
 
         const { data: order, error: orderError } = await supabaseClient
             .from('orders')
-            .select('*, food_item:food_items(*), buyer:profiles!orders_user_id_fkey(*)')
+            .select('id, user_id, merchant_id, quantity, total_price, status, confirmed_at, consumed_at, consumed_by, food_item:food_items(name)')
             .eq('pickup_code', pickup_code)
-            .single()
+            .eq('merchant_id', merchant.id)
+            .maybeSingle()
 
         if (orderError || !order) {
-            console.error('[Validate QR] Order not found:', pickup_code)
             return new Response(
-                JSON.stringify({ 
-                    success: false, 
+                JSON.stringify({
+                    success: false,
                     error: 'QR Code invalide ou inexistant',
                     code: 'INVALID_CODE'
                 }),
@@ -88,31 +93,10 @@ serve(async (req) => {
             )
         }
 
-        // ===================================================================
-        // 4. VÉRIFIER LA PROPRIÉTÉ (MERCHANT)
-        // ===================================================================
-
-        if (order.merchant_id !== user.id) {
-            console.error('[Validate QR] Ownership mismatch')
-            return new Response(
-                JSON.stringify({ 
-                    success: false, 
-                    error: 'Ce QR Code ne vous appartient pas',
-                    code: 'UNAUTHORIZED_MERCHANT'
-                }),
-                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-        }
-
-        // ===================================================================
-        // 5. VÉRIFIER QUE PAS DÉJÀ CONSOMMÉ
-        // ===================================================================
-
         if (order.consumed_at) {
-            console.warn('[Validate QR] Already consumed:', order.consumed_at)
             return new Response(
-                JSON.stringify({ 
-                    success: false, 
+                JSON.stringify({
+                    success: false,
                     error: 'QR Code déjà utilisé',
                     code: 'ALREADY_CONSUMED',
                     consumedAt: order.consumed_at,
@@ -122,65 +106,63 @@ serve(async (req) => {
             )
         }
 
-        // ===================================================================
-        // 6. VÉRIFIER QUE LA COMMANDE EST CONFIRMÉE
-        // ===================================================================
-
-        if (order.status !== 'confirmed') {
+        // Temporary onsite flow:
+        // pending is accepted so merchant scan can confirm payment + pickup on-site.
+        const allowedStatuses = ['pending', 'confirmed', 'ready']
+        if (!allowedStatuses.includes(order.status)) {
             return new Response(
-                JSON.stringify({ 
-                    success: false, 
-                    error: 'Commande non confirmée (paiement non validé)',
-                    code: 'NOT_CONFIRMED',
+                JSON.stringify({
+                    success: false,
+                    error: 'Commande non eligible pour validation QR',
+                    code: 'INVALID_ORDER_STATUS',
                     currentStatus: order.status
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
-        // ===================================================================
-        // 7. MARQUER COMME CONSOMMÉ
-        // ===================================================================
+        const consumedAt = new Date().toISOString()
 
         const { error: updateError } = await supabaseClient
             .from('orders')
             .update({
-                consumed_at: new Date().toISOString(),
+                confirmed_at: order.confirmed_at ?? consumedAt,
+                consumed_at: consumedAt,
                 consumed_by: user.id,
-                status: 'completed' // Optionnel : passer à completed
+                status: 'completed'
             })
             .eq('id', order.id)
+            .is('consumed_at', null)
 
         if (updateError) {
-            console.error('[Validate QR] Update error:', updateError)
             return new Response(
-                JSON.stringify({ 
-                    success: false, 
+                JSON.stringify({
+                    success: false,
                     error: 'Erreur lors de la validation'
                 }),
                 { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
-        console.log('[Validate QR] Success! Order consumed:', order.id)
-
-        // ===================================================================
-        // 8. RETOURNER LES DÉTAILS
-        // ===================================================================
+        const { data: buyer } = await supabaseClient
+            .from('profiles')
+            .select('full_name, phone')
+            .eq('user_id', order.user_id)
+            .maybeSingle()
 
         return new Response(
             JSON.stringify({
                 success: true,
-                message: 'QR Code validé avec succès',
+                message: 'Paiement sur place et retrait valides avec succes',
                 order: {
                     id: order.id,
                     productName: order.food_item?.name || 'Produit',
                     quantity: order.quantity,
                     totalPrice: order.total_price,
-                    customerName: order.buyer?.full_name || 'Client',
-                    customerPhone: order.buyer?.phone || '',
+                    customerName: buyer?.full_name || 'Client',
+                    customerPhone: buyer?.phone || '',
                     confirmedAt: order.confirmed_at,
-                    consumedAt: new Date().toISOString()
+                    consumedAt
                 }
             }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -189,9 +171,9 @@ serve(async (req) => {
     } catch (error) {
         console.error('[Validate QR] Error:', error)
         return new Response(
-            JSON.stringify({ 
-                success: false, 
-                error: (error as Error).message 
+            JSON.stringify({
+                success: false,
+                error: (error as Error).message
             }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )

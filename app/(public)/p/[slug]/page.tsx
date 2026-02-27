@@ -57,6 +57,15 @@ const ProductDetailPage = () => {
         try {
             const result = await inventoryService.getItemBySlug(productSlug);
             if (result.success && result.data) {
+                if (
+                    !result.data.merchant?.is_verified ||
+                    !result.data.merchant?.is_active ||
+                    result.data.merchant?.is_refused
+                ) {
+                    toast.error("Produit indisponible");
+                    router.push("/search");
+                    return;
+                }
                 setProduct(result.data);
             } else {
                 toast.error("Produit non trouvé");

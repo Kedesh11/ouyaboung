@@ -25,6 +25,8 @@ import {
   Camera,
   Save,
   CheckCircle,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { MerchantType, GabonCity, DayHours, OpeningHours } from "@/types";
@@ -39,6 +41,7 @@ const MERCHANT_TYPES: { value: MerchantType; label: string }[] = [
   { value: "supermarket", label: "Supermarché" },
   { value: "hotel", label: "Hôtel" },
   { value: "caterer", label: "Traiteur" },
+  { value: "other", label: "Autre" },
 ];
 
 const GABON_CITIES: GabonCity[] = [
@@ -57,7 +60,11 @@ const GABON_CITIES: GabonCity[] = [
 const MerchantProfilePage = () => {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [isProfileMissing, setIsProfileMissing] = useState(false);
+  const [merchantStatus, setMerchantStatus] = useState<"pending" | "approved" | "rejected">("pending");
 
   const [profile, setProfile] = useState({
     business_name: "",
@@ -98,7 +105,11 @@ const MerchantProfilePage = () => {
       const result = await getMyMerchantProfile(user.id);
       if (result.success && result.data) {
         const m = result.data;
+        setIsProfileMissing(false);
         setMerchantId(m.id);
+        setMerchantStatus(
+          m.is_verified ? "approved" : m.is_refused ? "rejected" : "pending"
+        );
         setProfile({
           business_name: m.business_name || "",
           business_type: m.business_type,
@@ -128,6 +139,10 @@ const MerchantProfilePage = () => {
 
           setHours(prev => ({ ...prev, ...mappedHours }));
         }
+      } else {
+        setMerchantId(null);
+        setIsProfileMissing(true);
+        console.warn("[MerchantProfile] Merchant profile missing for user", { userId: user.id });
       }
     } catch (error) {
       console.error(error);
@@ -135,29 +150,148 @@ const MerchantProfilePage = () => {
     }
   };
 
+  const handleCreateProfile = async () => {
+    if (!user || !supabaseClient) return;
+
+    setIsCreatingProfile(true);
+    try {
+      const businessName =
+        profile.business_name.trim() ||
+        user.user_metadata?.business_name ||
+        user.user_metadata?.full_name ||
+        "Mon Commerce";
+
+      const safeSlugBase = businessName
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 36);
+
+      const payload = {
+        user_id: user.id,
+        business_name: businessName,
+        business_type: profile.business_type || "other",
+        description: profile.description || "",
+        address: profile.address || "À compléter",
+        city: profile.city || "Libreville",
+        quartier: profile.quartier || "À compléter",
+        phone: profile.phone || user.user_metadata?.phone || "À compléter",
+        email: profile.email || user.email || "",
+        latitude: profile.latitude || null,
+        longitude: profile.longitude || null,
+        logo_url: profile.logo_url || null,
+        rating: 0,
+        total_reviews: 0,
+        is_verified: false,
+        is_active: false,
+        is_refused: false,
+        slug: `${safeSlugBase || "commerce"}-${Math.floor(Math.random() * 100000)}`,
+      };
+
+      const { data, error } = await supabaseClient
+        .from("merchants")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setMerchantId(data.id);
+      setIsProfileMissing(false);
+      setMerchantStatus("pending");
+      toast.success("Profil marchand créé. Il est en attente de validation.");
+
+      await fetch("/api/merchant/onboarding-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantId: data.id }),
+      }).catch((notifyError) => {
+        console.warn("[MerchantProfile] Failed to notify admins for new merchant", notifyError);
+      });
+    } catch (error: any) {
+      console.error("[MerchantProfile] Failed to create merchant profile", error);
+      toast.error(error?.message || "Impossible de créer le profil marchand");
+    } finally {
+      setIsCreatingProfile(false);
+    }
+  };
+
+  const validateProfile = () => {
+    if (!profile.business_name.trim()) {
+      return "Le nom du commerce est obligatoire";
+    }
+    if (!profile.address.trim()) {
+      return "L'adresse est obligatoire";
+    }
+    if (!profile.phone.trim()) {
+      return "Le numéro de téléphone est obligatoire";
+    }
+    if (!profile.email.trim()) {
+      return "L'email est obligatoire";
+    }
+    if (profile.latitude !== 0 && (profile.latitude < -90 || profile.latitude > 90)) {
+      return "Latitude invalide";
+    }
+    if (profile.longitude !== 0 && (profile.longitude < -180 || profile.longitude > 180)) {
+      return "Longitude invalide";
+    }
+    return null;
+  };
+
   const handleSave = async () => {
-    if (!merchantId) return;
+    if (!merchantId) {
+      toast.error("Profil marchand introuvable. Créez-le d'abord.");
+      return;
+    }
+
+    const validationError = validateProfile();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const result = await updateMerchantProfile(merchantId, {
+      const payload = {
         businessName: profile.business_name,
+        businessType: profile.business_type,
         description: profile.description,
-        // @ts-ignore - city type mismatch potential
         city: profile.city,
+        quartier: profile.quartier,
         address: profile.address,
         phone: profile.phone,
         email: profile.email,
         logoUrl: profile.logo_url,
         latitude: profile.latitude,
         longitude: profile.longitude,
+        isActive: profile.is_active,
         openingHours: hours as OpeningHours,
+      };
+
+      console.info("[MerchantProfile] Saving profile", {
+        merchantId,
+        payloadKeys: Object.keys(payload),
       });
+
+      const result = await updateMerchantProfile(merchantId, payload);
 
       if (result.success) {
         toast.success("Profil mis à jour avec succès");
+        if (result.data) {
+          setMerchantStatus(
+            result.data.is_verified
+              ? "approved"
+              : result.data.is_refused
+                ? "rejected"
+                : "pending"
+          );
+        }
       } else {
-        toast.error("Erreur lors de la mise à jour");
+        console.warn("[MerchantProfile] Update failed", result.error);
+        toast.error(result.error?.message || "Erreur lors de la mise à jour");
       }
     } catch (error) {
       console.error(error);
@@ -167,28 +301,70 @@ const MerchantProfilePage = () => {
     }
   };
 
-  const handleGeolocation = () => {
+  const handleGeolocation = async () => {
     if (!navigator.geolocation) {
       toast.error("La géolocalisation n'est pas supportée par votre navigateur");
       return;
     }
 
+    setIsLocating(true);
     toast.info("Acquisition de la position...");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setProfile({
-          ...profile,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+
+    try {
+      if (navigator.permissions?.query) {
+        const permission = await navigator.permissions.query({
+          name: "geolocation" as PermissionName,
         });
-        toast.success("Position mise à jour avec précision satellitaire");
-      },
-      (error) => {
-        console.error(error);
-        toast.error("Impossible d'obtenir votre position. Vérifiez vos autorisations.");
-      },
-      { enableHighAccuracy: true }
-    );
+        if (permission.state === "denied") {
+          toast.error("Permission de géolocalisation refusée dans le navigateur.");
+          setIsLocating(false);
+          return;
+        }
+      }
+
+      await new Promise<void>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const nextLatitude = position.coords.latitude;
+            const nextLongitude = position.coords.longitude;
+
+            setProfile((prev) => ({
+              ...prev,
+              latitude: nextLatitude,
+              longitude: nextLongitude,
+            }));
+
+            console.info("[MerchantProfile] Geolocation acquired", {
+              latitude: nextLatitude,
+              longitude: nextLongitude,
+              accuracy: position.coords.accuracy,
+            });
+            toast.success("Position récupérée. Enregistrez pour la sauvegarder.");
+            resolve();
+          },
+          (error) => {
+            console.error("[MerchantProfile] Geolocation failed", error);
+            if (error.code === 1) {
+              toast.error("Accès à la position refusé. Activez la permission de localisation.");
+            } else if (error.code === 2) {
+              toast.error("Position indisponible. Vérifiez votre réseau GPS.");
+            } else if (error.code === 3) {
+              toast.error("La géolocalisation a expiré. Réessayez.");
+            } else {
+              toast.error("Impossible d'obtenir votre position.");
+            }
+            resolve();
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          }
+        );
+      });
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,6 +413,31 @@ const MerchantProfilePage = () => {
           Gérez les informations de votre établissement
         </p>
       </div>
+      {isProfileMissing && (
+        <Card className="border-amber-300/60 bg-amber-50/40">
+          <CardContent className="p-4 flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 mt-0.5 text-amber-600" />
+              <div>
+                <p className="font-medium text-foreground">Profil marchand introuvable</p>
+                <p className="text-sm text-muted-foreground">
+                  Votre compte marchand existe, mais la fiche boutique n&apos;a pas encore été créée.
+                </p>
+              </div>
+            </div>
+            <Button onClick={handleCreateProfile} disabled={isCreatingProfile}>
+              {isCreatingProfile ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Création...
+                </>
+              ) : (
+                "Créer ma fiche"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Main Info */}
         <motion.div
@@ -365,9 +566,19 @@ const MerchantProfilePage = () => {
                       <span className="text-muted-foreground">Aucune position définie</span>
                     )}
                   </div>
-                  <Button variant="secondary" size="sm" onClick={handleGeolocation} type="button">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Obtenir ma position
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleGeolocation}
+                    type="button"
+                    disabled={isLocating}
+                  >
+                    {isLocating ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <MapPin className="w-4 h-4 mr-2" />
+                    )}
+                    {isLocating ? "Localisation..." : "Obtenir ma position"}
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
@@ -541,11 +752,24 @@ const MerchantProfilePage = () => {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="default" className="gap-1">
+                <Badge
+                  variant={
+                    merchantStatus === "approved"
+                      ? "default"
+                      : merchantStatus === "rejected"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                  className="gap-1"
+                >
                   <CheckCircle className="w-3 h-3" />
-                  Vérifié
+                  {merchantStatus === "approved"
+                    ? "Approuvé"
+                    : merchantStatus === "rejected"
+                      ? "Refusé"
+                      : "En attente"}
                 </Badge>
-                <Badge variant="secondary">En ligne</Badge>
+                <Badge variant="secondary">{profile.is_active ? "En ligne" : "Hors ligne"}</Badge>
               </div>
             </CardContent>
           </Card>
@@ -555,10 +779,10 @@ const MerchantProfilePage = () => {
             className="w-full gap-2"
             size="lg"
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isLoading || !merchantId}
           >
             <Save className="w-4 h-4" />
-            {isLoading ? "Enregistrement..." : "Enregistrer"}
+            {isLoading ? "Enregistrement..." : !merchantId ? "Profil introuvable" : "Enregistrer"}
           </Button>
         </motion.div>
       </div>

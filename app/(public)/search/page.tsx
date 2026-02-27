@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import FoodCard, { FoodItem as FoodCardItem } from "../../_components/FoodCard";
-import { Search as SearchIcon, MapPin, Grid, Map, SlidersHorizontal, Store, Loader2 } from "lucide-react";
-import { getAvailableItems, searchInventory, getCategoryName, formatPrice, getAuthUser, getActiveOrders, createReservation } from "@/services";
+import { Search as SearchIcon, MapPin, Grid, Map, SlidersHorizontal, Store, Loader2, LocateFixed } from "lucide-react";
+import { searchInventory, getCategoryName, formatPrice, getAuthUser, getActiveOrders, createReservation } from "@/services";
 import { useToast } from "@/hooks/use-toast";
 import type { FoodItem, FoodCategory, GabonCity, MerchantType } from "@/types";
 
@@ -59,6 +59,37 @@ const FOOD_CATEGORIES: FoodCategory[] = [
     'mixed_basket',
 ];
 
+const GEOLOCATION_STORAGE_KEY = "ouyaboung_user_location";
+
+const isValidCoord = (lat?: number | null, lng?: number | null): lat is number =>
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180;
+
+const calculateDistanceKm = (
+    origin: { latitude: number; longitude: number },
+    target: { latitude: number; longitude: number }
+): number => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const earthRadiusKm = 6371;
+    const dLat = toRad(target.latitude - origin.latitude);
+    const dLng = toRad(target.longitude - origin.longitude);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(origin.latitude)) *
+            Math.cos(toRad(target.latitude)) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusKm * c;
+};
+
 const SearchPage = () => {
     const { toast } = useToast();
     const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
@@ -66,6 +97,9 @@ const SearchPage = () => {
     const [priceRange, setPriceRange] = useState([0, 20000]); // XAF
     const [isLoading, setIsLoading] = useState(true);
     const [items, setItems] = useState<FoodItem[]>([]);
+    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+    const [isLocating, setIsLocating] = useState(false);
+    const [geoStatus, setGeoStatus] = useState<"idle" | "granted" | "denied" | "unavailable">("idle");
     const [userId, setUserId] = useState<string | null>(null);
     const [reservedCountMap, setReservedCountMap] = useState<Record<string, number>>({});
     const [reservingItemId, setReservingItemId] = useState<string | null>(null);
@@ -77,10 +111,75 @@ const SearchPage = () => {
     const [sortBy, setSortBy] = useState<"distance" | "price" | "discount" | "rating">("distance");
     const [searchQuery, setSearchQuery] = useState("");
 
+    const requestUserLocation = useCallback(async (showErrorFeedback: boolean = false) => {
+        if (!navigator.geolocation) {
+            setGeoStatus("unavailable");
+            return;
+        }
+
+        setIsLocating(true);
+        await new Promise<void>((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const nextLocation = {
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                    };
+                    setUserLocation(nextLocation);
+                    setGeoStatus("granted");
+                    localStorage.setItem(GEOLOCATION_STORAGE_KEY, JSON.stringify(nextLocation));
+                    resolve();
+                },
+                (error) => {
+                    if (error.code === error.PERMISSION_DENIED) {
+                        setGeoStatus("denied");
+                        if (showErrorFeedback) {
+                            toast({
+                                title: "Localisation refusée",
+                                description: "Autorisez la localisation pour trier les boutiques autour de vous.",
+                                variant: "destructive",
+                            });
+                        }
+                    } else {
+                        setGeoStatus("unavailable");
+                        if (showErrorFeedback) {
+                            toast({
+                                title: "Position indisponible",
+                                description: "Impossible d'obtenir votre position actuelle.",
+                                variant: "destructive",
+                            });
+                        }
+                    }
+                    resolve();
+                },
+                { enableHighAccuracy: true, timeout: 12000, maximumAge: 300000 }
+            );
+        });
+        setIsLocating(false);
+    }, [toast]);
+
     // Load items on mount and when filters change
     useEffect(() => {
         loadItems();
     }, [selectedCity, selectedCategory, selectedMerchantType, priceRange, sortBy]);
+
+    useEffect(() => {
+        const saved = localStorage.getItem(GEOLOCATION_STORAGE_KEY);
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved) as { latitude: number; longitude: number };
+                if (isValidCoord(parsed.latitude, parsed.longitude)) {
+                    setUserLocation(parsed);
+                    setGeoStatus("granted");
+                }
+            } catch {
+                localStorage.removeItem(GEOLOCATION_STORAGE_KEY);
+            }
+        }
+
+        // Active by default: trigger geolocation request as soon as page loads.
+        requestUserLocation(false);
+    }, [requestUserLocation]);
 
     useEffect(() => {
         const init = async () => {
@@ -226,6 +325,36 @@ const SearchPage = () => {
         }
     };
 
+    const distanceByItemId = useMemo(() => {
+        const distanceMap: Record<string, number> = {};
+        if (!userLocation) return distanceMap;
+
+        items.forEach((item) => {
+            const merchantLat = item.merchant?.latitude;
+            const merchantLng = item.merchant?.longitude;
+            if (isValidCoord(merchantLat, merchantLng)) {
+                distanceMap[item.id] = calculateDistanceKm(userLocation, {
+                    latitude: merchantLat,
+                    longitude: merchantLng,
+                });
+            }
+        });
+
+        return distanceMap;
+    }, [items, userLocation]);
+
+    const displayedItems = useMemo(() => {
+        if (sortBy !== "distance" || !userLocation) {
+            return items;
+        }
+
+        return [...items].sort((a, b) => {
+            const da = distanceByItemId[a.id] ?? Number.MAX_SAFE_INTEGER;
+            const db = distanceByItemId[b.id] ?? Number.MAX_SAFE_INTEGER;
+            return da - db;
+        });
+    }, [items, sortBy, userLocation, distanceByItemId]);
+
     // Convert FoodItem to FoodCardItem format
     const toFoodCardItem = (item: FoodItem): FoodCardItem => ({
         id: item.id,
@@ -237,7 +366,10 @@ const SearchPage = () => {
         merchant: {
             name: item.merchant?.business_name || "Commerce",
             type: item.merchant?.business_type || "other",
-            distance: item.merchant?.quartier || "",
+            distance:
+                distanceByItemId[item.id] !== undefined
+                    ? `${distanceByItemId[item.id].toLocaleString("fr-FR", { maximumFractionDigits: 1 })} km`
+                    : item.merchant?.quartier || "Distance inconnue",
             slug: item.merchant?.slug || "",
         },
         slug: item.slug || "",
@@ -300,6 +432,31 @@ const SearchPage = () => {
                                 <Button size="lg" className="gap-2 h-12" onClick={handleSearch}>
                                     <SearchIcon className="w-5 h-5" />
                                     Rechercher
+                                </Button>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="w-3.5 h-3.5" />
+                                    {geoStatus === "granted" && userLocation ? (
+                                        <span>
+                                            Localisation active: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+                                        </span>
+                                    ) : geoStatus === "denied" ? (
+                                        <span>Localisation refusée. Les résultats ne sont pas triés autour de vous.</span>
+                                    ) : (
+                                        <span>Activation automatique de la localisation...</span>
+                                    )}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 gap-1.5"
+                                    onClick={() => requestUserLocation(true)}
+                                    disabled={isLocating}
+                                >
+                                    {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LocateFixed className="w-3.5 h-3.5" />}
+                                    {isLocating ? "Localisation..." : "Actualiser ma position"}
                                 </Button>
                             </div>
                         </Card>
@@ -432,7 +589,7 @@ const SearchPage = () => {
                     {/* Results */}
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-muted-foreground">
-                            <span className="font-semibold text-foreground">{items.length}</span> résultats trouvés
+                            <span className="font-semibold text-foreground">{displayedItems.length}</span> résultats trouvés
                         </p>
                         <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                             <SelectTrigger className="w-40">
@@ -455,7 +612,7 @@ const SearchPage = () => {
                         <>
                             {/* Grid View - Hidden when map is active */}
                             <div className={`grid sm:grid-cols-2 lg:grid-cols-3 gap-6 ${viewMode !== "grid" ? "hidden" : ""}`}>
-                                {items.map((item, index) => (
+                                {displayedItems.map((item, index) => (
                                     <motion.div
                                         key={item.id}
                                         data-food-id={item.id}
@@ -471,7 +628,7 @@ const SearchPage = () => {
                                         />
                                     </motion.div>
                                 ))}
-                                {items.length === 0 && (
+                                {displayedItems.length === 0 && (
                                     <div className="col-span-full text-center py-12">
                                         <p className="text-muted-foreground">Aucun résultat trouvé</p>
                                         <p className="text-sm text-muted-foreground mt-2">
@@ -483,8 +640,9 @@ const SearchPage = () => {
                             {/* Map View - Conditionally rendered to prevent MapLibre reuse errors */}
                             {viewMode === "map" && (
                                 <GabonMapGL
-                                    items={items}
+                                    items={displayedItems}
                                     selectedCity={selectedCity === "all" ? "" : selectedCity}
+                                    userLocation={userLocation}
                                     onItemSelect={(item) => {
                                         setViewMode("grid");
                                         setTimeout(() => {

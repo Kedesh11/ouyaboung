@@ -52,6 +52,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [isVerifiedMerchant, setIsVerifiedMerchant] = useState(false);
 
+  const isInvalidRefreshTokenError = (error: unknown): boolean => {
+    const message = (error as { message?: string } | null)?.message || '';
+    return /invalid refresh token|refresh token not found/i.test(message);
+  };
+
+  const clearStoredSupabaseSession = () => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      localStorage.removeItem('supabase.auth.token');
+
+      Object.keys(localStorage).forEach((key) => {
+        // Supabase JS v2 storage key format: sb-<project-ref>-auth-token
+        if (/^sb-.*-auth-token$/.test(key)) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (error) {
+      debugWarn('[AuthContext] Failed to clear local auth storage', error);
+    }
+  };
+
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
@@ -76,7 +98,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         debugLog('Session fetched:', !!initialSession);
 
         if (error) {
-          console.error('Error getting session:', error);
+          if (isInvalidRefreshTokenError(error)) {
+            debugWarn('[AuthContext] Invalid refresh token detected, cleaning local session...');
+            clearStoredSupabaseSession();
+            await supabaseClient.auth.signOut({ scope: 'local' });
+          } else {
+            console.error('Error getting session:', error);
+          }
         }
 
         if (mounted && initialSession) {
@@ -231,7 +259,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setSession(null);
       setUserRole(null);
       setIsVerifiedMerchant(false);
-      localStorage.removeItem('supabase.auth.token'); // Force clear token
+      clearStoredSupabaseSession();
 
       if (!supabaseClient) return;
 

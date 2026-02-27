@@ -5,6 +5,16 @@
 
 export type MerchantEmailType = 'approval' | 'rejection';
 
+export interface NewMerchantAdminEmailPayload {
+  adminName?: string;
+  merchantName: string;
+  merchantEmail: string;
+  businessType: string;
+  city: string;
+  createdAt: string;
+  adminUrl: string;
+}
+
 export const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.APP_URL ||
@@ -12,6 +22,9 @@ export const APP_URL =
 
 export const buildMerchantActionUrl = (email: string): string =>
   `${APP_URL}/auth?role=merchant&email=${encodeURIComponent(email)}`;
+
+export const buildAdminValidationUrl = (): string =>
+  `${APP_URL}/admin/validations`;
 
 export const approvalHtml = (email: string, businessName: string): string => `
   <!DOCTYPE html>
@@ -124,6 +137,39 @@ export const rejectionHtml = (businessName: string, reason?: string): string => 
 
     <div style="text-align: center; padding: 25px; font-size: 12px; color: #9ca3af;">
       <p style="margin: 5;">© ${new Date().getFullYear()} ouyaboung. Tous droits reserves.</p>
+    </div>
+  </body>
+  </html>
+`;
+
+export const newMerchantAdminHtml = (payload: NewMerchantAdminEmailPayload): string => `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+    <div style="max-width: 620px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+      <div style="background: #111827; color: #ffffff; padding: 20px;">
+        <h1 style="margin: 0; font-size: 20px;">Nouvelle boutique en attente</h1>
+      </div>
+      <div style="padding: 20px;">
+        <p>Bonjour${payload.adminName ? ` ${payload.adminName}` : ""},</p>
+        <p>Une nouvelle boutique a été créée et attend une validation administrateur.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr><td style="padding: 6px 0; color: #6b7280;">Nom marchand</td><td style="padding: 6px 0;"><strong>${payload.merchantName}</strong></td></tr>
+          <tr><td style="padding: 6px 0; color: #6b7280;">Email</td><td style="padding: 6px 0;">${payload.merchantEmail}</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b7280;">Type</td><td style="padding: 6px 0;">${payload.businessType}</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b7280;">Ville</td><td style="padding: 6px 0;">${payload.city}</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b7280;">Date création</td><td style="padding: 6px 0;">${payload.createdAt}</td></tr>
+        </table>
+        <p>
+          <a href="${payload.adminUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 10px 14px; border-radius: 8px;">
+            Ouvrir la page de validation
+          </a>
+        </p>
+      </div>
     </div>
   </body>
   </html>

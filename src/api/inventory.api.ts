@@ -37,9 +37,11 @@ export const getAvailableFoodItems = async (filters?: {
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*, merchants(*)', { count: 'exact' })
+    .select('*, merchants!inner(*)', { count: 'exact' })
     .eq('is_available', true)
-    .gt('quantity_available', 0);
+    .gt('quantity_available', 0)
+    .eq('merchants.is_verified', true)
+    .eq('merchants.is_active', true);
 
   if (filters?.category) {
     query = query.eq('category', filters.category);
@@ -180,6 +182,23 @@ export const getFoodItemsByMerchant = async (
   }
 
   const client = requireSupabaseClient();
+
+  if (!includeUnavailable) {
+    const { data: merchant, error: merchantError } = await client
+      .from(DB_TABLES.MERCHANTS)
+      .select('is_verified, is_active')
+      .eq('id', merchantId)
+      .maybeSingle();
+
+    if (merchantError || !merchant || !merchant.is_verified || !merchant.is_active) {
+      return {
+        data: [],
+        error: null,
+        success: true,
+      };
+    }
+  }
+
   let query = client
     .from(DB_TABLES.FOOD_ITEMS)
     .select('*')
@@ -222,6 +241,31 @@ export const createFoodItem = async (
   }
 
   const client = requireSupabaseClient();
+
+  const { data: merchant, error: merchantError } = await client
+    .from(DB_TABLES.MERCHANTS)
+    .select('id, is_verified, is_active, is_refused')
+    .eq('id', merchantId)
+    .maybeSingle();
+
+  if (merchantError || !merchant) {
+    return {
+      data: null,
+      error: { code: 'MERCHANT_NOT_FOUND', message: 'Commerce introuvable' },
+      success: false,
+    };
+  }
+
+  if (!merchant.is_verified || !merchant.is_active || merchant.is_refused) {
+    return {
+      data: null,
+      error: {
+        code: 'MERCHANT_NOT_APPROVED',
+        message: 'Votre commerce doit être approuvé par un administrateur avant l’ajout de produits.',
+      },
+      success: false,
+    };
+  }
 
   // Calculate discount percentage
   const discountPercentage = Math.round(
@@ -355,9 +399,11 @@ export const searchFoodItems = async (
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*, merchants(*)')
+    .select('*, merchants!inner(*)')
     .eq('is_available', true)
-    .gt('quantity_available', 0);
+    .gt('quantity_available', 0)
+    .eq('merchants.is_verified', true)
+    .eq('merchants.is_active', true);
 
   if (filters.category) {
     query = query.eq('category', filters.category);

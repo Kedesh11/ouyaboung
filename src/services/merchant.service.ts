@@ -41,7 +41,7 @@ export const listMerchants = async (options?: {
   return getMerchants({
     city: options?.city,
     type: options?.type,
-    is_verified: options?.verifiedOnly,
+    is_verified: options?.verifiedOnly ?? true,
     is_active: options?.activeOnly !== false, // Default to active only
     limit,
     offset,
@@ -100,7 +100,8 @@ export const registerMerchant = async (data: {
     longitude: data.longitude,
     opening_hours: data.openingHours,
     is_verified: false,
-    is_active: true,
+    is_active: false,
+    is_refused: false,
   });
 };
 
@@ -111,7 +112,10 @@ export const updateMerchantProfile = async (
   merchantId: string,
   data: {
     businessName?: string;
+    businessType?: MerchantType;
     description?: string;
+    city?: GabonCity;
+    quartier?: string;
     address?: string;
     phone?: string;
     email?: string;
@@ -125,7 +129,10 @@ export const updateMerchantProfile = async (
 ): Promise<ApiResponse<Merchant>> => {
   const updates: Partial<Merchant> = {
     business_name: data.businessName,
+    business_type: data.businessType,
     description: data.description,
+    city: data.city,
+    quartier: data.quartier,
     address: data.address,
     phone: data.phone,
     email: data.email,
