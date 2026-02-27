@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Html5Qrcode } from "html5-qrcode";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Camera, Keyboard, CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { supabaseClient } from "@/api/supabaseClient";
+import type { Session } from "@supabase/supabase-js";
 
 type ScanMode = 'camera' | 'manual';
 
@@ -28,6 +30,7 @@ interface ValidationResult {
 }
 
 export default function ScanQRPage() {
+    const router = useRouter();
     const [mode, setMode] = useState<ScanMode>('camera');
     const [manualCode, setManualCode] = useState('');
     const [isScanning, setIsScanning] = useState(false);
@@ -184,18 +187,35 @@ export default function ScanQRPage() {
                 throw new Error("Supabase client not initialized");
             }
 
-            const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-            if (userError || !userData.user) {
+            const resolveValidSession = async (): Promise<Session | null> => {
+                const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+                if (!sessionError && sessionData.session?.access_token) {
+                    return sessionData.session;
+                }
+
+                const { data: refreshedData, error: refreshError } = await supabaseClient.auth.refreshSession();
+                if (refreshError || !refreshedData.session?.access_token) {
+                    return null;
+                }
+                return refreshedData.session;
+            };
+
+            const session = await resolveValidSession();
+            if (!session) {
                 setResult({
                     success: false,
                     error: "Session expiree. Veuillez vous reconnecter puis reessayer.",
                     code: "SESSION_EXPIRED",
                 });
+                router.push("/auth?role=merchant&redirect=/merchant/scan");
                 return;
             }
 
             const { data, error } = await supabaseClient.functions.invoke("validate-qr", {
                 body: { pickup_code: normalizedPickupCode },
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                },
             });
 
             if (error) {
