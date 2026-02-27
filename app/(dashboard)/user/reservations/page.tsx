@@ -321,6 +321,8 @@ export default function ReservationsPage() {
                 setReservations((prev) =>
                     prev.map((r) => (r.id === reservationId ? { ...r, status: 'cancelled' } : r))
                 );
+            } else if (resp?.error?.code === 'OFFLINE_QUEUED') {
+                toast.info("Annulation enregistree hors ligne. Elle sera synchronisee automatiquement.");
             } else {
                 alert('Erreur lors de l\'annulation: ' + (resp?.error?.message || 'Erreur inconnue'));
             }

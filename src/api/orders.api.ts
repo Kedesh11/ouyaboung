@@ -5,6 +5,12 @@
 
 import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES } from './routes';
+import {
+  DEFAULT_OFFLINE_CACHE_TTL_MS,
+  getOfflineCache,
+  isBrowserOffline,
+  setOfflineCache,
+} from '@/lib/offline/cache';
 import type {
   ApiResponse,
   Order,
@@ -217,6 +223,20 @@ export const getOrdersByUser = async (
   limit: number = 20,
   offset: number = 0
 ): Promise<ApiResponse<PaginatedResponse<Order>>> => {
+  const cacheKey = `orders:user:${userId}:status:${status || 'all'}:limit:${limit}:offset:${offset}`;
+  const cached = getOfflineCache<PaginatedResponse<Order>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Aucune donnee de reservations disponible hors ligne.' },
+      success: false,
+    };
+  }
+
   if (!isSupabaseConfigured()) {
     return {
       data: null,
@@ -242,6 +262,9 @@ export const getOrdersByUser = async (
   const { data, error, count } = await query;
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
@@ -255,14 +278,18 @@ export const getOrdersByUser = async (
     merchant: o.merchants,
   })) as Order[];
 
+  const responseData: PaginatedResponse<Order> = {
+    data: orders,
+    total: count || 0,
+    page: Math.floor(offset / limit) + 1,
+    per_page: limit,
+    total_pages: Math.ceil((count || 0) / limit),
+  };
+
+  setOfflineCache(cacheKey, responseData);
+
   return {
-    data: {
-      data: orders,
-      total: count || 0,
-      page: Math.floor(offset / limit) + 1,
-      per_page: limit,
-      total_pages: Math.ceil((count || 0) / limit),
-    },
+    data: responseData,
     error: null,
     success: true,
   };
@@ -586,6 +613,20 @@ export const getActiveOrders = async (
   userId?: string,
   merchantId?: string
 ): Promise<ApiResponse<Order[]>> => {
+  const cacheKey = `orders:active:user:${userId || 'none'}:merchant:${merchantId || 'none'}`;
+  const cached = getOfflineCache<Order[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Aucune commande active en cache hors ligne.' },
+      success: false,
+    };
+  }
+
   if (!isSupabaseConfigured()) {
     return {
       data: null,
@@ -610,6 +651,9 @@ export const getActiveOrders = async (
   const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
@@ -622,6 +666,8 @@ export const getActiveOrders = async (
     food_item: o.food_items,
     merchant: o.merchants,
   })) as Order[];
+
+  setOfflineCache(cacheKey, orders);
 
   return {
     data: orders,

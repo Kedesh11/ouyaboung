@@ -9,6 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthRedirect } from "@/components/auth/AuthRedirect";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
+import { OfflineSyncManager } from "@/components/pwa/OfflineSyncManager";
 import { SkipToContent } from "@/components/seo/AccessibilityHelpers";
 import { WebVitalsReporter } from "@/components/WebVitalsReporter";
 
@@ -65,6 +66,7 @@ export default function RootLayout({
                             <AuthRedirect />
                             <TooltipProvider>
                                 <OfflineIndicator />
+                                <OfflineSyncManager />
                                 <InstallPrompt />
                                 <main id="main-content">{children}</main>
                                 <Toaster />

@@ -95,6 +95,8 @@ const ProductDetailPage = () => {
             if (resp.success) {
                 toast.success("Réservation réussie !");
                 router.push("/user/reservations");
+            } else if (resp.error?.code === 'OFFLINE_QUEUED') {
+                toast.info("Vous etes hors ligne. La reservation sera synchronisee automatiquement.");
             } else {
                 toast.error(resp.error?.message || "Erreur lors de la réservation");
             }

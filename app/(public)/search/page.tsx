@@ -305,6 +305,24 @@ const SearchPage = () => {
                     title: "Réservation confirmée !",
                     description: `${item.name} a été ajouté à vos réservations`,
                 });
+            } else if (resp.error?.code === 'OFFLINE_QUEUED') {
+                setReservedCountMap((prev) => ({
+                    ...prev,
+                    [key]: (prev[key] || 0) + 1,
+                }));
+
+                setItems((prev) =>
+                    prev.map((fi) =>
+                        fi.id === item.id
+                            ? { ...fi, quantity_available: Math.max(0, (fi.quantity_available || 0) - 1) }
+                            : fi
+                    )
+                );
+
+                toast({
+                    title: "Réservation mise en attente",
+                    description: "Vous etes hors ligne. La reservation sera envoyee automatiquement des que la connexion revient.",
+                });
             } else {
                 // Notification d'erreur
                 toast({

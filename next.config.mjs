@@ -69,7 +69,22 @@ const config = withPWA({
     register: true,
     skipWaiting: true,
     disable: process.env.NODE_ENV === 'development',
+    fallbacks: {
+        document: '/offline.html',
+    },
     runtimeCaching: [
+        {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+                cacheName: 'pages-cache',
+                networkTimeoutSeconds: 5,
+                expiration: {
+                    maxEntries: 64,
+                    maxAgeSeconds: 6 * 60 * 60, // 6 hours
+                },
+            },
+        },
         {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: 'NetworkFirst',

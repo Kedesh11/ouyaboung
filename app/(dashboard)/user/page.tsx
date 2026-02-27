@@ -201,6 +201,19 @@ export default function UserDashboardPage() {
                     title: "✅ Réservation réussie !",
                     description: `${item.name} a été ajouté à vos réservations.`,
                 });
+            } else if (resp.error?.code === 'OFFLINE_QUEUED') {
+                setFavoriteItems((prev) =>
+                    prev.map((fi) =>
+                        fi.id === item.id
+                            ? { ...fi, quantity_available: Math.max(0, (fi.quantity_available || 0) - 1) }
+                            : fi
+                    )
+                );
+
+                toast({
+                    title: "Reservation en attente",
+                    description: "Vous etes hors ligne. La reservation sera synchronisee automatiquement.",
+                });
             } else {
                 // Handle API error
                 throw new Error(resp.error?.message || "Échec de la réservation");

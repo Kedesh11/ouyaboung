@@ -17,6 +17,9 @@ import {
   getActiveOrders as getActiveOrdersApi,
 } from '@/api';
 import { cancelOrderViaRPC } from '@/api/orders-rpc.api';
+import { OFFLINE_ACTION_TYPES } from '@/lib/offline/actions';
+import { isBrowserOffline, isLikelyOfflineError } from '@/lib/offline/cache';
+import { enqueueOfflineQueueItem } from '@/lib/offline/queue';
 import type {
   ApiResponse,
   Order,
@@ -32,7 +35,46 @@ export const createReservation = async (
   itemId: string,
   quantity: number
 ): Promise<ApiResponse<Order>> => {
-  return createOrder(userId, { food_item_id: itemId, quantity });
+  const queueReservation = () => {
+    const queued = enqueueOfflineQueueItem(OFFLINE_ACTION_TYPES.CREATE_RESERVATION, {
+      userId,
+      itemId,
+      quantity,
+    });
+    return {
+      data: null,
+      error: {
+        code: 'OFFLINE_QUEUED',
+        message: 'Reservation enregistree hors ligne. Elle sera synchronisee automatiquement.',
+        details: { queue_action_id: queued.id },
+      },
+      success: false,
+    } as ApiResponse<Order>;
+  };
+
+  if (isBrowserOffline()) {
+    return queueReservation();
+  }
+
+  try {
+    const result = await createOrder(userId, { food_item_id: itemId, quantity });
+    if (!result.success && isLikelyOfflineError(result.error)) {
+      return queueReservation();
+    }
+    return result;
+  } catch (error) {
+    if (isLikelyOfflineError(error)) {
+      return queueReservation();
+    }
+    return {
+      data: null,
+      error: {
+        code: 'RESERVATION_ERROR',
+        message: error instanceof Error ? error.message : 'Erreur lors de la reservation',
+      },
+      success: false,
+    };
+  }
 };
 
 /**
