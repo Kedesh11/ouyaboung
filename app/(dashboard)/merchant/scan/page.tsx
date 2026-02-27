@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +28,6 @@ interface ValidationResult {
 }
 
 export default function ScanQRPage() {
-    const searchParams = useSearchParams();
     const [mode, setMode] = useState<ScanMode>('camera');
     const [manualCode, setManualCode] = useState('');
     const [isScanning, setIsScanning] = useState(false);
@@ -41,12 +39,13 @@ export default function ScanQRPage() {
     const scannerInitialized = useRef(false);
 
     useEffect(() => {
-        const pickupCodeFromQuery = searchParams.get('pickup_code');
+        if (typeof window === 'undefined') return;
+        const pickupCodeFromQuery = new URLSearchParams(window.location.search).get('pickup_code');
         if (!pickupCodeFromQuery) return;
 
         setMode('manual');
         setManualCode(pickupCodeFromQuery);
-    }, [searchParams]);
+    }, []);
 
     // Initialize camera scanner
     useEffect(() => {
