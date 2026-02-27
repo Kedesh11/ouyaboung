@@ -102,6 +102,17 @@ const getCameraErrorMessage = (err: unknown): string => {
     return "Impossible d'acceder a la camera. Verifiez les permissions.";
 };
 
+const isFatalCameraError = (err: unknown): boolean => {
+    const name = (err as { name?: string })?.name || "";
+    return [
+        "NotAllowedError",
+        "PermissionDeniedError",
+        "NotFoundError",
+        "DevicesNotFoundError",
+        "OverconstrainedError",
+    ].includes(name);
+};
+
 export default function ScanQRPage() {
     const router = useRouter();
     const devices = useDevices();
@@ -138,9 +149,17 @@ export default function ScanQRPage() {
 
     const scannerConstraints = useMemo(() => {
         if (selectedDeviceId) {
-            return { deviceId: { exact: selectedDeviceId } };
+            return {
+                deviceId: selectedDeviceId,
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+            };
         }
-        return { facingMode: { ideal: "environment" } };
+        return {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+        };
     }, [selectedDeviceId]);
 
     const validateCode = async (pickupCodeInput: string): Promise<boolean> => {
@@ -362,12 +381,14 @@ export default function ScanQRPage() {
                                     onScan={handleCameraScan}
                                     onError={(error) => {
                                         setCameraError(getCameraErrorMessage(error));
-                                        setIsScanning(false);
+                                        if (isFatalCameraError(error)) {
+                                            setIsScanning(false);
+                                        }
                                     }}
                                     paused={!isScanning || isValidating}
                                     constraints={scannerConstraints}
                                     formats={["qr_code"]}
-                                    scanDelay={160}
+                                    scanDelay={80}
                                     components={{
                                         finder: true,
                                         torch: true,
@@ -521,4 +542,3 @@ export default function ScanQRPage() {
         </div>
     );
 }
-
