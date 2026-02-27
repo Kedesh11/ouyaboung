@@ -5,6 +5,12 @@
 
 import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES, API_ROUTES } from './routes';
+import {
+  DEFAULT_OFFLINE_CACHE_TTL_MS,
+  getOfflineCache,
+  isBrowserOffline,
+  setOfflineCache,
+} from '@/lib/offline/cache';
 
 import type {
   ApiResponse,
@@ -26,6 +32,20 @@ export const getMerchants = async (filters?: {
   limit?: number;
   offset?: number;
 }): Promise<ApiResponse<PaginatedResponse<Merchant>>> => {
+  const serializedFilters = JSON.stringify(filters || {});
+  const cacheKey = `merchants:list:${serializedFilters}`;
+  const cached = getOfflineCache<PaginatedResponse<Merchant>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Aucun commerce en cache hors ligne.' },
+      success: false,
+    };
+  }
 
 
   const client = requireSupabaseClient();
@@ -54,6 +74,9 @@ export const getMerchants = async (filters?: {
   const { data, error, count } = await query;
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
@@ -61,14 +84,18 @@ export const getMerchants = async (filters?: {
     };
   }
 
+  const responseData: PaginatedResponse<Merchant> = {
+    data: data as Merchant[],
+    total: count || 0,
+    page: Math.floor(offset / limit) + 1,
+    per_page: limit,
+    total_pages: Math.ceil((count || 0) / limit),
+  };
+
+  setOfflineCache(cacheKey, responseData);
+
   return {
-    data: {
-      data: data as Merchant[],
-      total: count || 0,
-      page: Math.floor(offset / limit) + 1,
-      per_page: limit,
-      total_pages: Math.ceil((count || 0) / limit),
-    },
+    data: responseData,
     error: null,
     success: true,
   };
@@ -110,6 +137,20 @@ export const getMerchantById = async (
 export const getMerchantBySlug = async (
   slug: string
 ): Promise<ApiResponse<Merchant>> => {
+  const cacheKey = `merchant:slug:${slug}`;
+  const cached = getOfflineCache<Merchant>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Commerce indisponible hors ligne (non mis en cache).' },
+      success: false,
+    };
+  }
+
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.MERCHANTS)
@@ -118,11 +159,18 @@ export const getMerchantBySlug = async (
     .maybeSingle();
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
       success: false,
     };
+  }
+
+  if (data) {
+    setOfflineCache(cacheKey, data as Merchant);
   }
 
   return {
@@ -360,6 +408,20 @@ export const searchMerchants = async (
   query: string,
   city?: GabonCity
 ): Promise<ApiResponse<Merchant[]>> => {
+  const cacheKey = `merchants:search:query:${query}:city:${city || 'all'}`;
+  const cached = getOfflineCache<Merchant[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Recherche commerces indisponible hors ligne (pas de cache).' },
+      success: false,
+    };
+  }
+
   if (!isSupabaseConfigured()) {
     return {
       data: null,
@@ -383,12 +445,17 @@ export const searchMerchants = async (
   const { data, error } = await dbQuery.limit(20);
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
       success: false,
     };
   }
+
+  setOfflineCache(cacheKey, data as Merchant[]);
 
   return {
     data: data as Merchant[],

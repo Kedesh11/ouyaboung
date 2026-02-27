@@ -135,6 +135,14 @@ export default function FavoritesPage() {
             if (!userId) throw new Error('Utilisateur non authentifié');
 
             const resp = await createReservation(userId, itemId, 1);
+            if (resp?.error?.code === 'OFFLINE_QUEUED') {
+                toast({
+                    title: 'Reservation en attente',
+                    description: 'Vous etes hors ligne. La reservation sera synchronisee automatiquement.',
+                });
+                return;
+            }
+
             if (!resp || !resp.success) {
                 throw new Error(resp?.error?.message || 'Impossible de réserver');
             }

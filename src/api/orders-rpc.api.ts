@@ -1,10 +1,13 @@
 import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { OFFLINE_ACTION_TYPES } from '@/lib/offline/actions';
+import { isBrowserOffline, isLikelyOfflineError } from '@/lib/offline/cache';
+import { enqueueOfflineQueueItem } from '@/lib/offline/queue';
 import type { ApiResponse } from '@/types';
 
 /**
  * Cancel an order using RPC function (bypasses RLS issues)
  */
-export const cancelOrderViaRPC = async (
+export const cancelOrderViaRPCOnline = async (
     orderId: string,
     reason?: string
 ): Promise<ApiResponse<any>> => {
@@ -60,4 +63,35 @@ export const cancelOrderViaRPC = async (
             success: false,
         };
     }
+};
+
+export const cancelOrderViaRPC = async (
+    orderId: string,
+    reason?: string
+): Promise<ApiResponse<any>> => {
+    const queueCancellation = (): ApiResponse<any> => {
+        const queued = enqueueOfflineQueueItem(OFFLINE_ACTION_TYPES.CANCEL_ORDER, {
+            orderId,
+            reason,
+        });
+        return {
+            data: null,
+            error: {
+                code: 'OFFLINE_QUEUED',
+                message: 'Annulation enregistree hors ligne. Elle sera synchronisee automatiquement.',
+                details: { queue_action_id: queued.id },
+            },
+            success: false,
+        };
+    };
+
+    if (isBrowserOffline()) {
+        return queueCancellation();
+    }
+
+    const result = await cancelOrderViaRPCOnline(orderId, reason);
+    if (!result.success && isLikelyOfflineError(result.error)) {
+        return queueCancellation();
+    }
+    return result;
 };

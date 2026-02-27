@@ -5,6 +5,12 @@
 
 import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES } from './routes';
+import {
+  DEFAULT_OFFLINE_CACHE_TTL_MS,
+  getOfflineCache,
+  isBrowserOffline,
+  setOfflineCache,
+} from '@/lib/offline/cache';
 import type {
   ApiResponse,
   FoodItem,
@@ -26,6 +32,21 @@ export const getAvailableFoodItems = async (filters?: {
   limit?: number;
   offset?: number;
 }): Promise<ApiResponse<PaginatedResponse<FoodItem>>> => {
+  const serializedFilters = JSON.stringify(filters || {});
+  const cacheKey = `inventory:available:${serializedFilters}`;
+  const cached = getOfflineCache<PaginatedResponse<FoodItem>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Aucun produit disponible en cache hors ligne.' },
+      success: false,
+    };
+  }
+
   if (!isSupabaseConfigured()) {
     return {
       data: null,
@@ -66,6 +87,9 @@ export const getAvailableFoodItems = async (filters?: {
   const { data, error, count } = await query;
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
@@ -79,14 +103,18 @@ export const getAvailableFoodItems = async (filters?: {
     merchant: item.merchants,
   })) as FoodItem[];
 
+  const responseData: PaginatedResponse<FoodItem> = {
+    data: items,
+    total: count || 0,
+    page: Math.floor(offset / limit) + 1,
+    per_page: limit,
+    total_pages: Math.ceil((count || 0) / limit),
+  };
+
+  setOfflineCache(cacheKey, responseData);
+
   return {
-    data: {
-      data: items,
-      total: count || 0,
-      page: Math.floor(offset / limit) + 1,
-      per_page: limit,
-      total_pages: Math.ceil((count || 0) / limit),
-    },
+    data: responseData,
     error: null,
     success: true,
   };
@@ -139,6 +167,20 @@ export const getFoodItemById = async (
 export const getFoodItemBySlug = async (
   slug: string
 ): Promise<ApiResponse<FoodItem>> => {
+  const cacheKey = `inventory:item:slug:${slug}`;
+  const cached = getOfflineCache<FoodItem>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Produit indisponible hors ligne (non mis en cache).' },
+      success: false,
+    };
+  }
+
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.FOOD_ITEMS)
@@ -147,6 +189,9 @@ export const getFoodItemBySlug = async (
     .maybeSingle();
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
@@ -158,6 +203,10 @@ export const getFoodItemBySlug = async (
     ...data,
     merchant: data.merchants,
   } : null;
+
+  if (item) {
+    setOfflineCache(cacheKey, item as FoodItem);
+  }
 
   return {
     data: item as FoodItem,
@@ -388,6 +437,21 @@ export const deleteFoodItem = async (
 export const searchFoodItems = async (
   filters: SearchFilters
 ): Promise<ApiResponse<FoodItem[]>> => {
+  const serializedFilters = JSON.stringify(filters || {});
+  const cacheKey = `inventory:search:${serializedFilters}`;
+  const cached = getOfflineCache<FoodItem[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+
+  if (isBrowserOffline()) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
+    return {
+      data: null,
+      error: { code: 'OFFLINE_NO_CACHE', message: 'Recherche indisponible hors ligne (pas de cache).' },
+      success: false,
+    };
+  }
+
   if (!isSupabaseConfigured()) {
     return {
       data: null,
@@ -442,6 +506,9 @@ export const searchFoodItems = async (
   const { data, error } = await query.limit(50);
 
   if (error) {
+    if (cached) {
+      return { data: cached, error: null, success: true };
+    }
     return {
       data: null,
       error: { code: error.code, message: error.message },
@@ -453,6 +520,8 @@ export const searchFoodItems = async (
     ...item,
     merchant: item.merchants,
   })) as FoodItem[];
+
+  setOfflineCache(cacheKey, items);
 
   return {
     data: items,
