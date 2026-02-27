@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthRedirect } from "@/components/auth/AuthRedirect";
+import { SystemPushBridge } from "@/components/notifications/SystemPushBridge";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { OfflineSyncManager } from "@/components/pwa/OfflineSyncManager";
@@ -64,6 +65,7 @@ export default function RootLayout({
                             disableTransitionOnChange
                         >
                             <AuthRedirect />
+                            <SystemPushBridge />
                             <TooltipProvider>
                                 <OfflineIndicator />
                                 <OfflineSyncManager />
