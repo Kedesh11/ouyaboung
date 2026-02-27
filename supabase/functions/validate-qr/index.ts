@@ -46,8 +46,12 @@ serve(async (req) => {
         }
 
         const { pickup_code } = await req.json()
+        const normalizedPickupCode =
+            typeof pickup_code === 'string'
+                ? pickup_code.replace(/\s+/g, '').toUpperCase()
+                : ''
 
-        if (!pickup_code) {
+        if (!normalizedPickupCode) {
             return new Response(
                 JSON.stringify({ success: false, error: 'Missing pickup_code' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -78,7 +82,7 @@ serve(async (req) => {
         const { data: order, error: orderError } = await supabaseClient
             .from('orders')
             .select('id, user_id, merchant_id, quantity, total_price, status, confirmed_at, consumed_at, consumed_by, food_item:food_items(name)')
-            .eq('pickup_code', pickup_code)
+            .ilike('pickup_code', normalizedPickupCode)
             .eq('merchant_id', merchant.id)
             .maybeSingle()
 
