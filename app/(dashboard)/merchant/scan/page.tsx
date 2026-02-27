@@ -71,6 +71,7 @@ const extractPickupCode = (rawValue: string): string => {
 };
 
 const isLikelyPickupCode = (value: string): boolean => /^[A-Z0-9]{6,32}$/.test(value);
+const VALIDATION_HARD_TIMEOUT_MS = 12000;
 
 export default function ScanQRPage() {
     const router = useRouter();
@@ -85,6 +86,7 @@ export default function ScanQRPage() {
     const scannerInitialized = useRef(false);
     const cameraValidationInFlightRef = useRef(false);
     const lastCameraCodeRef = useRef<{ code: string; at: number } | null>(null);
+    const validationRunIdRef = useRef(0);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -184,8 +186,8 @@ export default function ScanQRPage() {
             await scannerRef.current.start(
                 preferredCameraId,
                 {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 }
+                    fps: 18,
+                    qrbox: { width: 300, height: 300 }
                 },
                 (decodedText) => {
                     const candidateCode = extractPickupCode(decodedText);
@@ -199,7 +201,7 @@ export default function ScanQRPage() {
                     }
 
                     const last = lastCameraCodeRef.current;
-                    if (last && last.code === candidateCode && now - last.at < 3000) {
+                    if (last && last.code === candidateCode && now - last.at < 1200) {
                         return;
                     }
 
@@ -245,6 +247,9 @@ export default function ScanQRPage() {
     };
 
     const validateCode = async (pickup_code: string): Promise<boolean> => {
+        const runId = validationRunIdRef.current + 1;
+        validationRunIdRef.current = runId;
+
         const normalizedPickupCode = extractPickupCode(pickup_code);
         if (!normalizedPickupCode) return false;
 
@@ -259,8 +264,20 @@ export default function ScanQRPage() {
 
         setIsValidating(true);
         setResult(null);
+        const timeoutId = setTimeout(() => {
+            if (validationRunIdRef.current !== runId) return;
+            validationRunIdRef.current = 0;
+            setIsValidating(false);
+            setResult({
+                success: false,
+                error: "La validation prend trop de temps. Verifiez la connexion puis reessayez.",
+                code: "VALIDATION_TIMEOUT",
+            });
+        }, VALIDATION_HARD_TIMEOUT_MS);
 
         try {
+            const isRunActive = () => validationRunIdRef.current === runId;
+
             if (!supabaseClient) {
                 throw new Error("Supabase client not initialized");
             }
@@ -269,8 +286,9 @@ export default function ScanQRPage() {
                 functionName: "validate-qr",
                 body: { pickup_code: normalizedPickupCode },
                 retryOnUnauthorized: true,
-                timeoutMs: 15000,
+                timeoutMs: 9000,
             });
+            if (!isRunActive()) return false;
 
             if (!edgeResult.ok) {
                 const statusCode = edgeResult.status;
@@ -323,13 +341,18 @@ export default function ScanQRPage() {
             }
         } catch (err) {
             console.error("[Scan] Validation error:", err);
+            if (validationRunIdRef.current !== runId) return false;
             setResult({
                 success: false,
                 error: (err as Error).message || "Erreur lors de la validation"
             });
             return false;
         } finally {
-            setIsValidating(false);
+            clearTimeout(timeoutId);
+            if (validationRunIdRef.current === runId) {
+                validationRunIdRef.current = 0;
+                setIsValidating(false);
+            }
         }
     };
 
@@ -339,6 +362,8 @@ export default function ScanQRPage() {
     };
 
     const resetScan = () => {
+        validationRunIdRef.current = 0;
+        setIsValidating(false);
         setResult(null);
         setManualCode('');
         lastCameraCodeRef.current = null;
@@ -361,6 +386,7 @@ export default function ScanQRPage() {
                     variant={mode === 'camera' ? 'default' : 'outline'}
                     disabled={isValidating}
                     onClick={() => {
+                        validationRunIdRef.current = 0;
                         setMode('camera');
                         setResult(null);
                         if (isScanning) stopCameraScanning();
@@ -374,6 +400,7 @@ export default function ScanQRPage() {
                     variant={mode === 'manual' ? 'default' : 'outline'}
                     disabled={isValidating}
                     onClick={() => {
+                        validationRunIdRef.current = 0;
                         setMode('manual');
                         setResult(null);
                         if (isScanning) stopCameraScanning();
