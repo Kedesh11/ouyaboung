@@ -1,16 +1,30 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import type { IDetectedBarcode } from "@yudiel/react-qr-scanner";
+import { useDevices } from "@yudiel/react-qr-scanner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Camera, Keyboard, CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
+import {
+    AlertCircle,
+    Camera,
+    CheckCircle,
+    Keyboard,
+    Loader2,
+    XCircle,
+} from "lucide-react";
 import { supabaseClient } from "@/api/supabaseClient";
 import { callEdgeFunctionWithAuth } from "@/lib/auth/edge-function-client";
 
-type ScanMode = 'camera' | 'manual';
+const Scanner = dynamic(
+    () => import("@yudiel/react-qr-scanner").then((module) => module.Scanner),
+    { ssr: false }
+);
+
+type ScanMode = "camera" | "manual";
 
 interface ValidationResult {
     success: boolean;
@@ -34,22 +48,20 @@ type ValidateQrApiResponse = ValidationResult & {
     code?: string;
 };
 
+const VALIDATION_HARD_TIMEOUT_MS = 12000;
+
 const extractPickupCode = (rawValue: string): string => {
     const trimmed = rawValue.trim();
     if (!trimmed) return "";
 
-    // Support QR payload as URL: /merchant/scan?pickup_code=ABC123
     try {
         const url = new URL(trimmed);
         const queryCode = url.searchParams.get("pickup_code") || url.searchParams.get("code");
-        if (queryCode) {
-            return queryCode.replace(/\s+/g, "").toUpperCase();
-        }
+        if (queryCode) return queryCode.replace(/\s+/g, "").toUpperCase();
     } catch {
-        // not a URL, continue
+        // Not a URL payload.
     }
 
-    // Support JSON payload: {"pickup_code":"ABC123"}
     if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
         try {
             const parsed = JSON.parse(trimmed) as { pickup_code?: unknown; code?: unknown };
@@ -59,11 +71,9 @@ const extractPickupCode = (rawValue: string): string => {
                     : typeof parsed.code === "string"
                         ? parsed.code
                         : "";
-            if (rawCode) {
-                return rawCode.replace(/\s+/g, "").toUpperCase();
-            }
+            if (rawCode) return rawCode.replace(/\s+/g, "").toUpperCase();
         } catch {
-            // not valid JSON payload, continue
+            // Not a JSON payload.
         }
     }
 
@@ -71,186 +81,73 @@ const extractPickupCode = (rawValue: string): string => {
 };
 
 const isLikelyPickupCode = (value: string): boolean => /^[A-Z0-9]{6,32}$/.test(value);
-const VALIDATION_HARD_TIMEOUT_MS = 12000;
+
+const getCameraErrorMessage = (err: unknown): string => {
+    const name = (err as { name?: string })?.name || "";
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        return "Acces camera refuse. Autorisez la camera dans le navigateur puis reessayez.";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        return "Aucune camera detectee sur cet appareil.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+        return "Camera deja utilisee par une autre application. Fermez-la puis reessayez.";
+    }
+    if (name === "OverconstrainedError") {
+        return "Configuration camera non compatible. Essayez avec une autre camera.";
+    }
+    if (name === "AbortError") {
+        return "Le demarrage de la camera a ete interrompu. Reessayez.";
+    }
+    return "Impossible d'acceder a la camera. Verifiez les permissions.";
+};
 
 export default function ScanQRPage() {
     const router = useRouter();
-    const [mode, setMode] = useState<ScanMode>('camera');
-    const [manualCode, setManualCode] = useState('');
+    const devices = useDevices();
+
+    const [mode, setMode] = useState<ScanMode>("camera");
+    const [manualCode, setManualCode] = useState("");
     const [isScanning, setIsScanning] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
     const [result, setResult] = useState<ValidationResult | null>(null);
     const [cameraError, setCameraError] = useState<string | null>(null);
-    
-    const scannerRef = useRef<Html5Qrcode | null>(null);
-    const scannerInitialized = useRef(false);
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+
     const cameraValidationInFlightRef = useRef(false);
     const lastCameraCodeRef = useRef<{ code: string; at: number } | null>(null);
     const validationRunIdRef = useRef(0);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const pickupCodeFromQuery = new URLSearchParams(window.location.search).get('pickup_code');
+        if (typeof window === "undefined") return;
+        const pickupCodeFromQuery = new URLSearchParams(window.location.search).get("pickup_code");
         if (!pickupCodeFromQuery) return;
 
-        setMode('manual');
+        setMode("manual");
         setManualCode(extractPickupCode(pickupCodeFromQuery));
     }, []);
 
-    // Initialize camera scanner
     useEffect(() => {
-        if (mode === 'camera' && !scannerInitialized.current) {
-            const scanner = new Html5Qrcode("qr-reader");
-            scannerRef.current = scanner;
-            scannerInitialized.current = true;
+        if (!devices.length) return;
+        if (selectedDeviceId) return;
+
+        const preferredDevice =
+            devices.find((device) => /back|rear|environment|arriere/i.test(device.label)) ?? devices[0];
+        setSelectedDeviceId(preferredDevice.deviceId);
+    }, [devices, selectedDeviceId]);
+
+    const scannerConstraints = useMemo(() => {
+        if (selectedDeviceId) {
+            return { deviceId: { exact: selectedDeviceId } };
         }
-    }, [mode]);
+        return { facingMode: { ideal: "environment" } };
+    }, [selectedDeviceId]);
 
-    useEffect(() => {
-        return () => {
-            // Cleanup on unmount
-            if (scannerRef.current) {
-                scannerRef.current.stop().catch(() => undefined);
-            }
-        };
-    }, []);
-
-    const getCameraErrorMessage = (err: unknown): string => {
-        const name = (err as { name?: string })?.name || "";
-
-        if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-            return "Acces camera refuse. Autorisez la camera dans le navigateur puis reessayez.";
-        }
-        if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-            return "Aucune camera detectee sur cet appareil.";
-        }
-        if (name === "NotReadableError" || name === "TrackStartError") {
-            return "Camera deja utilisee par une autre application. Fermez-la puis reessayez.";
-        }
-        if (name === "OverconstrainedError") {
-            return "Configuration camera non compatible. Essayez avec une autre camera.";
-        }
-        if (name === "AbortError") {
-            return "Le demarrage de la camera a ete interrompu. Reessayez.";
-        }
-        return "Impossible d'acceder a la camera. Verifiez les permissions.";
-    };
-
-    const requestCameraPermission = async (): Promise<boolean> => {
-        if (typeof window !== 'undefined' && !window.isSecureContext) {
-            setCameraError("La camera requiert une connexion securisee (HTTPS).");
-            return false;
-        }
-
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            setCameraError("Votre navigateur ne supporte pas l'acces camera.");
-            return false;
-        }
-
-        try {
-            // Explicitly trigger permission prompt before starting QR scanner.
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: "environment" } },
-                audio: false,
-            });
-            stream.getTracks().forEach((track) => track.stop());
-            return true;
-        } catch (err) {
-            setCameraError(getCameraErrorMessage(err));
-            return false;
-        }
-    };
-
-    const startCameraScanning = async () => {
-        if (!scannerRef.current || isScanning || isValidating) return;
-
-        try {
-            setCameraError(null);
-            setResult(null);
-
-            const hasPermission = await requestCameraPermission();
-            if (!hasPermission) {
-                return;
-            }
-
-            const cameras = await Html5Qrcode.getCameras();
-            if (!cameras.length) {
-                setCameraError("Aucune camera detectee. Verifiez votre appareil puis reessayez.");
-                return;
-            }
-
-            const preferredCameraId =
-                cameras.find((camera) => /back|rear|environment|arriere/i.test(camera.label))?.id ??
-                cameras[0].id;
-
-            await scannerRef.current.start(
-                preferredCameraId,
-                {
-                    fps: 18,
-                    qrbox: { width: 300, height: 300 }
-                },
-                (decodedText) => {
-                    const candidateCode = extractPickupCode(decodedText);
-                    if (!isLikelyPickupCode(candidateCode)) {
-                        return;
-                    }
-
-                    const now = Date.now();
-                    if (cameraValidationInFlightRef.current) {
-                        return;
-                    }
-
-                    const last = lastCameraCodeRef.current;
-                    if (last && last.code === candidateCode && now - last.at < 1200) {
-                        return;
-                    }
-
-                    cameraValidationInFlightRef.current = true;
-                    lastCameraCodeRef.current = { code: candidateCode, at: now };
-                    setManualCode(candidateCode);
-
-                    void validateCode(candidateCode)
-                        .then((success) => {
-                            if (success) {
-                                void stopCameraScanning();
-                            }
-                        })
-                        .finally(() => {
-                            cameraValidationInFlightRef.current = false;
-                        });
-                },
-                (errorMessage) => {
-                    // Scanning error (ignore, these are normal during scanning)
-                }
-            );
-            setIsScanning(true);
-        } catch (err) {
-            console.error("[Scan] Camera error:", err);
-            setCameraError(getCameraErrorMessage(err));
-            setIsScanning(false);
-        }
-    };
-
-    const stopCameraScanning = async () => {
-        if (scannerRef.current) {
-            try {
-                await scannerRef.current.stop();
-            } catch (err) {
-                const stopMessage = (err as Error)?.message?.toLowerCase() || "";
-                if (!stopMessage.includes("not running")) {
-                    console.error("[Scan] Stop error:", err);
-                }
-            } finally {
-                setIsScanning(false);
-            }
-        }
-    };
-
-    const validateCode = async (pickup_code: string): Promise<boolean> => {
+    const validateCode = async (pickupCodeInput: string): Promise<boolean> => {
         const runId = validationRunIdRef.current + 1;
         validationRunIdRef.current = runId;
 
-        const normalizedPickupCode = extractPickupCode(pickup_code);
+        const normalizedPickupCode = extractPickupCode(pickupCodeInput);
         if (!normalizedPickupCode) return false;
 
         if (!isLikelyPickupCode(normalizedPickupCode)) {
@@ -264,6 +161,7 @@ export default function ScanQRPage() {
 
         setIsValidating(true);
         setResult(null);
+
         const timeoutId = setTimeout(() => {
             if (validationRunIdRef.current !== runId) return;
             validationRunIdRef.current = 0;
@@ -296,26 +194,25 @@ export default function ScanQRPage() {
                     statusCode === 0
                         ? "La validation a expire (timeout) ou la connexion est indisponible."
                         : statusCode === 401
-                        ? "Acces non autorise. Reconnectez-vous puis reessayez."
-                        : statusCode === 403
-                            ? "Compte marchand non autorise pour valider cette commande."
-                            : "Erreur lors de la validation du code.";
+                            ? "Acces non autorise. Reconnectez-vous puis reessayez."
+                            : statusCode === 403
+                                ? "Compte marchand non autorise pour valider cette commande."
+                                : "Erreur lors de la validation du code.";
 
                 setResult({
                     success: false,
                     error: edgeResult.error?.error || edgeResult.error?.message || defaultError,
                     code:
                         edgeResult.error?.code ||
-                        (
-                            statusCode === 0
-                                ? "NETWORK_OR_TIMEOUT"
-                                : statusCode === 401
-                                    ? "UNAUTHORIZED"
-                                    : statusCode === 403
-                                        ? "FORBIDDEN"
-                                        : "VALIDATION_ERROR"
-                        ),
+                        (statusCode === 0
+                            ? "NETWORK_OR_TIMEOUT"
+                            : statusCode === 401
+                                ? "UNAUTHORIZED"
+                                : statusCode === 403
+                                    ? "FORBIDDEN"
+                                    : "VALIDATION_ERROR"),
                 });
+
                 if (statusCode === 401) {
                     router.push("/auth?role=merchant&redirect=/merchant/scan");
                 }
@@ -323,28 +220,26 @@ export default function ScanQRPage() {
             }
 
             const payload = edgeResult.data;
-
             if (payload?.success) {
                 setResult({
                     success: true,
                     message: payload.message,
-                    order: payload.order
+                    order: payload.order,
                 });
                 return true;
-            } else {
-                setResult({
-                    success: false,
-                    error: payload?.error || "Code invalide ou commande non eligible.",
-                    code: payload?.code || "VALIDATION_ERROR"
-                });
-                return false;
             }
+
+            setResult({
+                success: false,
+                error: payload?.error || "Code invalide ou commande non eligible.",
+                code: payload?.code || "VALIDATION_ERROR",
+            });
+            return false;
         } catch (err) {
-            console.error("[Scan] Validation error:", err);
             if (validationRunIdRef.current !== runId) return false;
             setResult({
                 success: false,
-                error: (err as Error).message || "Erreur lors de la validation"
+                error: (err as Error).message || "Erreur lors de la validation",
             });
             return false;
         } finally {
@@ -356,20 +251,74 @@ export default function ScanQRPage() {
         }
     };
 
+    const startCameraScanning = () => {
+        setCameraError(null);
+        setResult(null);
+        setIsScanning(true);
+    };
+
+    const stopCameraScanning = () => {
+        setIsScanning(false);
+    };
+
+    const handleCameraScan = (detectedCodes: IDetectedBarcode[]) => {
+        if (!detectedCodes.length || !isScanning || isValidating) return;
+
+        const rawValue = detectedCodes[0]?.rawValue;
+        if (!rawValue) return;
+
+        const candidateCode = extractPickupCode(rawValue);
+        if (!isLikelyPickupCode(candidateCode)) return;
+
+        const now = Date.now();
+        if (cameraValidationInFlightRef.current) return;
+
+        const last = lastCameraCodeRef.current;
+        if (last && last.code === candidateCode && now - last.at < 1200) return;
+
+        cameraValidationInFlightRef.current = true;
+        lastCameraCodeRef.current = { code: candidateCode, at: now };
+        setManualCode(candidateCode);
+
+        void validateCode(candidateCode)
+            .then((success) => {
+                if (success) {
+                    stopCameraScanning();
+                }
+            })
+            .finally(() => {
+                cameraValidationInFlightRef.current = false;
+            });
+    };
+
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         void validateCode(manualCode);
+    };
+
+    const handleModeChange = (nextMode: ScanMode) => {
+        validationRunIdRef.current = 0;
+        setIsValidating(false);
+        setResult(null);
+        setCameraError(null);
+        setMode(nextMode);
+        if (nextMode === "camera") {
+            setIsScanning(false);
+        } else {
+            stopCameraScanning();
+        }
     };
 
     const resetScan = () => {
         validationRunIdRef.current = 0;
         setIsValidating(false);
         setResult(null);
-        setManualCode('');
+        setManualCode("");
         lastCameraCodeRef.current = null;
         cameraValidationInFlightRef.current = false;
-        if (mode === 'camera' && !isScanning) {
-            startCameraScanning();
+        if (mode === "camera") {
+            setCameraError(null);
+            setIsScanning(false);
         }
     };
 
@@ -380,31 +329,20 @@ export default function ScanQRPage() {
                 <p className="text-muted-foreground">Validez les commandes de vos clients</p>
             </div>
 
-            {/* Mode Selection */}
             <div className="flex gap-2 justify-center">
                 <Button
-                    variant={mode === 'camera' ? 'default' : 'outline'}
+                    variant={mode === "camera" ? "default" : "outline"}
                     disabled={isValidating}
-                    onClick={() => {
-                        validationRunIdRef.current = 0;
-                        setMode('camera');
-                        setResult(null);
-                        if (isScanning) stopCameraScanning();
-                    }}
+                    onClick={() => handleModeChange("camera")}
                     className="flex items-center gap-2"
                 >
                     <Camera className="w-4 h-4" />
                     Scanner
                 </Button>
                 <Button
-                    variant={mode === 'manual' ? 'default' : 'outline'}
+                    variant={mode === "manual" ? "default" : "outline"}
                     disabled={isValidating}
-                    onClick={() => {
-                        validationRunIdRef.current = 0;
-                        setMode('manual');
-                        setResult(null);
-                        if (isScanning) stopCameraScanning();
-                    }}
+                    onClick={() => handleModeChange("manual")}
                     className="flex items-center gap-2"
                 >
                     <Keyboard className="w-4 h-4" />
@@ -412,15 +350,59 @@ export default function ScanQRPage() {
                 </Button>
             </div>
 
-            {/* Camera Mode */}
-            {mode === 'camera' && (
+            {mode === "camera" && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-center">Scanner avec la caméra</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {/* QR Reader Container */}
-                        <div id="qr-reader" className="rounded-lg overflow-hidden border" />
+                        <div className="rounded-lg border overflow-hidden bg-black/5">
+                            {isScanning ? (
+                                <Scanner
+                                    onScan={handleCameraScan}
+                                    onError={(error) => {
+                                        setCameraError(getCameraErrorMessage(error));
+                                        setIsScanning(false);
+                                    }}
+                                    paused={!isScanning || isValidating}
+                                    constraints={scannerConstraints}
+                                    formats={["qr_code"]}
+                                    scanDelay={160}
+                                    components={{
+                                        finder: true,
+                                        torch: true,
+                                        zoom: true,
+                                        onOff: false,
+                                    }}
+                                    sound={true}
+                                />
+                            ) : (
+                                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                                    Appuyez sur "Demarrer le scan" pour ouvrir la caméra.
+                                </div>
+                            )}
+                        </div>
+
+                        {devices.length > 1 && (
+                            <div className="space-y-2">
+                                <label htmlFor="camera-select" className="text-sm font-medium">
+                                    Camera
+                                </label>
+                                <select
+                                    id="camera-select"
+                                    className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                                    value={selectedDeviceId}
+                                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                                    disabled={isValidating}
+                                >
+                                    {devices.map((device, index) => (
+                                        <option key={device.deviceId} value={device.deviceId}>
+                                            {device.label || `Camera ${index + 1}`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         {isValidating && (
                             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900 flex items-start gap-2">
@@ -443,7 +425,7 @@ export default function ScanQRPage() {
                                     Démarrer le scan
                                 </Button>
                             ) : (
-                                <Button variant="destructive" onClick={stopCameraScanning}>
+                                <Button variant="destructive" onClick={stopCameraScanning} disabled={isValidating}>
                                     Arrêter
                                 </Button>
                             )}
@@ -452,8 +434,7 @@ export default function ScanQRPage() {
                 </Card>
             )}
 
-            {/* Manual Mode */}
-            {mode === 'manual' && (
+            {mode === "manual" && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-center">Saisir le code manuellement</CardTitle>
@@ -475,7 +456,7 @@ export default function ScanQRPage() {
                                         Validation...
                                     </>
                                 ) : (
-                                    'Valider'
+                                    "Valider"
                                 )}
                             </Button>
                         </form>
@@ -483,9 +464,8 @@ export default function ScanQRPage() {
                 </Card>
             )}
 
-            {/* Validation Result */}
             {result && (
-                <Card className={result.success ? 'border-green-500' : 'border-red-500'}>
+                <Card className={result.success ? "border-green-500" : "border-red-500"}>
                     <CardContent className="p-6">
                         {result.success ? (
                             <div className="space-y-4">
@@ -541,3 +521,4 @@ export default function ScanQRPage() {
         </div>
     );
 }
+
