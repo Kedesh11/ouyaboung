@@ -70,6 +70,8 @@ const extractPickupCode = (rawValue: string): string => {
     return trimmed.replace(/\s+/g, "").toUpperCase();
 };
 
+const isLikelyPickupCode = (value: string): boolean => /^[A-Z0-9]{6,32}$/.test(value);
+
 export default function ScanQRPage() {
     const router = useRouter();
     const [mode, setMode] = useState<ScanMode>('camera');
@@ -81,6 +83,8 @@ export default function ScanQRPage() {
     
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const scannerInitialized = useRef(false);
+    const cameraValidationInFlightRef = useRef(false);
+    const lastCameraCodeRef = useRef<{ code: string; at: number } | null>(null);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -88,7 +92,7 @@ export default function ScanQRPage() {
         if (!pickupCodeFromQuery) return;
 
         setMode('manual');
-        setManualCode(pickupCodeFromQuery);
+        setManualCode(extractPickupCode(pickupCodeFromQuery));
     }, []);
 
     // Initialize camera scanner
@@ -184,10 +188,34 @@ export default function ScanQRPage() {
                     qrbox: { width: 250, height: 250 }
                 },
                 (decodedText) => {
-                    // QR Code detected
-                    console.log("[Scan] QR Code detected:", decodedText);
-                    validateCode(decodedText);
-                    stopCameraScanning();
+                    const candidateCode = extractPickupCode(decodedText);
+                    if (!isLikelyPickupCode(candidateCode)) {
+                        return;
+                    }
+
+                    const now = Date.now();
+                    if (cameraValidationInFlightRef.current) {
+                        return;
+                    }
+
+                    const last = lastCameraCodeRef.current;
+                    if (last && last.code === candidateCode && now - last.at < 3000) {
+                        return;
+                    }
+
+                    cameraValidationInFlightRef.current = true;
+                    lastCameraCodeRef.current = { code: candidateCode, at: now };
+                    setManualCode(candidateCode);
+
+                    void validateCode(candidateCode)
+                        .then((success) => {
+                            if (success) {
+                                void stopCameraScanning();
+                            }
+                        })
+                        .finally(() => {
+                            cameraValidationInFlightRef.current = false;
+                        });
                 },
                 (errorMessage) => {
                     // Scanning error (ignore, these are normal during scanning)
@@ -216,9 +244,18 @@ export default function ScanQRPage() {
         }
     };
 
-    const validateCode = async (pickup_code: string) => {
+    const validateCode = async (pickup_code: string): Promise<boolean> => {
         const normalizedPickupCode = extractPickupCode(pickup_code);
-        if (!normalizedPickupCode) return;
+        if (!normalizedPickupCode) return false;
+
+        if (!isLikelyPickupCode(normalizedPickupCode)) {
+            setResult({
+                success: false,
+                error: "Format de code invalide. Utilisez un code alphanumerique (6+ caracteres).",
+                code: "INVALID_CODE_FORMAT",
+            });
+            return false;
+        }
 
         setIsValidating(true);
         setResult(null);
@@ -232,12 +269,15 @@ export default function ScanQRPage() {
                 functionName: "validate-qr",
                 body: { pickup_code: normalizedPickupCode },
                 retryOnUnauthorized: true,
+                timeoutMs: 15000,
             });
 
             if (!edgeResult.ok) {
                 const statusCode = edgeResult.status;
                 const defaultError =
-                    statusCode === 401
+                    statusCode === 0
+                        ? "La validation a expire (timeout) ou la connexion est indisponible."
+                        : statusCode === 401
                         ? "Acces non autorise. Reconnectez-vous puis reessayez."
                         : statusCode === 403
                             ? "Compte marchand non autorise pour valider cette commande."
@@ -248,12 +288,20 @@ export default function ScanQRPage() {
                     error: edgeResult.error?.error || edgeResult.error?.message || defaultError,
                     code:
                         edgeResult.error?.code ||
-                        (statusCode === 401 ? "UNAUTHORIZED" : statusCode === 403 ? "FORBIDDEN" : "VALIDATION_ERROR"),
+                        (
+                            statusCode === 0
+                                ? "NETWORK_OR_TIMEOUT"
+                                : statusCode === 401
+                                    ? "UNAUTHORIZED"
+                                    : statusCode === 403
+                                        ? "FORBIDDEN"
+                                        : "VALIDATION_ERROR"
+                        ),
                 });
                 if (statusCode === 401) {
                     router.push("/auth?role=merchant&redirect=/merchant/scan");
                 }
-                return;
+                return false;
             }
 
             const payload = edgeResult.data;
@@ -264,12 +312,14 @@ export default function ScanQRPage() {
                     message: payload.message,
                     order: payload.order
                 });
+                return true;
             } else {
                 setResult({
                     success: false,
                     error: payload?.error || "Code invalide ou commande non eligible.",
                     code: payload?.code || "VALIDATION_ERROR"
                 });
+                return false;
             }
         } catch (err) {
             console.error("[Scan] Validation error:", err);
@@ -277,6 +327,7 @@ export default function ScanQRPage() {
                 success: false,
                 error: (err as Error).message || "Erreur lors de la validation"
             });
+            return false;
         } finally {
             setIsValidating(false);
         }
@@ -284,12 +335,14 @@ export default function ScanQRPage() {
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        validateCode(manualCode);
+        void validateCode(manualCode);
     };
 
     const resetScan = () => {
         setResult(null);
         setManualCode('');
+        lastCameraCodeRef.current = null;
+        cameraValidationInFlightRef.current = false;
         if (mode === 'camera' && !isScanning) {
             startCameraScanning();
         }
@@ -306,6 +359,7 @@ export default function ScanQRPage() {
             <div className="flex gap-2 justify-center">
                 <Button
                     variant={mode === 'camera' ? 'default' : 'outline'}
+                    disabled={isValidating}
                     onClick={() => {
                         setMode('camera');
                         setResult(null);
@@ -318,6 +372,7 @@ export default function ScanQRPage() {
                 </Button>
                 <Button
                     variant={mode === 'manual' ? 'default' : 'outline'}
+                    disabled={isValidating}
                     onClick={() => {
                         setMode('manual');
                         setResult(null);
@@ -339,6 +394,13 @@ export default function ScanQRPage() {
                     <CardContent className="space-y-4">
                         {/* QR Reader Container */}
                         <div id="qr-reader" className="rounded-lg overflow-hidden border" />
+
+                        {isValidating && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900 flex items-start gap-2">
+                                <Loader2 className="w-4 h-4 mt-0.5 flex-shrink-0 animate-spin" />
+                                <p>Validation du code en cours. Gardez le QR Code visible quelques secondes.</p>
+                            </div>
+                        )}
 
                         {cameraError && (
                             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 flex items-start gap-2">

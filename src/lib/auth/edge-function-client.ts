@@ -52,10 +52,12 @@ export const callEdgeFunctionWithAuth = async <T>({
   functionName,
   body,
   retryOnUnauthorized = true,
+  timeoutMs = 15000,
 }: {
   functionName: string;
   body: Record<string, unknown>;
   retryOnUnauthorized?: boolean;
+  timeoutMs?: number;
 }): Promise<EdgeFunctionCallResult<T>> => {
   if (!supabaseClient) {
     return {
@@ -79,18 +81,26 @@ export const callEdgeFunctionWithAuth = async <T>({
   }
 
   const execute = async (accessToken: string) => {
-    const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    const payload = await parseJsonSafely<T & EdgeFunctionErrorPayload>(response);
-    return { response, payload };
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: anonKey,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      const payload = await parseJsonSafely<T & EdgeFunctionErrorPayload>(response);
+      return { response, payload };
+    } finally {
+      clearTimeout(timeoutId);
+    }
   };
 
   let session = await getFreshSession();
@@ -106,13 +116,46 @@ export const callEdgeFunctionWithAuth = async <T>({
     };
   }
 
-  let { response, payload } = await execute(session.access_token);
+  let response: Response;
+  let payload: (T & EdgeFunctionErrorPayload) | null;
+
+  try {
+    ({ response, payload } = await execute(session.access_token));
+  } catch (error) {
+    const isAbortError = (error as { name?: string } | null)?.name === "AbortError";
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      error: {
+        code: isAbortError ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
+        error: isAbortError
+          ? "La requete a expire. Verifiez la connexion et reessayez."
+          : "Erreur reseau lors de l'appel Edge Function.",
+      },
+    };
+  }
 
   if (response.status === 401 && retryOnUnauthorized) {
     const { data: refreshedData, error: refreshError } = await supabaseClient.auth.refreshSession();
     if (!refreshError && refreshedData.session?.access_token) {
       session = refreshedData.session;
-      ({ response, payload } = await execute(session.access_token));
+      try {
+        ({ response, payload } = await execute(session.access_token));
+      } catch (error) {
+        const isAbortError = (error as { name?: string } | null)?.name === "AbortError";
+        return {
+          ok: false,
+          status: 0,
+          data: null,
+          error: {
+            code: isAbortError ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
+            error: isAbortError
+              ? "La requete a expire. Verifiez la connexion et reessayez."
+              : "Erreur reseau lors de l'appel Edge Function.",
+          },
+        };
+      }
     }
   }
 
@@ -132,4 +175,3 @@ export const callEdgeFunctionWithAuth = async <T>({
     error: null,
   };
 };
-
