@@ -48,7 +48,7 @@ serve(async (req) => {
         const { pickup_code } = await req.json()
         const normalizedPickupCode =
             typeof pickup_code === 'string'
-                ? pickup_code.replace(/\s+/g, '').toUpperCase()
+                ? pickup_code.toUpperCase().replace(/[^A-Z0-9]/g, '')
                 : ''
 
         if (!normalizedPickupCode) {
