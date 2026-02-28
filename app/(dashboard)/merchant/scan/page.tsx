@@ -147,6 +147,12 @@ export default function ScanQRPage() {
         setSelectedDeviceId(preferredDevice.deviceId);
     }, [devices, selectedDeviceId]);
 
+    useEffect(() => {
+        if (mode !== "camera") return;
+        if (isScanning || isValidating || result || cameraError) return;
+        setIsScanning(true);
+    }, [mode, isScanning, isValidating, result, cameraError]);
+
     const scannerConstraints = useMemo(() => {
         if (selectedDeviceId) {
             return {
