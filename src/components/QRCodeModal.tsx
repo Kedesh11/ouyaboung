@@ -19,7 +19,11 @@ interface QRCodeModalProps {
     };
 }
 
+const QR_CENTER_BADGE_SRC = "/icons/qr-center-badge.svg";
+
 export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) {
+    const pickupCode = order.pickup_code?.toUpperCase().replace(/[^A-Z0-9]/g, "") || order.id;
+
     return (
         <Dialog open={open} onOpenChange={onClose}>
             <DialogContent className="w-[min(94vw,1210px)] max-h-[88vh] overflow-y-auto p-4 sm:p-6 lg:p-7">
@@ -30,20 +34,34 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                 <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6">
                     <div className="space-y-4">
                         {/* QR Code */}
-                        <div className="flex justify-center p-4 sm:p-5 bg-white rounded-lg border">
-                            <QRCodeSVG
-                                value={order.pickup_code}
-                                size={240}
-                                level="H"
-                                includeMargin={true}
-                            />
+                        <div className="flex flex-col items-center rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                            <div className="rounded-xl bg-white p-2 sm:p-3">
+                                <QRCodeSVG
+                                    value={pickupCode}
+                                    size={300}
+                                    level="H"
+                                    fgColor="#153D40"
+                                    bgColor="#FFFFFF"
+                                    marginSize={6}
+                                    boostLevel={true}
+                                    imageSettings={{
+                                        src: QR_CENTER_BADGE_SRC,
+                                        width: 62,
+                                        height: 62,
+                                        excavate: true,
+                                    }}
+                                />
+                            </div>
+                            <p className="mt-3 text-center text-xs text-muted-foreground">
+                                Montez la luminosite de l&apos;ecran pour un scan plus rapide.
+                            </p>
                         </div>
 
                         {/* Code de retrait (texte) */}
                         <div className="bg-gray-50 rounded-lg p-3">
                             <p className="text-xs text-muted-foreground mb-1">Code de retrait</p>
                             <p className="text-sm font-mono bg-white px-2.5 py-1.5 rounded border break-all">
-                                {order.pickup_code}
+                                {pickupCode}
                             </p>
                             <p className="text-xs text-muted-foreground mt-2">
                                 En cas de probleme de scan, communiquez ce code au marchand

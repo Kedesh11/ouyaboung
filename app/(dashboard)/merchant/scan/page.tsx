@@ -50,6 +50,9 @@ type ValidateQrApiResponse = ValidationResult & {
 
 const VALIDATION_HARD_TIMEOUT_MS = 12000;
 
+const normalizePickupCode = (value: string): string =>
+    value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
 const extractPickupCode = (rawValue: string): string => {
     const trimmed = rawValue.trim();
     if (!trimmed) return "";
@@ -57,7 +60,7 @@ const extractPickupCode = (rawValue: string): string => {
     try {
         const url = new URL(trimmed);
         const queryCode = url.searchParams.get("pickup_code") || url.searchParams.get("code");
-        if (queryCode) return queryCode.replace(/\s+/g, "").toUpperCase();
+        if (queryCode) return normalizePickupCode(queryCode);
     } catch {
         // Not a URL payload.
     }
@@ -71,13 +74,13 @@ const extractPickupCode = (rawValue: string): string => {
                     : typeof parsed.code === "string"
                         ? parsed.code
                         : "";
-            if (rawCode) return rawCode.replace(/\s+/g, "").toUpperCase();
+            if (rawCode) return normalizePickupCode(rawCode);
         } catch {
             // Not a JSON payload.
         }
     }
 
-    return trimmed.replace(/\s+/g, "").toUpperCase();
+    return normalizePickupCode(trimmed);
 };
 
 const isLikelyPickupCode = (value: string): boolean => /^[A-Z0-9]{6,32}$/.test(value);
@@ -124,6 +127,7 @@ export default function ScanQRPage() {
     const [result, setResult] = useState<ValidationResult | null>(null);
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+    const [hasManuallySelectedDevice, setHasManuallySelectedDevice] = useState(false);
 
     const cameraValidationInFlightRef = useRef(false);
     const lastCameraCodeRef = useRef<{ code: string; at: number } | null>(null);
@@ -139,13 +143,10 @@ export default function ScanQRPage() {
     }, []);
 
     useEffect(() => {
-        if (!devices.length) return;
-        if (selectedDeviceId) return;
-
-        const preferredDevice =
-            devices.find((device) => /back|rear|environment|arriere/i.test(device.label)) ?? devices[0];
-        setSelectedDeviceId(preferredDevice.deviceId);
-    }, [devices, selectedDeviceId]);
+        if (!devices.length || hasManuallySelectedDevice) return;
+        const preferredDevice = devices.find((device) => /back|rear|environment|arriere/i.test(device.label));
+        setSelectedDeviceId(preferredDevice?.deviceId || "");
+    }, [devices, hasManuallySelectedDevice]);
 
     useEffect(() => {
         if (mode !== "camera") return;
@@ -156,15 +157,15 @@ export default function ScanQRPage() {
     const scannerConstraints = useMemo(() => {
         if (selectedDeviceId) {
             return {
-                deviceId: selectedDeviceId,
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
+                deviceId: { exact: selectedDeviceId },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
             };
         }
         return {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
         };
     }, [selectedDeviceId]);
 
@@ -279,6 +280,8 @@ export default function ScanQRPage() {
     const startCameraScanning = () => {
         setCameraError(null);
         setResult(null);
+        lastCameraCodeRef.current = null;
+        cameraValidationInFlightRef.current = false;
         setIsScanning(true);
     };
 
@@ -289,11 +292,10 @@ export default function ScanQRPage() {
     const handleCameraScan = (detectedCodes: IDetectedBarcode[]) => {
         if (!detectedCodes.length || !isScanning || isValidating) return;
 
-        const rawValue = detectedCodes[0]?.rawValue;
-        if (!rawValue) return;
-
-        const candidateCode = extractPickupCode(rawValue);
-        if (!isLikelyPickupCode(candidateCode)) return;
+        const candidateCode = detectedCodes
+            .map((detectedCode) => extractPickupCode(detectedCode.rawValue || ""))
+            .find((code) => isLikelyPickupCode(code));
+        if (!candidateCode) return;
 
         const now = Date.now();
         if (cameraValidationInFlightRef.current) return;
@@ -394,12 +396,23 @@ export default function ScanQRPage() {
                                     paused={!isScanning || isValidating}
                                     constraints={scannerConstraints}
                                     formats={["qr_code"]}
-                                    scanDelay={80}
+                                    scanDelay={200}
+                                    allowMultiple={true}
                                     components={{
                                         finder: true,
                                         torch: true,
                                         zoom: true,
                                         onOff: false,
+                                    }}
+                                    styles={{
+                                        container: {
+                                            width: "100%",
+                                            aspectRatio: "1 / 1",
+                                            maxHeight: "420px",
+                                        },
+                                        video: {
+                                            objectFit: "cover",
+                                        },
                                     }}
                                     sound={true}
                                 />
@@ -419,9 +432,13 @@ export default function ScanQRPage() {
                                     id="camera-select"
                                     className="w-full h-10 rounded-md border bg-background px-3 text-sm"
                                     value={selectedDeviceId}
-                                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                                    onChange={(e) => {
+                                        setHasManuallySelectedDevice(true);
+                                        setSelectedDeviceId(e.target.value);
+                                    }}
                                     disabled={isValidating}
                                 >
+                                    <option value="">Automatique (camera arriere)</option>
                                     {devices.map((device, index) => (
                                         <option key={device.deviceId} value={device.deviceId}>
                                             {device.label || `Camera ${index + 1}`}
