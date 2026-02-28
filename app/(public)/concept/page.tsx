@@ -78,7 +78,7 @@ const Concept = () => {
                         <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
                             {[
                                 { value: "1/3", label: "de la nourriture produite est gaspillée dans le monde" },
-                                { value: "10M", label: "de tonnes jetées chaque année en France" },
+                                { value: "150M", label: "de tonnes jetées chaque année en Afrique" },
                                 { value: "20kg", label: "de nourriture gaspillée par personne par an" },
                             ].map((stat, index) => (
                                 <motion.div
