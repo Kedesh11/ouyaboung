@@ -97,7 +97,7 @@ serve(async (req) => {
 
         const { data: transaction, error: txError } = await supabaseClient
             .from('transactions')
-            .select('*')
+            .select('id,status,order_id')
             .eq('reference', reference)
             .single()
 

@@ -69,8 +69,8 @@ export const cancelOrderViaRPC = async (
     orderId: string,
     reason?: string
 ): Promise<ApiResponse<any>> => {
-    const queueCancellation = (): ApiResponse<any> => {
-        const queued = enqueueOfflineQueueItem(OFFLINE_ACTION_TYPES.CANCEL_ORDER, {
+    const queueCancellation = async (): Promise<ApiResponse<any>> => {
+        const queued = await enqueueOfflineQueueItem(OFFLINE_ACTION_TYPES.CANCEL_ORDER, {
             orderId,
             reason,
         });
@@ -86,12 +86,12 @@ export const cancelOrderViaRPC = async (
     };
 
     if (isBrowserOffline()) {
-        return queueCancellation();
+        return await queueCancellation();
     }
 
     const result = await cancelOrderViaRPCOnline(orderId, reason);
     if (!result.success && isLikelyOfflineError(result.error)) {
-        return queueCancellation();
+        return await queueCancellation();
     }
     return result;
 };

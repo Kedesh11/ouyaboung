@@ -13,6 +13,9 @@ const corsHeaders = {
 }
 const PAYMENT_FLOW_ENABLED = false
 
+const generateScanFriendlyPickupCode = (): string =>
+    `PK${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`
+
 const getProvidedWebhookSecret = (req: Request): string => {
     const bearer = req.headers.get('authorization')
     const bearerToken = bearer?.toLowerCase().startsWith('bearer ')
@@ -133,7 +136,7 @@ serve(async (req) => {
 
         const { data: transaction, error: txError } = await supabaseClient
             .from('transactions')
-            .select('*')
+            .select('id,status,order_id')
             .eq('reference', reference)
             .single()
 
@@ -224,8 +227,8 @@ serve(async (req) => {
         // ===================================================================
 
         if (finalStatus === 'SUCCESS') {
-            // Générer un code unique pour le QR Code
-            const pickupCode = `QR_${crypto.randomUUID()}`
+            // Générer un code court et lisible pour un scan rapide.
+            const pickupCode = generateScanFriendlyPickupCode()
             
             const { error: orderError } = await supabaseClient
                 .from('orders')

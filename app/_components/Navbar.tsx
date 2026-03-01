@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Leaf, Menu, X, Store } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -70,54 +69,52 @@ const Navbar = () => {
                 <button
                     onClick={() => setIsOpen(!isOpen)}
                     className="md:hidden p-2 rounded-lg hover:bg-accent transition-colors"
+                    aria-label={isOpen ? "Fermer le menu" : "Ouvrir le menu"}
+                    aria-expanded={isOpen}
+                    aria-controls="mobile-nav"
                 >
                     {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                 </button>
             </nav>
 
             {/* Mobile Menu */}
-            <AnimatePresence>
-                {isOpen && (
-                    <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="md:hidden glass border-b border-border/50"
-                    >
-                        <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
-                            {navLinks.map((link) => (
-                                <Link
-                                    key={link.href}
-                                    href={link.href}
-                                    onClick={() => setIsOpen(false)}
-                                    className={`text-base font-medium py-2 transition-colors ${isActive(link.href) ? "text-primary" : "text-muted-foreground"
-                                        }`}
-                                >
-                                    {link.label}
-                                </Link>
-                            ))}
-                            <hr className="border-border" />
-                            {isAuthenticated ? (
-                                <div className="flex items-center gap-3 p-2">
-                                    <UserMenu />
-                                </div>
-                            ) : (
-                                <>
-                                    <Link href="/auth?role=merchant" onClick={() => setIsOpen(false)}>
-                                        <Button variant="outline" className="w-full gap-2">
-                                            <Store className="w-4 h-4" />
-                                            Espace Commerçant
-                                        </Button>
-                                    </Link>
-                                    <Link href="/auth" onClick={() => setIsOpen(false)}>
-                                        <Button className="w-full">Connexion</Button>
-                                    </Link>
-                                </>
-                            )}
+            <div
+                id="mobile-nav"
+                className={`md:hidden glass border-b border-border/50 overflow-hidden transition-[max-height,opacity] duration-300 ${isOpen ? "max-h-[360px] opacity-100" : "max-h-0 opacity-0"
+                    }`}
+            >
+                <div className="container mx-auto px-4 py-4 flex flex-col gap-4">
+                    {navLinks.map((link) => (
+                        <Link
+                            key={link.href}
+                            href={link.href}
+                            onClick={() => setIsOpen(false)}
+                            className={`text-base font-medium py-2 transition-colors ${isActive(link.href) ? "text-primary" : "text-muted-foreground"
+                                }`}
+                        >
+                            {link.label}
+                        </Link>
+                    ))}
+                    <hr className="border-border" />
+                    {isAuthenticated ? (
+                        <div className="flex items-center gap-3 p-2">
+                            <UserMenu />
                         </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                    ) : (
+                        <>
+                            <Link href="/auth?role=merchant" onClick={() => setIsOpen(false)}>
+                                <Button variant="outline" className="w-full gap-2">
+                                    <Store className="w-4 h-4" />
+                                    Espace Commerçant
+                                </Button>
+                            </Link>
+                            <Link href="/auth" onClick={() => setIsOpen(false)}>
+                                <Button className="w-full">Connexion</Button>
+                            </Link>
+                        </>
+                    )}
+                </div>
+            </div>
         </header>
     );
 };

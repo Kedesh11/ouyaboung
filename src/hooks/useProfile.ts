@@ -8,6 +8,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabaseClient } from '@/api/supabaseClient';
 import type { UserProfile } from '@/types';
 
+const PROFILE_COLUMNS =
+  'id,user_id,email,phone,full_name,first_name,last_name,avatar_url,role,address,city,quartier,preferences,created_at,updated_at';
+
 export const useProfile = () => {
   const { user, isAuthenticated } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -35,7 +38,7 @@ export const useProfile = () => {
         // First, try to get existing profile
         const { data: existingProfile, error: fetchError } = await supabaseClient
           .from('profiles')
-          .select('*')
+          .select(PROFILE_COLUMNS)
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -61,7 +64,7 @@ export const useProfile = () => {
         const { data: createdProfile, error: createError } = await supabaseClient
           .from('profiles')
           .insert(newProfile)
-          .select()
+          .select(PROFILE_COLUMNS)
           .single();
 
         if (createError) {
@@ -88,7 +91,7 @@ export const useProfile = () => {
         .from('profiles')
         .update(updates)
         .eq('user_id', user.id)
-        .select()
+        .select(PROFILE_COLUMNS)
         .maybeSingle();
 
       if (error) throw error;

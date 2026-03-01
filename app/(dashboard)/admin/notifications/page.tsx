@@ -133,11 +133,25 @@ const AdminNotificationsPage = () => {
 
                                                         <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                                             {!notification.is_read && (
-                                                                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => markAsRead(notification.id)} title="Marquer comme lu">
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-8 w-8"
+                                                                    onClick={() => markAsRead(notification.id)}
+                                                                    title="Marquer comme lu"
+                                                                    aria-label="Marquer la notification comme lue"
+                                                                >
                                                                     <CheckCircle2 className="w-4 h-4" />
                                                                 </Button>
                                                             )}
-                                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => deleteNotification(notification.id)} title="Supprimer">
+                                                            <Button
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                onClick={() => deleteNotification(notification.id)}
+                                                                title="Supprimer"
+                                                                aria-label="Supprimer la notification"
+                                                            >
                                                                 <Trash2 className="w-4 h-4" />
                                                             </Button>
                                                         </div>

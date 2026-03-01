@@ -1,25 +1,57 @@
 
 import React from 'react';
+import type { Metadata, Viewport } from "next";
 // import { Inter } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { AuthRedirect } from "@/components/auth/AuthRedirect";
-import { SystemPushBridge } from "@/components/notifications/SystemPushBridge";
-import { InstallPrompt } from "@/components/pwa/InstallPrompt";
-import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
-import { OfflineSyncManager } from "@/components/pwa/OfflineSyncManager";
 import { SkipToContent } from "@/components/seo/AccessibilityHelpers";
-import { WebVitalsReporter } from "@/components/WebVitalsReporter";
+import { DeferredAppEnhancements } from "@/components/app/DeferredAppEnhancements";
 
 // const inter = Inter({ subsets: ["latin"] });
 
-export const metadata = {
-    title: "Oyaboug - Anti-gaspillage alimentaire",
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://ouyaboung-eight.vercel.app";
+
+export const metadata: Metadata = {
+    metadataBase: new URL(APP_BASE_URL),
+    title: {
+        default: "Ouyaboung - Anti-gaspillage alimentaire",
+        template: "%s | Ouyaboung",
+    },
     description: "Recuperez des invendus de qualite a petit prix pres de chez vous.",
+    applicationName: "Ouyaboung",
     manifest: "/manifest.json",
+    alternates: {
+        canonical: "/",
+    },
+    openGraph: {
+        type: "website",
+        locale: "fr_GA",
+        siteName: "Ouyaboung",
+        url: APP_BASE_URL,
+        title: "Ouyaboung - Anti-gaspillage alimentaire",
+        description: "Recuperez des invendus de qualite a petit prix pres de chez vous.",
+        images: [
+            {
+                url: "/icons/icon-512x512.png",
+                width: 512,
+                height: 512,
+                alt: "Ouyaboung",
+            },
+        ],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Ouyaboung - Anti-gaspillage alimentaire",
+        description: "Recuperez des invendus de qualite a petit prix pres de chez vous.",
+        images: ["/icons/icon-512x512.png"],
+    },
+    robots: {
+        index: true,
+        follow: true,
+    },
     appleWebApp: {
         capable: true,
         statusBarStyle: "default",
@@ -31,7 +63,7 @@ export const metadata = {
     },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
     width: "device-width",
     initialScale: 1,
     maximumScale: 5,
@@ -51,11 +83,10 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="fr" suppressHydrationWarning>
+        <html lang="fr" data-scroll-behavior="smooth" suppressHydrationWarning>
             {/* Fallback to standard sans-serif font to avoid build timeout with Google Fonts */}
             <body className={"font-sans antialiased"} suppressHydrationWarning>
                 <SkipToContent />
-                <WebVitalsReporter />
                 <QueryProvider>
                     <AuthProvider>
                         <ThemeProvider
@@ -64,12 +95,8 @@ export default function RootLayout({
                             enableSystem
                             disableTransitionOnChange
                         >
-                            <AuthRedirect />
-                            <SystemPushBridge />
+                            <DeferredAppEnhancements />
                             <TooltipProvider>
-                                <OfflineIndicator />
-                                <OfflineSyncManager />
-                                <InstallPrompt />
                                 <main id="main-content">{children}</main>
                                 <Toaster />
                                 <Sonner />

@@ -77,8 +77,13 @@ const MerchantLayout = ({ children, title, subtitle }: MerchantLayoutProps) => {
               </div>
 
               <div className="ml-auto flex items-center gap-2">
-                <Link href="/user/notifications">
-                  <Button variant="ghost" size="icon" className="relative">
+                <Link href="/merchant/notifications">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative"
+                    aria-label={`Notifications commerçant${unreadCount > 0 ? `, ${unreadCount} non lues` : ""}`}
+                  >
                     <Bell className="w-5 h-5" />
                     {unreadCount > 0 && (
                       <Badge
@@ -92,7 +97,12 @@ const MerchantLayout = ({ children, title, subtitle }: MerchantLayoutProps) => {
                 </Link>
 
                 {/* User Avatar */}
-                <Button variant="ghost" size="icon" className="rounded-full">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full"
+                  aria-label="Ouvrir le profil commerçant"
+                >
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                     <span className="text-sm font-medium text-primary">{merchantInitials}</span>
                   </div>

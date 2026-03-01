@@ -1,5 +1,11 @@
+import {
+  deleteIndexedDbValue,
+  getIndexedDbValue,
+  setIndexedDbValue,
+} from "./indexeddb";
+
 const CACHE_PREFIX = 'ouyaboung:offline:cache:v1:';
-export const DEFAULT_OFFLINE_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+export const DEFAULT_OFFLINE_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface OfflineCacheEntry<T> {
   cachedAt: number;
@@ -60,6 +66,41 @@ export const setOfflineCache = <T>(key: string, data: T): void => {
   }
 };
 
+export const getOfflineCacheAsync = async <T>(
+  key: string,
+  maxAgeMs: number = DEFAULT_OFFLINE_CACHE_TTL_MS
+): Promise<T | null> => {
+  const storageKey = `${CACHE_PREFIX}${key}`;
+
+  const localValue = getOfflineCache<T>(key, maxAgeMs);
+  if (localValue) return localValue;
+
+  const indexedPayload = await getIndexedDbValue<OfflineCacheEntry<T>>(storageKey);
+  if (!indexedPayload || typeof indexedPayload.cachedAt !== "number") {
+    return null;
+  }
+
+  if (Date.now() - indexedPayload.cachedAt > maxAgeMs) {
+    await deleteIndexedDbValue(storageKey);
+    return null;
+  }
+
+  // Keep localStorage warm for synchronous reads.
+  setOfflineCache(key, indexedPayload.data);
+  return indexedPayload.data;
+};
+
+export const setOfflineCacheAsync = async <T>(key: string, data: T): Promise<void> => {
+  const storageKey = `${CACHE_PREFIX}${key}`;
+  const payload: OfflineCacheEntry<T> = {
+    cachedAt: Date.now(),
+    data,
+  };
+
+  setOfflineCache(key, data);
+  await setIndexedDbValue(storageKey, payload);
+};
+
 export const isLikelyOfflineError = (errorLike: unknown): boolean => {
   if (!errorLike) return false;
 
@@ -85,4 +126,3 @@ export const isLikelyOfflineError = (errorLike: unknown): boolean => {
     text.includes('timeout')
   );
 };
-

@@ -237,6 +237,7 @@ export interface UserImpact {
   money_saved_xaf: number;
   co2_avoided_kg: number;
   orders_count: number;
+  total_meals_saved?: number;
   favorite_merchants: string[];
 }
 
@@ -246,6 +247,7 @@ export interface MerchantImpact {
   revenue_from_waste_xaf: number;
   co2_avoided_kg: number;
   orders_fulfilled: number;
+  total_meals_saved?: number;
   average_rating: number;
   waste_reduction_rate: number;
 }

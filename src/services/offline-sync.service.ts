@@ -59,7 +59,7 @@ const processCancelOrder = async (
 };
 
 const processQueueImpl = async (): Promise<OfflineSyncResult> => {
-  const queue = getOfflineQueue();
+  const queue = await getOfflineQueue();
   if (!queue.length || !isBrowserOnline()) {
     return { processed: 0, failed: 0, dropped: 0, remaining: queue.length };
   }
@@ -111,7 +111,7 @@ const processQueueImpl = async (): Promise<OfflineSyncResult> => {
     });
   }
 
-  saveOfflineQueue(nextQueue);
+  await saveOfflineQueue(nextQueue);
 
   return {
     processed,
@@ -128,4 +128,3 @@ export const processOfflineQueue = async (): Promise<OfflineSyncResult> => {
   });
   return activeSyncPromise;
 };
-

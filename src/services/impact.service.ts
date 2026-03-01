@@ -13,6 +13,12 @@ import {
   getUserMonthlyImpact as getUserMonthlyImpactApi,
 } from '@/api';
 import type { ApiResponse, ImpactStats, UserImpact, MerchantImpact } from '@/types';
+import {
+  co2KgToCarKm,
+  co2KgToPhoneCharges,
+  co2KgToShowers,
+  co2KgToTrees,
+} from '@/lib/impactCalculations';
 
 /**
  * Get global platform impact statistics
@@ -121,10 +127,10 @@ export const formatGlobalImpact = (stats: ImpactStats) => {
  */
 export const calculateEquivalents = (co2Kg: number) => {
   return {
-    treesPlanted: Math.round(co2Kg / 22), // 22 kg CO2 absorbed per tree per year
-    carKmAvoided: Math.round(co2Kg / 0.12), // 0.12 kg CO2 per km
-    showersSaved: Math.round(co2Kg / 0.5), // 0.5 kg CO2 per 5-min shower
-    phonesCharged: Math.round(co2Kg / 0.008), // 8g CO2 per charge
+    treesPlanted: co2KgToTrees(co2Kg),
+    carKmAvoided: co2KgToCarKm(co2Kg),
+    showersSaved: co2KgToShowers(co2Kg),
+    phonesCharged: co2KgToPhoneCharges(co2Kg),
   };
 };
 

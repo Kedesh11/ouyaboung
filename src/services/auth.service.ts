@@ -25,7 +25,7 @@ export const login = async (
   email: string,
   password: string
 ): Promise<ApiResponse<{ user: User; session: unknown }>> => {
-  const credentials: AuthCredentials = { email, password };
+  const credentials: AuthCredentials = { email: email.trim().toLowerCase(), password };
   return signInWithEmail(credentials);
 };
 
@@ -44,7 +44,7 @@ export const register = async (
   } = {}
 ): Promise<ApiResponse<{ user: User; session: unknown }>> => {
   const signUpData: SignUpData = {
-    email,
+    email: email.trim().toLowerCase(),
     password,
     full_name: options.fullName,
     phone: options.phone,
@@ -87,7 +87,7 @@ export const getCurrentUser = apiGetCurrentUser;
 export const requestPasswordReset = async (
   email: string
 ): Promise<ApiResponse<null>> => {
-  return apiResetPassword(email);
+  return apiResetPassword(email.trim().toLowerCase());
 };
 
 /**

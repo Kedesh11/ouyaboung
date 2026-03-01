@@ -5,8 +5,12 @@
 
 import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES } from './routes';
+import { AVG_MEAL_WEIGHT_KG } from '@/lib/impactCalculations';
 
 import type { ApiResponse, UserProfile, UserPreferences, UserImpact } from '@/types';
+
+const PROFILE_LIST_COLUMNS =
+  'id,user_id,email,phone,full_name,first_name,last_name,avatar_url,role,address,city,quartier,preferences,created_at,updated_at';
 
 /**
  * Get user profile by ID
@@ -25,7 +29,7 @@ export const getUserProfile = async (
   const client = requireSupabaseClient();
   const { data: profileByUserId, error: userIdError } = await client
     .from(DB_TABLES.PROFILES)
-    .select('*')
+    .select(PROFILE_LIST_COLUMNS)
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -47,7 +51,7 @@ export const getUserProfile = async (
 
   const { data, error } = await client
     .from(DB_TABLES.PROFILES)
-    .select('*')
+    .select(PROFILE_LIST_COLUMNS)
     .eq('id', userId)
     .maybeSingle();
 
@@ -121,7 +125,7 @@ export const updateUserProfile = async (
       .from(DB_TABLES.PROFILES)
       .update(payload)
       .eq('user_id', userId)
-      .select('*')
+      .select(PROFILE_LIST_COLUMNS)
       .maybeSingle();
     data = result.data;
     error = result.error;
@@ -133,7 +137,7 @@ export const updateUserProfile = async (
     const result = await client
       .from(DB_TABLES.PROFILES)
       .insert(payload)
-      .select('*')
+      .select(PROFILE_LIST_COLUMNS)
       .maybeSingle();
     data = result.data;
     error = result.error;
@@ -363,7 +367,7 @@ export const getUserImpact = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.IMPACT_LOGS)
-    .select('*')
+    .select('food_saved_kg,money_saved_xaf,co2_avoided_kg')
     .eq('user_id', userId);
 
   if (error) {
@@ -375,12 +379,14 @@ export const getUserImpact = async (
   }
 
   // Aggregate impact data
+  const totalFoodSavedKg = data?.reduce((sum, log) => sum + (log.food_saved_kg || 0), 0) || 0;
   const impact: UserImpact = {
     user_id: userId,
-    food_saved_kg: data?.reduce((sum, log) => sum + (log.food_saved_kg || 0), 0) || 0,
+    food_saved_kg: totalFoodSavedKg,
     money_saved_xaf: data?.reduce((sum, log) => sum + (log.money_saved_xaf || 0), 0) || 0,
     co2_avoided_kg: data?.reduce((sum, log) => sum + (log.co2_avoided_kg || 0), 0) || 0,
     orders_count: data?.length || 0,
+    total_meals_saved: Math.round(totalFoodSavedKg / AVG_MEAL_WEIGHT_KG),
     favorite_merchants: [],
   };
 
@@ -408,7 +414,7 @@ export const getUserProfileByUserId = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.PROFILES)
-    .select('*')
+    .select(PROFILE_LIST_COLUMNS)
     .eq('user_id', userId)
     .maybeSingle();
 

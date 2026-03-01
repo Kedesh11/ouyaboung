@@ -1,55 +1,62 @@
 import { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://ouyaboung-eight.vercel.app'; // Update with actual domain
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ouyaboung-eight.vercel.app';
+  const now = new Date();
 
   // Static pages with high priority
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: baseUrl,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'daily',
       priority: 1.0,
     },
     {
       url: `${baseUrl}/search`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'hourly',
       priority: 0.9,
     },
     {
       url: `${baseUrl}/about`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
       url: `${baseUrl}/concept`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
       url: `${baseUrl}/auth`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.5,
     },
     {
+      url: `${baseUrl}/merchant/register`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    },
+    {
       url: `${baseUrl}/legal/cgu`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
       url: `${baseUrl}/legal/privacy`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
       url: `${baseUrl}/legal/help`,
-      lastModified: new Date(),
+      lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.4,
     },

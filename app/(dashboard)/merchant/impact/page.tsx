@@ -21,6 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getMerchantImpactStats } from "@/services";
+import { AVG_MEAL_WEIGHT_KG, co2KgToCarKm, co2KgToTrees } from "@/lib/impactCalculations";
 import type { MerchantImpact } from "@/types";
 
 const MerchantImpactPage = () => {
@@ -42,26 +43,30 @@ const MerchantImpactPage = () => {
     setIsLoading(false);
   };
 
+  const co2Saved = impact?.co2_avoided_kg || 0;
+  const mealsSaved = impact?.total_meals_saved
+    ?? Math.round((impact?.food_saved_kg || 0) / AVG_MEAL_WEIGHT_KG);
+
   const impactStats = [
     {
       icon: Leaf,
       value: `${impact?.food_saved_kg?.toFixed(0) || 0} kg`,
       label: "Nourriture sauvée",
-      description: "Équivalent à 300 repas",
+      description: `Équivalent à ${mealsSaved.toLocaleString("fr-FR")} repas`,
       color: "text-primary",
       bgColor: "bg-primary/10",
     },
     {
       icon: Droplets,
-      value: `${impact?.co2_avoided_kg?.toFixed(0) || 0} kg`,
+      value: `${co2Saved.toFixed(0)} kg`,
       label: "CO₂ évité",
-      description: "Équivalent à 500 km en voiture",
+      description: `Équivalent à ${co2KgToCarKm(co2Saved).toLocaleString("fr-FR")} km en voiture`,
       color: "text-blue-600",
       bgColor: "bg-blue-100",
     },
     {
       icon: TreePine,
-      value: `${Math.round((impact?.co2_avoided_kg || 0) / 22)}`,
+      value: `${co2KgToTrees(co2Saved)}`,
       label: "Arbres équivalents",
       description: "Absorption CO₂ annuelle",
       color: "text-green-600",

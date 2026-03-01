@@ -20,47 +20,53 @@ interface QRCodeModalProps {
 }
 
 const QR_CENTER_BADGE_SRC = "/icons/qr-center-badge.svg";
+const QR_VISUAL_SIZE = 360;
+const QR_LOGO_SIZE = 52;
 
 export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) {
     const pickupCode = order.pickup_code?.toUpperCase().replace(/[^A-Z0-9]/g, "") || order.id;
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="w-[min(94vw,1210px)] max-h-[88vh] overflow-y-auto p-4 sm:p-6 lg:p-7">
+            <DialogContent className="w-[94vw] max-h-[88vh] overflow-y-auto p-4 sm:p-6 md:w-[75vw] md:max-w-[75vw] lg:p-7">
                 <DialogHeader>
                     <DialogTitle className="text-center text-lg sm:text-xl">Votre QR Code de Retrait</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6">
-                    <div className="space-y-4">
+                <div className="md:grid md:grid-cols-[minmax(0,340px)_minmax(0,1fr)] md:items-start md:gap-6">
+                    <div className="mx-auto w-full max-w-[420px] space-y-4 md:mx-0 md:max-w-[340px] md:min-w-0">
                         {/* QR Code */}
                         <div className="flex flex-col items-center rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                            <div className="rounded-xl bg-white p-2 sm:p-3">
-                                <QRCodeSVG
-                                    value={pickupCode}
-                                    size={300}
-                                    level="H"
-                                    fgColor="#153D40"
-                                    bgColor="#FFFFFF"
-                                    marginSize={6}
-                                    boostLevel={true}
-                                    imageSettings={{
-                                        src: QR_CENTER_BADGE_SRC,
-                                        width: 62,
-                                        height: 62,
-                                        excavate: true,
-                                    }}
-                                />
+                            <div className="w-full rounded-2xl bg-slate-100/90 p-3 sm:p-4">
+                                <div className="mx-auto w-full max-w-[332px] rounded-xl bg-white p-3 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 sm:p-4">
+                                    <QRCodeSVG
+                                        value={pickupCode}
+                                        size={QR_VISUAL_SIZE}
+                                        level="H"
+                                        fgColor="#153D40"
+                                        bgColor="#FFFFFF"
+                                        marginSize={8}
+                                        boostLevel={true}
+                                        title="QR Code de retrait"
+                                        className="mx-auto h-auto w-full max-w-[300px]"
+                                        imageSettings={{
+                                            src: QR_CENTER_BADGE_SRC,
+                                            width: QR_LOGO_SIZE,
+                                            height: QR_LOGO_SIZE,
+                                            excavate: true,
+                                        }}
+                                    />
+                                </div>
                             </div>
                             <p className="mt-3 text-center text-xs text-muted-foreground">
                                 Montez la luminosite de l&apos;ecran pour un scan plus rapide.
                             </p>
                         </div>
 
-                        {/* Code de retrait (texte) */}
-                        <div className="bg-gray-50 rounded-lg p-3">
+                        {/* Code de retrait (desktop/tablette uniquement) */}
+                        <div className="hidden rounded-lg bg-gray-50 p-3 md:block">
                             <p className="text-xs text-muted-foreground mb-1">Code de retrait</p>
-                            <p className="text-sm font-mono bg-white px-2.5 py-1.5 rounded border break-all">
+                            <p className="text-sm font-mono text-black bg-white px-2.5 py-1.5 rounded border break-all">
                                 {pickupCode}
                             </p>
                             <p className="text-xs text-muted-foreground mt-2">
@@ -69,7 +75,7 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                         </div>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="hidden space-y-4 md:block md:min-w-0">
                         {/* Instructions */}
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <p className="text-sm text-blue-900 font-medium mb-2">

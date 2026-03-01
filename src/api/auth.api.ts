@@ -41,14 +41,20 @@ const isRedirectRelatedError = (message?: string): boolean => {
   return /redirect|redirect_to|allowed|invalid.*url|site url/i.test(message);
 };
 
+const isExpectedSignInError = (message?: string): boolean => {
+  if (!message) return false;
+  return /invalid login credentials|email not confirmed|invalid email/i.test(message);
+};
+
 /**
  * Sign in with email and password
  */
 export const signInWithEmail = async (
   credentials: AuthCredentials
 ): Promise<ApiResponse<{ user: User; session: unknown }>> => {
+  const normalizedEmail = credentials.email.trim().toLowerCase();
   debugLog('=== AUTH.API SIGNINWITHEMAIL ===');
-  debugLog('Credentials:', { email: credentials.email, password: '***' });
+  debugLog('Credentials:', { email: normalizedEmail, password: '***' });
 
   if (!isSupabaseConfigured()) {
     console.error('Supabase non configuré');
@@ -65,7 +71,7 @@ export const signInWithEmail = async (
 
     // Wrapper pour ajouter un timeout
     const signInPromise = client.auth.signInWithPassword({
-      email: credentials.email,
+      email: normalizedEmail,
       password: credentials.password,
     });
 
@@ -77,7 +83,11 @@ export const signInWithEmail = async (
     debugLog('Réponse Supabase reçue:', { data: !!data, error: error?.message });
 
     if (error) {
-      console.error('Erreur Supabase:', error);
+      if (isExpectedSignInError(error.message)) {
+        debugLog('Erreur Supabase attendue:', error.message);
+      } else {
+        console.error('Erreur Supabase:', error);
+      }
       return {
         data: null,
         error: { code: error.name, message: error.message },
@@ -118,13 +128,14 @@ export const signUpWithEmail = async (
     };
   }
 
+  const normalizedEmail = signUpData.email.trim().toLowerCase();
   const client = requireSupabaseClient();
   const redirectUrl = buildRedirectUrl('/auth');
   const safeRole = signUpData.role === 'merchant' ? 'merchant' : 'user';
 
   try {
     const { data, error } = await client.auth.signUp({
-      email: signUpData.email,
+      email: normalizedEmail,
       password: signUpData.password,
       options: {
         ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
@@ -232,10 +243,11 @@ export const resetPassword = async (
   }
 
   const client = requireSupabaseClient();
+  const normalizedEmail = email.trim().toLowerCase();
   const redirectUrl = buildRedirectUrl('/auth/reset');
   const resetOptions = redirectUrl ? { redirectTo: redirectUrl } : undefined;
 
-  let { error } = await client.auth.resetPasswordForEmail(email, resetOptions);
+  let { error } = await client.auth.resetPasswordForEmail(normalizedEmail, resetOptions);
 
   const errorStatus = (error as { status?: number } | null)?.status;
   const shouldRetryWithoutRedirect = !!error && !!redirectUrl && (
@@ -243,7 +255,7 @@ export const resetPassword = async (
   );
 
   if (shouldRetryWithoutRedirect) {
-    const fallbackResult = await client.auth.resetPasswordForEmail(email);
+    const fallbackResult = await client.auth.resetPasswordForEmail(normalizedEmail);
     error = fallbackResult.error;
   }
 

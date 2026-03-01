@@ -81,7 +81,12 @@ export default function UserDashboardLayout({
                             <NotificationBell />
 
                             {/* User Avatar */}
-                            <Button variant="ghost" size="icon" className="rounded-full">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-full"
+                                aria-label="Ouvrir le menu utilisateur"
+                            >
                                 <Avatar className="h-8 w-8">
                                     <AvatarImage src={user?.avatarUrl} alt={user?.firstName} className="object-cover" />
                                     <AvatarFallback className="bg-primary/10 text-primary font-medium">
