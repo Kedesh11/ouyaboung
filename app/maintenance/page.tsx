@@ -45,7 +45,7 @@ export default function MaintenancePage() {
         <p className="text-sm text-muted-foreground">
           Des questions ?{" "}
           <a
-            href="mailto:contact@ouyaboung.com"
+            href="mailto:oyaboug@gmail.com"
             className="text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"
           >
             Contactez-nous
