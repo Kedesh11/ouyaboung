@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import type { Metadata, Viewport } from "next";
 // import { Inter } from "next/font/google";
 import "./globals.css";
@@ -117,7 +117,9 @@ export default function RootLayout({
                                 disableTransitionOnChange
                             >
                                 <DeferredAppEnhancements />
-                                <PageTrackerInit />
+                                <Suspense fallback={null}>
+                                    <PageTrackerInit />
+                                </Suspense>
                                 <TooltipProvider>
                                     <main id="main-content">{children}</main>
                                     <Toaster />

@@ -3,10 +3,8 @@ import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { EventType, type DeviceType } from '@/lib/tracking/types';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+// Remove top-level supabase client to fix build errors.
+// It will be instantiated inside the POST handler lazily.
 
 // ============================================================
 // Types & Schemas
@@ -95,6 +93,11 @@ export async function POST(req: NextRequest) {
     if (events.length === 0) {
       return NextResponse.json({ inserted: 0 });
     }
+
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
 
     // Insert into user_events using the service_role key
     // RLS explicitly blocks anon/authenticated access to this table.
