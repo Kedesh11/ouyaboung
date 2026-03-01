@@ -3,18 +3,20 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
-import { DB_TABLES, API_ROUTES } from './routes';
+import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { DB_TABLES } from './routes';
 import type { 
   ApiResponse, 
   ImpactStats, 
   UserImpact, 
   MerchantImpact 
 } from '@/types';
-
-// Constants for impact calculations
-const CO2_PER_KG_FOOD = 2.5; // kg CO2 equivalent per kg of food waste avoided
-const AVG_MEAL_WEIGHT_KG = 0.5; // Average weight of a meal in kg
+import {
+  AVG_MEAL_WEIGHT_KG,
+  CO2_PER_KG_FOOD_KG,
+  co2KgToTrees,
+  mealsToCo2Kg,
+} from '@/lib/impactCalculations';
 
 /**
  * Get global platform impact statistics
@@ -22,12 +24,13 @@ const AVG_MEAL_WEIGHT_KG = 0.5; // Average weight of a meal in kg
 export const getGlobalImpact = async (): Promise<ApiResponse<ImpactStats>> => {
   if (!isSupabaseConfigured()) {
     // Return mock data for development
+    const mockTotalMeals = 25000;
     return {
       data: {
         total_food_saved_kg: 12500,
         total_money_saved_xaf: 8750000,
-        total_co2_avoided_kg: 31250,
-        total_meals_saved: 25000,
+        total_co2_avoided_kg: Math.round(mealsToCo2Kg(mockTotalMeals)),
+        total_meals_saved: mockTotalMeals,
         total_orders: 18500,
         total_merchants: 245,
         total_users: 12800,
@@ -51,18 +54,18 @@ export const getGlobalImpact = async (): Promise<ApiResponse<ImpactStats>> => {
     // Get counts
     const { count: merchantCount } = await client
       .from(DB_TABLES.MERCHANTS)
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('is_active', true);
 
     const { count: userCount } = await client
       .from(DB_TABLES.PROFILES)
-      .select('*', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true });
 
     // Calculate totals
     const totalMeals = orders?.reduce((sum, o) => sum + (o.quantity || 0), 0) || 0;
     const totalSavings = orders?.reduce((sum, o) => sum + (o.savings || 0), 0) || 0;
     const totalFoodKg = totalMeals * AVG_MEAL_WEIGHT_KG;
-    const totalCO2 = totalFoodKg * CO2_PER_KG_FOOD;
+    const totalCO2 = mealsToCo2Kg(totalMeals);
 
     return {
       data: {
@@ -101,7 +104,7 @@ export const getUserMonthlyImpact = async (
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthLabel = d.toLocaleString('fr-FR', { month: 'short' });
       const meals = Math.floor(Math.random() * 10) + 1;
-      res.push({ month: monthLabel, meals, co2: Math.round(meals * AVG_MEAL_WEIGHT_KG * CO2_PER_KG_FOOD) });
+      res.push({ month: monthLabel, meals, co2: Math.round(mealsToCo2Kg(meals)) });
     }
     return { data: res, error: null, success: true };
   }
@@ -136,7 +139,7 @@ export const getUserMonthlyImpact = async (
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const meals = buckets[key]?.meals || 0;
       const monthLabel = d.toLocaleString('fr-FR', { month: 'short' });
-      const co2 = Math.round(meals * AVG_MEAL_WEIGHT_KG * CO2_PER_KG_FOOD);
+      const co2 = Math.round(mealsToCo2Kg(meals));
       result.push({ month: monthLabel, meals, co2 });
     }
 
@@ -154,13 +157,15 @@ export const getUserImpact = async (
 ): Promise<ApiResponse<UserImpact>> => {
   if (!isSupabaseConfigured()) {
     // Return mock data
+    const mockTotalMeals = 50;
     return {
       data: {
         user_id: userId,
         food_saved_kg: 25,
         money_saved_xaf: 17500,
-        co2_avoided_kg: 62.5,
-        orders_count: 50,
+        co2_avoided_kg: Math.round(mealsToCo2Kg(mockTotalMeals) * 10) / 10,
+        orders_count: 20,
+        total_meals_saved: mockTotalMeals,
         favorite_merchants: [],
       },
       error: null,
@@ -184,7 +189,7 @@ export const getUserImpact = async (
     const totalMeals = orders?.reduce((sum, o) => sum + (o.quantity || 0), 0) || 0;
     const totalSavings = orders?.reduce((sum, o) => sum + (o.savings || 0), 0) || 0;
     const totalFoodKg = totalMeals * AVG_MEAL_WEIGHT_KG;
-    const totalCO2 = totalFoodKg * CO2_PER_KG_FOOD;
+    const totalCO2 = mealsToCo2Kg(totalMeals);
 
     // Get most frequented merchants
     const merchantCounts = orders?.reduce((acc, o) => {
@@ -204,6 +209,7 @@ export const getUserImpact = async (
         money_saved_xaf: totalSavings,
         co2_avoided_kg: Math.round(totalCO2 * 10) / 10,
         orders_count: orders?.length || 0,
+        total_meals_saved: totalMeals,
         favorite_merchants: topMerchants,
       },
       error: null,
@@ -226,13 +232,15 @@ export const getMerchantImpact = async (
 ): Promise<ApiResponse<MerchantImpact>> => {
   if (!isSupabaseConfigured()) {
     // Return mock data
+    const mockTotalMeals = 300;
     return {
       data: {
         merchant_id: merchantId,
         food_saved_kg: 150,
         revenue_from_waste_xaf: 525000,
-        co2_avoided_kg: 375,
+        co2_avoided_kg: Math.round(mealsToCo2Kg(mockTotalMeals)),
         orders_fulfilled: 300,
+        total_meals_saved: mockTotalMeals,
         average_rating: 4.5,
         waste_reduction_rate: 78,
       },
@@ -266,7 +274,7 @@ export const getMerchantImpact = async (
     const totalMeals = orders?.reduce((sum, o) => sum + (o.quantity || 0), 0) || 0;
     const totalRevenue = orders?.reduce((sum, o) => sum + (o.total_price || 0), 0) || 0;
     const totalFoodKg = totalMeals * AVG_MEAL_WEIGHT_KG;
-    const totalCO2 = totalFoodKg * CO2_PER_KG_FOOD;
+    const totalCO2 = mealsToCo2Kg(totalMeals);
 
     return {
       data: {
@@ -275,6 +283,7 @@ export const getMerchantImpact = async (
         revenue_from_waste_xaf: totalRevenue,
         co2_avoided_kg: Math.round(totalCO2 * 10) / 10,
         orders_fulfilled: orders?.length || 0,
+        total_meals_saved: totalMeals,
         average_rating: merchant?.rating || 0,
         waste_reduction_rate: 75, // Would need more data to calculate properly
       },
@@ -298,15 +307,12 @@ export const calculateCO2Impact = async (params: {
   weight_kg?: number;
 }): Promise<ApiResponse<{ co2_avoided_kg: number; trees_equivalent: number }>> => {
   const weightKg = params.weight_kg || params.quantity * AVG_MEAL_WEIGHT_KG;
-  const co2Avoided = weightKg * CO2_PER_KG_FOOD;
-  
-  // One tree absorbs about 22 kg of CO2 per year
-  const treesEquivalent = co2Avoided / 22;
+  const co2Avoided = weightKg * CO2_PER_KG_FOOD_KG;
 
   return {
     data: {
       co2_avoided_kg: Math.round(co2Avoided * 100) / 100,
-      trees_equivalent: Math.round(treesEquivalent * 100) / 100,
+      trees_equivalent: co2KgToTrees(co2Avoided),
     },
     error: null,
     success: true,
@@ -345,10 +351,10 @@ export const getImpactLeaderboard = async (
 
   try {
     if (type === 'users') {
-      // Get top users by order count
+      // Get top users by rescued meal count
       const { data, error } = await client
         .from(DB_TABLES.ORDERS)
-        .select('user_id, profiles(full_name)')
+        .select('user_id, quantity, profiles(full_name)')
         .eq('status', 'completed');
 
       if (error) throw error;
@@ -360,15 +366,15 @@ export const getImpactLeaderboard = async (
           acc[userId] = {
             id: userId,
             name: order.profiles?.full_name || 'Utilisateur',
-            count: 0,
+            meals: 0,
           };
         }
-        acc[userId].count += 1;
+        acc[userId].meals += order.quantity || 0;
         return acc;
-      }, {} as Record<string, { id: string; name: string; count: number }>) || {};
+      }, {} as Record<string, { id: string; name: string; meals: number }>) || {};
 
       const leaderboard = Object.values(userScores)
-        .map((u: any) => ({ id: u.id, name: u.name, impact_score: u.count * AVG_MEAL_WEIGHT_KG }))
+        .map((u: any) => ({ id: u.id, name: u.name, impact_score: u.meals * AVG_MEAL_WEIGHT_KG }))
         .sort((a, b) => b.impact_score - a.impact_score)
         .slice(0, limit);
 
@@ -505,7 +511,7 @@ export const generateImpactReport = async (params: {
     const totalMeals = orders?.reduce((sum, o) => sum + (o.quantity || 0), 0) || 0;
     const totalSavings = orders?.reduce((sum, o) => sum + (o.savings || 0), 0) || 0;
     const totalFoodKg = totalMeals * AVG_MEAL_WEIGHT_KG;
-    const totalCO2 = totalFoodKg * CO2_PER_KG_FOOD;
+    const totalCO2 = mealsToCo2Kg(totalMeals);
 
     // Group by day
     const dailyData = orders?.reduce((acc, order: any) => {
@@ -520,7 +526,7 @@ export const generateImpactReport = async (params: {
     const dailyBreakdown = Object.entries(dailyData).map(([date, data]: [string, any]) => ({
       date,
       meals_saved: data.meals,
-      co2_avoided: data.meals * AVG_MEAL_WEIGHT_KG * CO2_PER_KG_FOOD,
+      co2_avoided: mealsToCo2Kg(data.meals),
     }));
 
     return {

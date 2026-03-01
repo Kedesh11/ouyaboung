@@ -7,9 +7,9 @@ import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './s
 import { DB_TABLES } from './routes';
 import {
   DEFAULT_OFFLINE_CACHE_TTL_MS,
-  getOfflineCache,
+  getOfflineCacheAsync,
   isBrowserOffline,
-  setOfflineCache,
+  setOfflineCacheAsync,
 } from '@/lib/offline/cache';
 import type {
   ApiResponse,
@@ -18,6 +18,16 @@ import type {
   CreateOrderInput,
   PaginatedResponse
 } from '@/types';
+
+const PROFILE_LIST_COLUMNS = 'id,user_id,email,phone,full_name,first_name,last_name,avatar_url,role,address,city,quartier,preferences,created_at,updated_at';
+const MERCHANT_LIST_COLUMNS =
+  'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
+const FOOD_ITEM_LIST_COLUMNS =
+  'id,merchant_id,name,description,category,original_price,discounted_price,discount_percentage,quantity_available,quantity_initial,image_url,images,pickup_start,pickup_end,expiry_date,is_available,contents,badges,slug,created_at,updated_at';
+const ORDER_LIST_COLUMNS =
+  'id,user_id,merchant_id,food_item_id,quantity,total_price,original_total,savings,status,pickup_code,tracking_code,pickup_time,confirmed_at,picked_up_at,cancelled_at,cancellation_reason,rating,review,consumed_at,consumed_by,created_at,updated_at';
+const toOne = <T>(value: T | T[] | null | undefined): T | null =>
+  Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
 
 /**
  * Generate a unique pickup code
@@ -30,6 +40,9 @@ const generatePickupCode = (): string => {
   }
   return code;
 };
+
+const normalizePickupCode = (value: string): string =>
+  value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 /**
  * Create a new order/reservation
@@ -51,9 +64,10 @@ export const createOrder = async (
   // Get food item details to calculate prices
   const { data: foodItem, error: itemError } = await client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*, merchants(*)')
+    .select(`${FOOD_ITEM_LIST_COLUMNS}, merchants(${MERCHANT_LIST_COLUMNS})`)
     .eq('id', orderData.food_item_id)
     .single();
+  const foodItemMerchant = toOne(foodItem?.merchants);
 
   if (itemError || !foodItem) {
     return {
@@ -65,9 +79,9 @@ export const createOrder = async (
 
   if (
     !foodItem.is_available ||
-    !foodItem.merchants?.is_verified ||
-    !foodItem.merchants?.is_active ||
-    foodItem.merchants?.is_refused
+    !foodItemMerchant?.is_verified ||
+    !foodItemMerchant?.is_active ||
+    foodItemMerchant?.is_refused
   ) {
     return {
       data: null,
@@ -105,7 +119,7 @@ export const createOrder = async (
       status: 'pending',
       pickup_code: generatePickupCode(),
     })
-    .select('*, food_items(*), merchants(*)')
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
     .single();
 
   if (error) {
@@ -127,8 +141,8 @@ export const createOrder = async (
 
   const order: Order = {
     ...data,
-    food_item: data.food_items,
-    merchant: data.merchants,
+    food_item: toOne(data.food_items) ?? undefined,
+    merchant: toOne(data.merchants) ?? undefined,
   };
 
   return {
@@ -155,7 +169,7 @@ export const getOrderById = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.ORDERS)
-    .select('*, food_items(*), merchants(*)')
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
     .eq('id', orderId)
     .maybeSingle();
 
@@ -169,8 +183,8 @@ export const getOrderById = async (
 
   const order: Order = data ? {
     ...data,
-    food_item: data.food_items,
-    merchant: data.merchants,
+    food_item: toOne(data.food_items) ?? undefined,
+    merchant: toOne(data.merchants) ?? undefined,
   } : null;
 
   return {
@@ -189,7 +203,7 @@ export const getOrderByTrackingCode = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.ORDERS)
-    .select('*, food_items(*), merchants(*)')
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
     .eq('tracking_code', trackingCode)
     .maybeSingle();
 
@@ -203,8 +217,8 @@ export const getOrderByTrackingCode = async (
 
   const order: Order = data ? {
     ...data,
-    food_item: data.food_items,
-    merchant: data.merchants,
+    food_item: toOne(data.food_items) ?? undefined,
+    merchant: toOne(data.merchants) ?? undefined,
   } : null;
 
   return {
@@ -224,7 +238,7 @@ export const getOrdersByUser = async (
   offset: number = 0
 ): Promise<ApiResponse<PaginatedResponse<Order>>> => {
   const cacheKey = `orders:user:${userId}:status:${status || 'all'}:limit:${limit}:offset:${offset}`;
-  const cached = getOfflineCache<PaginatedResponse<Order>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<PaginatedResponse<Order>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -248,7 +262,7 @@ export const getOrdersByUser = async (
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.ORDERS)
-    .select('*, food_items(*), merchants(*)', { count: 'exact' })
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`, { count: 'exact' })
     .eq('user_id', userId);
 
   if (status) {
@@ -274,8 +288,8 @@ export const getOrdersByUser = async (
 
   const orders = data?.map((o) => ({
     ...o,
-    food_item: o.food_items,
-    merchant: o.merchants,
+    food_item: toOne(o.food_items),
+    merchant: toOne(o.merchants),
   })) as Order[];
 
   const responseData: PaginatedResponse<Order> = {
@@ -286,7 +300,7 @@ export const getOrdersByUser = async (
     total_pages: Math.ceil((count || 0) / limit),
   };
 
-  setOfflineCache(cacheKey, responseData);
+  await setOfflineCacheAsync(cacheKey, responseData);
 
   return {
     data: responseData,
@@ -315,7 +329,7 @@ export const getOrdersByMerchant = async (
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.ORDERS)
-    .select('*, food_items(*)', { count: 'exact' })
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS})`, { count: 'exact' })
     .eq('merchant_id', merchantId);
 
   if (status) {
@@ -343,7 +357,7 @@ export const getOrdersByMerchant = async (
     if (userIds.length > 0) {
       const { data: profiles } = await client
         .from(DB_TABLES.PROFILES)
-        .select('*')
+        .select(PROFILE_LIST_COLUMNS)
         .in('user_id', userIds);
 
       if (profiles) {
@@ -359,7 +373,7 @@ export const getOrdersByMerchant = async (
 
   const orders = data?.map((o) => ({
     ...o,
-    food_item: o.food_items,
+    food_item: toOne(o.food_items),
     user: profilesMap[o.user_id] || null,
   })) as Order[];
 
@@ -418,7 +432,7 @@ export const updateOrderStatus = async (
     .from(DB_TABLES.ORDERS)
     .update(updateData)
     .eq('id', orderId)
-    .select('*, food_items(*), merchants(*)')
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
     .single();
 
   if (error) {
@@ -431,10 +445,11 @@ export const updateOrderStatus = async (
 
   // If cancelled, restore quantity
   if (status === 'cancelled' && data) {
+    const updatedFoodItem = toOne(data.food_items);
     await client
       .from(DB_TABLES.FOOD_ITEMS)
       .update({
-        quantity_available: data.food_items.quantity_available + data.quantity,
+        quantity_available: (updatedFoodItem?.quantity_available || 0) + data.quantity,
         is_available: true,
       })
       .eq('id', data.food_item_id);
@@ -442,8 +457,8 @@ export const updateOrderStatus = async (
 
   const order: Order = {
     ...data,
-    food_item: data.food_items,
-    merchant: data.merchants,
+    food_item: toOne(data.food_items) ?? undefined,
+    merchant: toOne(data.merchants) ?? undefined,
   };
 
   return {
@@ -515,7 +530,7 @@ export const completeOrder = async (
     };
   }
 
-  if (order.pickup_code !== pickupCode) {
+  if (normalizePickupCode(order.pickup_code || '') !== normalizePickupCode(pickupCode || '')) {
     return {
       data: null,
       error: { code: 'INVALID_CODE', message: 'Invalid pickup code' },
@@ -559,7 +574,7 @@ export const addOrderReview = async (
       updated_at: new Date().toISOString(),
     })
     .eq('id', orderId)
-    .select('*, food_items(*), merchants(*)')
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
     .single();
 
   if (error) {
@@ -595,8 +610,8 @@ export const addOrderReview = async (
 
   const order: Order = {
     ...data,
-    food_item: data.food_items,
-    merchant: data.merchants,
+    food_item: toOne(data.food_items) ?? undefined,
+    merchant: toOne(data.merchants) ?? undefined,
   };
 
   return {
@@ -614,7 +629,7 @@ export const getActiveOrders = async (
   merchantId?: string
 ): Promise<ApiResponse<Order[]>> => {
   const cacheKey = `orders:active:user:${userId || 'none'}:merchant:${merchantId || 'none'}`;
-  const cached = getOfflineCache<Order[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<Order[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -638,7 +653,7 @@ export const getActiveOrders = async (
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.ORDERS)
-    .select('*, food_items(*), merchants(*)')
+    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
     .in('status', ['pending', 'confirmed', 'ready']);
 
   if (userId) {
@@ -663,11 +678,11 @@ export const getActiveOrders = async (
 
   const orders = data?.map((o) => ({
     ...o,
-    food_item: o.food_items,
-    merchant: o.merchants,
+    food_item: toOne(o.food_items),
+    merchant: toOne(o.merchants),
   })) as Order[];
 
-  setOfflineCache(cacheKey, orders);
+  await setOfflineCacheAsync(cacheKey, orders);
 
   return {
     data: orders,

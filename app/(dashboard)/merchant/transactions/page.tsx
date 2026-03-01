@@ -47,6 +47,27 @@ interface MerchantTransaction {
     consumed_at: string;
 }
 
+const MERCHANT_TRANSACTION_COLUMNS = [
+    "transaction_id",
+    "transaction_date",
+    "payment_status",
+    "q_gabon_reference",
+    "base_amount",
+    "total_amount",
+    "merchant_revenue",
+    "q_gabon_fees",
+    "payment_phone_number",
+    "operator",
+    "status_code",
+    "product_name",
+    "customer_name",
+    "customer_phone",
+    "order_status",
+    "order_quantity",
+    "pickup_code",
+    "consumed_at",
+].join(",");
+
 // Status mapping
 const STATUS_MAP = {
     PENDING: { label: 'En attente', variant: 'secondary' as const, icon: Clock },
@@ -91,13 +112,14 @@ export default function MerchantTransactionsPage() {
             // Fetch transactions for this merchant
             const { data, error } = await supabase
                 .from('merchant_transactions')
-                .select('*')
+                .select(MERCHANT_TRANSACTION_COLUMNS)
                 .eq('merchant_id', profile.merchant_id)
-                .order('transaction_date', { ascending: false });
+                .order('transaction_date', { ascending: false })
+                .range(0, 199);
 
             if (error) throw error;
 
-            setTransactions(data || []);
+            setTransactions((data || []) as unknown as MerchantTransaction[]);
         } catch (error) {
             console.error('Error fetching transactions:', error);
             toast.error('Erreur lors du chargement des transactions');

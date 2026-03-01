@@ -6,6 +6,9 @@ import { requireSupabaseClient } from '@/api/supabaseClient';
 import { logger } from '@/lib/logger';
 import type { AuthSession, SessionInfo, DeviceInfo } from './types';
 
+const AUTH_SESSION_COLUMNS =
+    'id,user_id,token_hash,device_info,user_agent,ip_address,is_active,last_activity,expires_at,created_at';
+
 /**
  * Get device information from user agent
  */
@@ -98,7 +101,7 @@ export async function getActiveSessions(userId: string): Promise<SessionInfo[]> 
     try {
         const { data, error } = await client
             .from('auth_sessions')
-            .select('*')
+            .select(AUTH_SESSION_COLUMNS)
             .eq('user_id', userId)
             .eq('is_active', true)
             .gt('expires_at', new Date().toISOString())
@@ -112,7 +115,7 @@ export async function getActiveSessions(userId: string): Promise<SessionInfo[]> 
             ? await hashToken(currentSession.data.session.access_token)
             : null;
 
-        return (data || []).map((session: AuthSession) => ({
+        return (data || []).map((session: any) => ({
             id: session.id,
             device: session.device_info?.device_name || 'Unknown Device',
             location: 'Unknown', // TODO: Add IP geolocation

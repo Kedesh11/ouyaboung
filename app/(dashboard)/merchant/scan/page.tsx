@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { IDetectedBarcode } from "@yudiel/react-qr-scanner";
@@ -49,6 +49,8 @@ type ValidateQrApiResponse = ValidationResult & {
 };
 
 const VALIDATION_HARD_TIMEOUT_MS = 12000;
+const SCANNER_FRAME_WIDTH = 1280;
+const SCANNER_FRAME_HEIGHT = 720;
 
 const normalizePickupCode = (value: string): string =>
     value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -83,7 +85,7 @@ const extractPickupCode = (rawValue: string): string => {
     return normalizePickupCode(trimmed);
 };
 
-const isLikelyPickupCode = (value: string): boolean => /^[A-Z0-9]{6,32}$/.test(value);
+const isLikelyPickupCode = (value: string): boolean => /^[A-Z0-9]{6,64}$/.test(value);
 
 const getCameraErrorMessage = (err: unknown): string => {
     const name = (err as { name?: string })?.name || "";
@@ -158,14 +160,16 @@ export default function ScanQRPage() {
         if (selectedDeviceId) {
             return {
                 deviceId: { exact: selectedDeviceId },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
+                width: { ideal: SCANNER_FRAME_WIDTH, min: 640, max: 1920 },
+                height: { ideal: SCANNER_FRAME_HEIGHT, min: 480, max: 1080 },
+                frameRate: { ideal: 24, max: 30 },
             };
         }
         return {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: SCANNER_FRAME_WIDTH, min: 640, max: 1920 },
+            height: { ideal: SCANNER_FRAME_HEIGHT, min: 480, max: 1080 },
+            frameRate: { ideal: 24, max: 30 },
         };
     }, [selectedDeviceId]);
 
@@ -277,19 +281,19 @@ export default function ScanQRPage() {
         }
     };
 
-    const startCameraScanning = () => {
+    const startCameraScanning = useCallback(() => {
         setCameraError(null);
         setResult(null);
         lastCameraCodeRef.current = null;
         cameraValidationInFlightRef.current = false;
         setIsScanning(true);
-    };
+    }, []);
 
-    const stopCameraScanning = () => {
+    const stopCameraScanning = useCallback(() => {
         setIsScanning(false);
-    };
+    }, []);
 
-    const handleCameraScan = (detectedCodes: IDetectedBarcode[]) => {
+    const handleCameraScan = useCallback((detectedCodes: IDetectedBarcode[]) => {
         if (!detectedCodes.length || !isScanning || isValidating) return;
 
         const candidateCode = detectedCodes
@@ -303,20 +307,17 @@ export default function ScanQRPage() {
         const last = lastCameraCodeRef.current;
         if (last && last.code === candidateCode && now - last.at < 1200) return;
 
+        // Stop camera immediately once we have a reliable code candidate.
+        stopCameraScanning();
         cameraValidationInFlightRef.current = true;
         lastCameraCodeRef.current = { code: candidateCode, at: now };
         setManualCode(candidateCode);
 
         void validateCode(candidateCode)
-            .then((success) => {
-                if (success) {
-                    stopCameraScanning();
-                }
-            })
             .finally(() => {
                 cameraValidationInFlightRef.current = false;
             });
-    };
+    }, [isScanning, isValidating, stopCameraScanning, validateCode]);
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -396,8 +397,8 @@ export default function ScanQRPage() {
                                     paused={!isScanning || isValidating}
                                     constraints={scannerConstraints}
                                     formats={["qr_code"]}
-                                    scanDelay={200}
-                                    allowMultiple={true}
+                                    scanDelay={150}
+                                    allowMultiple={false}
                                     components={{
                                         finder: true,
                                         torch: true,

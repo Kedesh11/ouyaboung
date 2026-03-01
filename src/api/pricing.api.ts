@@ -131,7 +131,7 @@ export const getPricingHistory = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.PRICING_HISTORY)
-    .select('*')
+    .select('food_item_id,original_price,recommended_price,discount_percentage,confidence_score,factors,created_at')
     .eq('food_item_id', itemId)
     .order('created_at', { ascending: false })
     .limit(10);

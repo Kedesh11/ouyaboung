@@ -7,9 +7,9 @@ import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './s
 import { DB_TABLES } from './routes';
 import {
   DEFAULT_OFFLINE_CACHE_TTL_MS,
-  getOfflineCache,
+  getOfflineCacheAsync,
   isBrowserOffline,
-  setOfflineCache,
+  setOfflineCacheAsync,
 } from '@/lib/offline/cache';
 import type {
   ApiResponse,
@@ -19,6 +19,13 @@ import type {
   PaginatedResponse,
   SearchFilters
 } from '@/types';
+
+const MERCHANT_LIST_COLUMNS =
+  'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
+const FOOD_ITEM_LIST_COLUMNS =
+  'id,merchant_id,name,description,category,original_price,discounted_price,discount_percentage,quantity_available,quantity_initial,image_url,images,pickup_start,pickup_end,expiry_date,is_available,contents,badges,slug,created_at,updated_at';
+const toOne = <T>(value: T | T[] | null | undefined): T | null =>
+  Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
 
 /**
  * Get all available food items
@@ -34,7 +41,7 @@ export const getAvailableFoodItems = async (filters?: {
 }): Promise<ApiResponse<PaginatedResponse<FoodItem>>> => {
   const serializedFilters = JSON.stringify(filters || {});
   const cacheKey = `inventory:available:${serializedFilters}`;
-  const cached = getOfflineCache<PaginatedResponse<FoodItem>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<PaginatedResponse<FoodItem>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -58,7 +65,7 @@ export const getAvailableFoodItems = async (filters?: {
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*, merchants!inner(*)', { count: 'exact' })
+    .select(`${FOOD_ITEM_LIST_COLUMNS}, merchants!inner(${MERCHANT_LIST_COLUMNS})`, { count: 'exact' })
     .eq('is_available', true)
     .gt('quantity_available', 0)
     .eq('merchants.is_verified', true)
@@ -100,7 +107,7 @@ export const getAvailableFoodItems = async (filters?: {
   // Transform data to include merchant info
   const items = data?.map((item) => ({
     ...item,
-    merchant: item.merchants,
+    merchant: toOne(item.merchants),
   })) as FoodItem[];
 
   const responseData: PaginatedResponse<FoodItem> = {
@@ -111,7 +118,7 @@ export const getAvailableFoodItems = async (filters?: {
     total_pages: Math.ceil((count || 0) / limit),
   };
 
-  setOfflineCache(cacheKey, responseData);
+  await setOfflineCacheAsync(cacheKey, responseData);
 
   return {
     data: responseData,
@@ -137,7 +144,7 @@ export const getFoodItemById = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*, merchants(*)')
+    .select(`${FOOD_ITEM_LIST_COLUMNS}, merchants(${MERCHANT_LIST_COLUMNS})`)
     .eq('id', itemId)
     .maybeSingle();
 
@@ -151,7 +158,7 @@ export const getFoodItemById = async (
 
   const item = data ? {
     ...data,
-    merchant: data.merchants,
+    merchant: toOne(data.merchants),
   } : null;
 
   return {
@@ -168,7 +175,7 @@ export const getFoodItemBySlug = async (
   slug: string
 ): Promise<ApiResponse<FoodItem>> => {
   const cacheKey = `inventory:item:slug:${slug}`;
-  const cached = getOfflineCache<FoodItem>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<FoodItem>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -184,7 +191,7 @@ export const getFoodItemBySlug = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*, merchants(*)')
+    .select(`${FOOD_ITEM_LIST_COLUMNS}, merchants(${MERCHANT_LIST_COLUMNS})`)
     .eq('slug', slug)
     .maybeSingle();
 
@@ -201,11 +208,11 @@ export const getFoodItemBySlug = async (
 
   const item = data ? {
     ...data,
-    merchant: data.merchants,
+    merchant: toOne(data.merchants),
   } : null;
 
   if (item) {
-    setOfflineCache(cacheKey, item as FoodItem);
+    await setOfflineCacheAsync(cacheKey, item as FoodItem);
   }
 
   return {
@@ -250,7 +257,7 @@ export const getFoodItemsByMerchant = async (
 
   let query = client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*')
+    .select(FOOD_ITEM_LIST_COLUMNS)
     .eq('merchant_id', merchantId);
 
   if (!includeUnavailable) {
@@ -331,7 +338,7 @@ export const createFoodItem = async (
       is_available: true,
       contents: itemData.contents,
     })
-    .select()
+    .select(FOOD_ITEM_LIST_COLUMNS)
     .single();
 
   if (error) {
@@ -382,7 +389,7 @@ export const updateFoodItem = async (
     .from(DB_TABLES.FOOD_ITEMS)
     .update(updateData)
     .eq('id', itemId)
-    .select()
+    .select(FOOD_ITEM_LIST_COLUMNS)
     .single();
 
   if (error) {
@@ -439,7 +446,7 @@ export const searchFoodItems = async (
 ): Promise<ApiResponse<FoodItem[]>> => {
   const serializedFilters = JSON.stringify(filters || {});
   const cacheKey = `inventory:search:${serializedFilters}`;
-  const cached = getOfflineCache<FoodItem[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<FoodItem[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -463,7 +470,7 @@ export const searchFoodItems = async (
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.FOOD_ITEMS)
-    .select('*, merchants!inner(*)')
+    .select(`${FOOD_ITEM_LIST_COLUMNS}, merchants!inner(${MERCHANT_LIST_COLUMNS})`)
     .eq('is_available', true)
     .gt('quantity_available', 0)
     .eq('merchants.is_verified', true)
@@ -518,10 +525,10 @@ export const searchFoodItems = async (
 
   const items = data?.map((item) => ({
     ...item,
-    merchant: item.merchants,
+    merchant: toOne(item.merchants),
   })) as FoodItem[];
 
-  setOfflineCache(cacheKey, items);
+  await setOfflineCacheAsync(cacheKey, items);
 
   return {
     data: items,
@@ -620,7 +627,7 @@ export const updateFoodItemQuantity = async (
     .from(DB_TABLES.FOOD_ITEMS)
     .update(updateData)
     .eq('id', itemId)
-    .select()
+    .select(FOOD_ITEM_LIST_COLUMNS)
     .single();
 
   if (error) {

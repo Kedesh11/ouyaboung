@@ -35,8 +35,8 @@ export const createReservation = async (
   itemId: string,
   quantity: number
 ): Promise<ApiResponse<Order>> => {
-  const queueReservation = () => {
-    const queued = enqueueOfflineQueueItem(OFFLINE_ACTION_TYPES.CREATE_RESERVATION, {
+  const queueReservation = async () => {
+    const queued = await enqueueOfflineQueueItem(OFFLINE_ACTION_TYPES.CREATE_RESERVATION, {
       userId,
       itemId,
       quantity,
@@ -53,18 +53,18 @@ export const createReservation = async (
   };
 
   if (isBrowserOffline()) {
-    return queueReservation();
+    return await queueReservation();
   }
 
   try {
     const result = await createOrder(userId, { food_item_id: itemId, quantity });
     if (!result.success && isLikelyOfflineError(result.error)) {
-      return queueReservation();
+      return await queueReservation();
     }
     return result;
   } catch (error) {
     if (isLikelyOfflineError(error)) {
-      return queueReservation();
+      return await queueReservation();
     }
     return {
       data: null,

@@ -12,6 +12,12 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const normalizePickupCode = (value: string): string =>
+    value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+const ORDER_SELECT =
+    'id,user_id,merchant_id,quantity,total_price,status,pickup_code,confirmed_at,consumed_at,consumed_by,food_item:food_items(name)'
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -46,9 +52,10 @@ serve(async (req) => {
         }
 
         const { pickup_code } = await req.json()
+        const rawPickupCode = typeof pickup_code === 'string' ? pickup_code.trim() : ''
         const normalizedPickupCode =
             typeof pickup_code === 'string'
-                ? pickup_code.toUpperCase().replace(/[^A-Z0-9]/g, '')
+                ? normalizePickupCode(pickup_code)
                 : ''
 
         if (!normalizedPickupCode) {
@@ -79,12 +86,59 @@ serve(async (req) => {
             )
         }
 
-        const { data: order, error: orderError } = await supabaseClient
+        const selectByNormalized = await supabaseClient
             .from('orders')
-            .select('id, user_id, merchant_id, quantity, total_price, status, confirmed_at, consumed_at, consumed_by, food_item:food_items(name)')
-            .ilike('pickup_code', normalizedPickupCode)
+            .select(ORDER_SELECT)
+            .eq('pickup_code_normalized', normalizedPickupCode)
             .eq('merchant_id', merchant.id)
             .maybeSingle()
+
+        let order = selectByNormalized.data
+        let orderError = selectByNormalized.error
+
+        // Backward compatibility for environments where pickup_code_normalized
+        // migration has not been applied yet.
+        if (!order && orderError?.message?.includes('pickup_code_normalized')) {
+            const fallbackCandidates = Array.from(
+                new Set(
+                    [rawPickupCode, normalizedPickupCode]
+                        .map((candidate) => candidate.trim())
+                        .filter((candidate) => candidate.length > 0)
+                )
+            )
+
+            if (fallbackCandidates.length > 0) {
+                const fallbackLookup = await supabaseClient
+                    .from('orders')
+                    .select(ORDER_SELECT)
+                    .eq('merchant_id', merchant.id)
+                    .in('pickup_code', fallbackCandidates)
+                    .maybeSingle()
+
+                if (!fallbackLookup.error && fallbackLookup.data) {
+                    order = fallbackLookup.data
+                    orderError = null
+                } else if (!fallbackLookup.error) {
+                    const recentLookup = await supabaseClient
+                        .from('orders')
+                        .select(ORDER_SELECT)
+                        .eq('merchant_id', merchant.id)
+                        .order('created_at', { ascending: false })
+                        .limit(250)
+
+                    if (!recentLookup.error && recentLookup.data) {
+                        order = recentLookup.data.find((candidateOrder) =>
+                            normalizePickupCode(candidateOrder.pickup_code || '') === normalizedPickupCode
+                        ) || null
+                        orderError = null
+                    } else {
+                        orderError = recentLookup.error
+                    }
+                } else {
+                    orderError = fallbackLookup.error
+                }
+            }
+        }
 
         if (orderError || !order) {
             return new Response(

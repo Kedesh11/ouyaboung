@@ -52,8 +52,9 @@ const AuthContent = () => {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        const normalizedEmail = loginEmail.trim().toLowerCase();
 
-        if (!loginEmail || !loginPassword) {
+        if (!normalizedEmail || !loginPassword) {
             toast({
                 title: "Erreur",
                 description: "Veuillez remplir tous les champs",
@@ -64,7 +65,7 @@ const AuthContent = () => {
 
         setIsLoading(true);
         try {
-            const result = await login(loginEmail, loginPassword);
+            const result = await login(normalizedEmail, loginPassword);
             setIsLoading(false);
 
             if (result.success) {
@@ -83,7 +84,7 @@ const AuthContent = () => {
                 } else if (result.error?.code === 'NETWORK_ERROR' || errorMessage.includes('Failed to fetch') || errorMessage.includes('ERR_NAME_NOT_RESOLVED')) {
                     errorMessage = "Erreur de connexion. Vérifiez votre connexion internet et que les variables d'environnement Supabase sont correctement configurées.";
                 } else if (errorMessage.includes('Invalid login credentials') || errorMessage.includes('invalid_credentials')) {
-                    errorMessage = "Email ou mot de passe incorrect";
+                    errorMessage = "Email ou mot de passe incorrect. Verifiez aussi que votre email est confirme.";
                 } else if (errorMessage.includes('Email not confirmed')) {
                     errorMessage = "Veuillez confirmer votre email avant de vous connecter";
                 }
