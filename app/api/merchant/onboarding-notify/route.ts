@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchNewMerchantNotifications } from '@/services/merchant-onboarding.server';
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
 export const runtime = 'nodejs';
 
@@ -24,8 +25,7 @@ const parsePayload = async (request: NextRequest): Promise<NotifyPayload> => {
 };
 
 const createSupabaseServerClient = async () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Supabase configuration missing');

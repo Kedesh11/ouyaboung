@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createBrowserClient } from '@supabase/ssr';
+import { getSupabasePublicEnv } from "@/lib/supabase/public-env";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -122,9 +123,10 @@ export default function UserTransactionsPage() {
     const [searchText, setSearchText] = useState('');
 
     // Initialize Supabase client
+    const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
     const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        supabaseUrl,
+        supabaseAnonKey
     );
 
     // Fetch user transactions

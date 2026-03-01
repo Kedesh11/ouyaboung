@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendMerchantApprovalEmail, sendMerchantRejectionEmail } from '@/services/email.server';
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
 export const runtime = 'nodejs';
 
@@ -26,8 +27,7 @@ const isValidPayload = (payload: unknown): payload is MerchantEmailPayload => {
 };
 
 const assertAdmin = async (): Promise<{ ok: true } | { ok: false; status: number; error: string }> => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return { ok: false, status: 500, error: 'Supabase config missing' };

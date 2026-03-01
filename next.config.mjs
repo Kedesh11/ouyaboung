@@ -1,8 +1,10 @@
 // @ts-check
 import withPWA from 'next-pwa';
 
+const sanitizeEnv = (value) => (typeof value === 'string' ? value.trim() : '');
+
 const supabaseImageHost = (() => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl = sanitizeEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
     if (!supabaseUrl) return null;
     try {
         return new URL(supabaseUrl).hostname;
