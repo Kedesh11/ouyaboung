@@ -7,6 +7,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { TrackingProvider } from "@/contexts/TrackingContext";
+import { PageTrackerInit } from "@/components/analytics/PageTrackerInit";
 import { SkipToContent } from "@/components/seo/AccessibilityHelpers";
 import { DeferredAppEnhancements } from "@/components/app/DeferredAppEnhancements";
 
@@ -107,19 +109,22 @@ export default function RootLayout({
                 <SkipToContent />
                 <QueryProvider>
                     <AuthProvider>
-                        <ThemeProvider
-                            attribute="class"
-                            defaultTheme="system"
-                            enableSystem
-                            disableTransitionOnChange
-                        >
-                            <DeferredAppEnhancements />
-                            <TooltipProvider>
-                                <main id="main-content">{children}</main>
-                                <Toaster />
-                                <Sonner />
-                            </TooltipProvider>
-                        </ThemeProvider>
+                        <TrackingProvider>
+                            <ThemeProvider
+                                attribute="class"
+                                defaultTheme="system"
+                                enableSystem
+                                disableTransitionOnChange
+                            >
+                                <DeferredAppEnhancements />
+                                <PageTrackerInit />
+                                <TooltipProvider>
+                                    <main id="main-content">{children}</main>
+                                    <Toaster />
+                                    <Sonner />
+                                </TooltipProvider>
+                            </ThemeProvider>
+                        </TrackingProvider>
                     </AuthProvider>
                 </QueryProvider>
             </body>
