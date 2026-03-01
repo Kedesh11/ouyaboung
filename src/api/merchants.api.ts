@@ -7,10 +7,11 @@ import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './s
 import { DB_TABLES, API_ROUTES } from './routes';
 import {
   DEFAULT_OFFLINE_CACHE_TTL_MS,
-  getOfflineCache,
+  getOfflineCacheAsync,
   isBrowserOffline,
-  setOfflineCache,
+  setOfflineCacheAsync,
 } from '@/lib/offline/cache';
+import { AVG_MEAL_WEIGHT_KG } from '@/lib/impactCalculations';
 
 import type {
   ApiResponse,
@@ -20,6 +21,9 @@ import type {
   PaginatedResponse,
   GabonCity
 } from '@/types';
+
+const MERCHANT_LIST_COLUMNS =
+  'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
 
 /**
  * Get all merchants with optional filters
@@ -34,7 +38,7 @@ export const getMerchants = async (filters?: {
 }): Promise<ApiResponse<PaginatedResponse<Merchant>>> => {
   const serializedFilters = JSON.stringify(filters || {});
   const cacheKey = `merchants:list:${serializedFilters}`;
-  const cached = getOfflineCache<PaginatedResponse<Merchant>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<PaginatedResponse<Merchant>>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -51,7 +55,7 @@ export const getMerchants = async (filters?: {
   const client = requireSupabaseClient();
   let query = client
     .from(DB_TABLES.MERCHANTS)
-    .select('*', { count: 'exact' });
+    .select(MERCHANT_LIST_COLUMNS, { count: 'exact' });
 
   if (filters?.city) {
     query = query.eq('city', filters.city);
@@ -92,7 +96,7 @@ export const getMerchants = async (filters?: {
     total_pages: Math.ceil((count || 0) / limit),
   };
 
-  setOfflineCache(cacheKey, responseData);
+  await setOfflineCacheAsync(cacheKey, responseData);
 
   return {
     data: responseData,
@@ -112,7 +116,7 @@ export const getMerchantById = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.MERCHANTS)
-    .select('*')
+    .select(MERCHANT_LIST_COLUMNS)
     .eq('id', merchantId)
     .maybeSingle();
 
@@ -138,7 +142,7 @@ export const getMerchantBySlug = async (
   slug: string
 ): Promise<ApiResponse<Merchant>> => {
   const cacheKey = `merchant:slug:${slug}`;
-  const cached = getOfflineCache<Merchant>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<Merchant>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -154,7 +158,7 @@ export const getMerchantBySlug = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.MERCHANTS)
-    .select('*')
+    .select(MERCHANT_LIST_COLUMNS)
     .eq('slug', slug)
     .maybeSingle();
 
@@ -170,7 +174,7 @@ export const getMerchantBySlug = async (
   }
 
   if (data) {
-    setOfflineCache(cacheKey, data as Merchant);
+    await setOfflineCacheAsync(cacheKey, data as Merchant);
   }
 
   return {
@@ -197,7 +201,7 @@ export const getMerchantByUserId = async (
   const client = requireSupabaseClient();
   const { data, error } = await client
     .from(DB_TABLES.MERCHANTS)
-    .select('*')
+    .select(MERCHANT_LIST_COLUMNS)
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -240,7 +244,7 @@ export const createMerchant = async (
       is_verified: merchantData.is_verified ?? false,
       is_active: merchantData.is_active ?? false,
     })
-    .select()
+    .select(MERCHANT_LIST_COLUMNS)
     .single();
 
   if (error) {
@@ -281,7 +285,7 @@ export const updateMerchant = async (
       updated_at: new Date().toISOString(),
     })
     .eq('id', merchantId)
-    .select()
+    .select(MERCHANT_LIST_COLUMNS)
     .single();
 
   if (error) {
@@ -324,7 +328,7 @@ export const getNearbyMerchants = async (
 
   const { data, error } = await client
     .from(DB_TABLES.MERCHANTS)
-    .select('*')
+    .select(MERCHANT_LIST_COLUMNS)
     .gte('latitude', latitude - latDelta)
     .lte('latitude', latitude + latDelta)
     .gte('longitude', longitude - lonDelta)
@@ -366,7 +370,7 @@ export const getMerchantImpact = async (
   // Get merchant stats from impact logs
   const { data, error } = await client
     .from(DB_TABLES.IMPACT_LOGS)
-    .select('*')
+    .select('merchant_id,food_saved_kg,revenue_xaf,co2_avoided_kg')
     .eq('merchant_id', merchantId);
 
   if (error) {
@@ -384,12 +388,14 @@ export const getMerchantImpact = async (
     .eq('id', merchantId)
     .maybeSingle();
 
+  const totalFoodSavedKg = data?.reduce((sum, log) => sum + (log.food_saved_kg || 0), 0) || 0;
   const impact: MerchantImpact = {
     merchant_id: merchantId,
-    food_saved_kg: data?.reduce((sum, log) => sum + (log.food_saved_kg || 0), 0) || 0,
+    food_saved_kg: totalFoodSavedKg,
     revenue_from_waste_xaf: data?.reduce((sum, log) => sum + (log.revenue_xaf || 0), 0) || 0,
     co2_avoided_kg: data?.reduce((sum, log) => sum + (log.co2_avoided_kg || 0), 0) || 0,
     orders_fulfilled: data?.length || 0,
+    total_meals_saved: Math.round(totalFoodSavedKg / AVG_MEAL_WEIGHT_KG),
     average_rating: merchant?.rating || 0,
     waste_reduction_rate: 0, // Calculate based on business logic
   };
@@ -409,7 +415,7 @@ export const searchMerchants = async (
   city?: GabonCity
 ): Promise<ApiResponse<Merchant[]>> => {
   const cacheKey = `merchants:search:query:${query}:city:${city || 'all'}`;
-  const cached = getOfflineCache<Merchant[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
+  const cached = await getOfflineCacheAsync<Merchant[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
 
   if (isBrowserOffline()) {
     if (cached) {
@@ -433,7 +439,7 @@ export const searchMerchants = async (
   const client = requireSupabaseClient();
   let dbQuery = client
     .from(DB_TABLES.MERCHANTS)
-    .select('*')
+    .select(MERCHANT_LIST_COLUMNS)
     .or(`business_name.ilike.%${query}%,quartier.ilike.%${query}%`)
     .eq('is_active', true)
     .eq('is_verified', true);
@@ -455,7 +461,7 @@ export const searchMerchants = async (
     };
   }
 
-  setOfflineCache(cacheKey, data as Merchant[]);
+  await setOfflineCacheAsync(cacheKey, data as Merchant[]);
 
   return {
     data: data as Merchant[],

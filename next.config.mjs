@@ -80,21 +80,20 @@ const config = withPWA({
                 cacheName: 'pages-cache',
                 networkTimeoutSeconds: 5,
                 expiration: {
-                    maxEntries: 64,
-                    maxAgeSeconds: 6 * 60 * 60, // 6 hours
+                    maxEntries: 128,
+                    maxAgeSeconds: 24 * 60 * 60, // 24 hours
                 },
             },
         },
         {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
                 cacheName: 'supabase-api-cache',
                 expiration: {
-                    maxEntries: 32,
-                    maxAgeSeconds: 24 * 60 * 60, // 24 hours
+                    maxEntries: 128,
+                    maxAgeSeconds: 72 * 60 * 60, // 72 hours
                 },
-                networkTimeoutSeconds: 10,
             },
         },
         {
@@ -109,10 +108,12 @@ const config = withPWA({
             },
         },
         {
-            urlPattern: /\.(?:js|css|woff|woff2|ttf|otf|eot)$/i,
+            // Avoid caching Next.js runtime chunks aggressively to prevent stale bundle 404s.
+            // Keep CacheFirst only for fonts.
+            urlPattern: /\.(?:woff|woff2|ttf|otf|eot)$/i,
             handler: 'CacheFirst',
             options: {
-                cacheName: 'static-resources',
+                cacheName: 'font-resources',
                 expiration: {
                     maxEntries: 64,
                     maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days

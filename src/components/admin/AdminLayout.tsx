@@ -47,7 +47,12 @@ const AdminLayout = ({ children, title, subtitle }: AdminLayoutProps) => {
                 <NotificationBell viewAllLink="/admin/notifications" />
 
                 {/* Admin Avatar */}
-                <Button variant="ghost" size="icon" className="rounded-full">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full"
+                  aria-label="Ouvrir le menu administrateur"
+                >
                   <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
                     <span className="text-sm font-medium text-destructive">SA</span>
                   </div>

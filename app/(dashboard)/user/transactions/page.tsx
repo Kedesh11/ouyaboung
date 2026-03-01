@@ -71,6 +71,32 @@ interface UserTransaction {
     order_status: string;
 }
 
+const USER_TRANSACTION_COLUMNS = [
+    "transaction_id",
+    "transaction_date",
+    "payment_status",
+    "q_gabon_reference",
+    "base_amount",
+    "airtel_fees",
+    "pvit_fees",
+    "app_fees",
+    "total_amount",
+    "merchant_revenue",
+    "q_gabon_fees",
+    "payment_phone_number",
+    "operator_owner_charge",
+    "q_gabon_transaction_id",
+    "merchant_reference_id",
+    "operator",
+    "operator_fees",
+    "status_code",
+    "message",
+    "product_name",
+    "merchant_name",
+    "customer_phone",
+    "order_status",
+].join(",");
+
 // Status mapping
 const STATUS_MAP = {
     PENDING: { label: 'En attente', variant: 'secondary' as const, icon: Clock },
@@ -114,13 +140,14 @@ export default function UserTransactionsPage() {
             // Fetch transactions for this user
             const { data, error } = await supabase
                 .from('merchant_transactions')
-                .select('*')
+                .select(USER_TRANSACTION_COLUMNS)
                 .eq('customer_id', user.id)
-                .order('transaction_date', { ascending: false });
+                .order('transaction_date', { ascending: false })
+                .range(0, 499);
 
             if (error) throw error;
 
-            setTransactions(data || []);
+            setTransactions((data || []) as unknown as UserTransaction[]);
         } catch (error) {
             console.error('Error fetching transactions:', error);
             toast.error('Erreur lors du chargement de vos transactions');

@@ -29,6 +29,7 @@ import {
 } from "@/services";
 import { useAuth } from "@/hooks/useAuth";
 import type { Order, FoodItem, UserImpact } from "@/types";
+import { AVG_MEAL_WEIGHT_KG, co2KgToTrees } from "@/lib/impactCalculations";
 
 export default function UserDashboardPage() {
     const { user } = useAuth();
@@ -260,6 +261,42 @@ export default function UserDashboardPage() {
             bgColor: "bg-destructive/10",
         },
     ];
+    const totalMealsSaved = userImpact?.total_meals_saved
+        ?? Math.round((userImpact?.food_saved_kg || 0) / AVG_MEAL_WEIGHT_KG);
+
+    const formatPickupWindow = (pickupStart?: string, pickupEnd?: string): string => {
+        if (!pickupStart || !pickupEnd) return "Horaire non disponible";
+
+        const start = new Date(pickupStart);
+        const end = new Date(pickupEnd);
+
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+            return `${pickupStart} - ${pickupEnd}`;
+        }
+
+        const sameDay = start.toDateString() === end.toDateString();
+        const startTime = start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+        const endTime = end.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+        if (sameDay) {
+            const dateLabel = start.toLocaleDateString("fr-FR", {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+            });
+            return `${dateLabel} • ${startTime} - ${endTime}`;
+        }
+
+        const startLabel = start.toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "short",
+        });
+        const endLabel = end.toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "short",
+        });
+        return `${startLabel} ${startTime} → ${endLabel} ${endTime}`;
+    };
 
     // Convert FoodItem to FoodCardItem format
     const toFoodCardItem = (item: FoodItem): FoodCardItem => ({
@@ -276,7 +313,7 @@ export default function UserDashboardPage() {
             slug: item.merchant?.slug || "",
         },
         slug: item.slug || "",
-        pickupTime: `${item.pickup_start} - ${item.pickup_end}`,
+        pickupTime: formatPickupWindow(item.pickup_start, item.pickup_end),
         quantity: item.quantity_available,
         badges: (item.badges || []) as ("bio" | "free" | "lastItems")[],
     });
@@ -458,7 +495,7 @@ export default function UserDashboardPage() {
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="p-3 rounded-lg bg-muted/50 text-center">
                                         <p className="text-lg font-bold text-foreground">
-                                            {userImpact?.orders_count || 0}
+                                            {totalMealsSaved}
                                         </p>
                                         <p className="text-xs text-muted-foreground">Repas sauvés</p>
                                     </div>
@@ -471,7 +508,7 @@ export default function UserDashboardPage() {
                                 </div>
 
                                 <p className="text-xs text-center text-muted-foreground">
-                                    🌱 Équivalent à {((userImpact?.co2_avoided_kg || 0) / 21).toFixed(0)} arbres plantés
+                                    🌱 Équivalent à {co2KgToTrees(userImpact?.co2_avoided_kg || 0)} arbres plantés
                                 </p>
                             </div>
                         </CardContent>

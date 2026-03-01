@@ -6,6 +6,9 @@ import { requireSupabaseClient } from '@/api/supabaseClient';
 import { logger } from '@/lib/logger';
 import type { MFAFactor, MFASetupRequest, MFASetupResponse } from './types';
 
+const MFA_FACTOR_COLUMNS =
+    'id,user_id,factor_type,secret,phone_number,email,is_verified,is_active,backup_codes,last_used_at,created_at,updated_at';
+
 /**
  * Generate TOTP secret
  */
@@ -93,7 +96,7 @@ export async function setupMFA(
                 is_active: false, // Activate after verification
                 backup_codes: backup_codes,
             })
-            .select()
+            .select(MFA_FACTOR_COLUMNS)
             .single();
 
         if (error) throw error;
@@ -126,7 +129,7 @@ export async function verifyMFAToken(
         // Get the MFA factor
         const { data: factor, error } = await client
             .from('auth_mfa_factors')
-            .select('*')
+            .select(MFA_FACTOR_COLUMNS)
             .eq('id', factorId)
             .eq('user_id', userId)
             .single();
@@ -201,7 +204,7 @@ export async function getMFAFactors(userId: string): Promise<MFAFactor[]> {
     try {
         const { data, error } = await client
             .from('auth_mfa_factors')
-            .select('*')
+            .select(MFA_FACTOR_COLUMNS)
             .eq('user_id', userId)
             .order('created_at', { ascending: false });
 

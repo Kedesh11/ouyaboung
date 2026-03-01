@@ -19,6 +19,9 @@ import type {
   PlatformSettings
 } from '@/types/admin.types';
 
+const MERCHANT_LIST_COLUMNS =
+  'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at,owner_name,postal_code,siret';
+
 // Transform DB merchant to MerchantRegistration
 const transformMerchant = (dbMerchant: any): MerchantRegistration => ({
   id: dbMerchant.id,
@@ -78,6 +81,9 @@ export const adminService = {
     const { data: orders, error: ordersError } = await client
       .from(DB_TABLES.ORDERS)
       .select('user_id, total_price');
+      
+    // Restrict aggregation to known users only.
+    const scopedOrders = orders?.filter((order) => order.user_id && userIds.includes(order.user_id)) || [];
 
     if (ordersError) {
       console.error('Error fetching client orders:', ordersError);
@@ -89,7 +95,7 @@ export const adminService = {
       { ordersCount: number; totalSpent: number }
     > = {};
 
-    (orders || []).forEach((order: any) => {
+    scopedOrders.forEach((order: any) => {
       const userId = order.user_id as string | null;
       if (!userId) return;
 
@@ -141,7 +147,7 @@ export const adminService = {
     const client = requireSupabaseClient();
     const { data, error } = await client
       .from(DB_TABLES.ORDERS)
-      .select('*, merchant:merchants(business_name)')
+      .select('id,created_at,total_price,status,merchant:merchants(business_name)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -168,7 +174,7 @@ export const adminService = {
     }
 
     const client = requireSupabaseClient();
-    let query = client.from(DB_TABLES.MERCHANTS).select('*');
+    let query = client.from(DB_TABLES.MERCHANTS).select(MERCHANT_LIST_COLUMNS);
 
     if (status === 'validated') {
       query = query.eq('is_verified', true);
@@ -197,7 +203,7 @@ export const adminService = {
     const client = requireSupabaseClient();
     const { data, error } = await client
       .from(DB_TABLES.MERCHANTS)
-      .select('*')
+      .select(MERCHANT_LIST_COLUMNS)
       .eq('id', id)
       .maybeSingle();
 
@@ -244,7 +250,7 @@ export const adminService = {
       .from(DB_TABLES.MERCHANTS)
       .update(updates)
       .eq('id', action.merchantId)
-      .select()
+      .select(MERCHANT_LIST_COLUMNS)
       .single();
 
     if (error) {
@@ -316,12 +322,12 @@ export const adminService = {
       productsResult,
       ordersResult,
     ] = await Promise.all([
-      client.from(DB_TABLES.MERCHANTS).select('*', { count: 'exact', head: true }),
-      client.from(DB_TABLES.MERCHANTS).select('*', { count: 'exact', head: true }).eq('is_verified', true).eq('is_active', true),
-      client.from(DB_TABLES.MERCHANTS).select('*', { count: 'exact', head: true }).eq('is_verified', false).eq('is_refused', false),
-      client.from(DB_TABLES.MERCHANTS).select('*', { count: 'exact', head: true }).eq('is_refused', true),
-      client.from(DB_TABLES.PROFILES).select('*', { count: 'exact', head: true }),
-      client.from(DB_TABLES.FOOD_ITEMS).select('*', { count: 'exact', head: true }).eq('is_available', true),
+      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }),
+      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }).eq('is_verified', true).eq('is_active', true),
+      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }).eq('is_verified', false).eq('is_refused', false),
+      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }).eq('is_refused', true),
+      client.from(DB_TABLES.PROFILES).select('id', { count: 'exact', head: true }),
+      client.from(DB_TABLES.FOOD_ITEMS).select('id', { count: 'exact', head: true }).eq('is_available', true),
       client.from(DB_TABLES.ORDERS).select('total_price'),
     ]);
 
@@ -382,7 +388,7 @@ export const adminService = {
     const client = requireSupabaseClient();
     const { data, error } = await client
       .from(DB_TABLES.ADMIN_ACTIVITIES)
-      .select('*')
+      .select('id,type,description,metadata,created_at')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -539,7 +545,7 @@ export const adminService = {
     const client = requireSupabaseClient();
     const { data, error } = await client
       .from(DB_TABLES.FOOD_ITEMS)
-      .select('*, merchant:merchants(id, business_name)')
+      .select('id,merchant_id,name,category,original_price,discounted_price,quantity_available,is_available,description,created_at,merchant:merchants(id,business_name)')
       .order('created_at', { ascending: false });
 
     if (error) {

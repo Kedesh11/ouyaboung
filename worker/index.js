@@ -1,3 +1,20 @@
+self.addEventListener("sync", (event) => {
+  if (!event || event.tag !== "ouyaboung-offline-sync") return;
+
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      for (const client of clients) {
+        client.postMessage({ type: "OFFLINE_SYNC_TRIGGER" });
+      }
+    })()
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   const notification = event.notification;
   const targetUrl = (notification && notification.data && notification.data.url) || "/";
@@ -59,4 +76,3 @@ self.addEventListener("push", (event) => {
     })
   );
 });
-

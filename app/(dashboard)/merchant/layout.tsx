@@ -70,7 +70,12 @@ export default function MerchantDashboardLayout({ children }: { children: ReactN
                                 <NotificationBell />
 
                                 {/* Profile Placeholder */}
-                                <Button variant="ghost" size="icon" className="rounded-full">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-full"
+                                    aria-label="Ouvrir le profil commerçant"
+                                >
                                     <Avatar className="h-8 w-8">
                                         <AvatarFallback className="bg-primary/10 text-primary font-medium">
                                             {profile ? profile.businessName.charAt(0).toUpperCase() : "M"}

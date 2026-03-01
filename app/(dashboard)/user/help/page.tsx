@@ -51,7 +51,7 @@ const faqs = [
     },
     {
         question: "Comment sont calculés mes impacts environnementaux ?",
-        answer: "Chaque repas sauvé représente en moyenne 2 kg de CO₂ évités, 500 litres d'eau économisés et 4 kWh d'énergie préservés. Ces calculs sont basés sur les études scientifiques sur l'impact du gaspillage alimentaire."
+        answer: "Nous utilisons une base de 0,5 kg de nourriture sauvée par repas. Avec les ratios FAO sur le gaspillage alimentaire (3,3 Gt CO₂e et 250 km³ d'eau pour 1,3 Gt d'aliments), cela correspond à environ 1,27 kg de CO₂ évités et 96 litres d'eau économisés par repas."
     },
 ];
 

@@ -10,13 +10,12 @@ import {
     Award,
     TrendingUp,
     ShoppingBag,
-    Calendar,
 } from "lucide-react";
 import { getAuthUser } from "@/services";
 import { getUserStats, getUserMonthlyImpact } from "@/services";
 import {
+    AVG_MEAL_WEIGHT_KG,
     mealsToWaterL,
-    mealsToEnergyKwh,
     co2KgToTrees,
     co2KgToCarKm,
 } from "@/lib/impactCalculations";
@@ -84,10 +83,12 @@ export default function ImpactPage() {
 
     const impactData = impact
         ? {
-            mealsRescued: impact.orders_count || 0,
+            mealsRescued: impact.total_meals_saved
+                ?? Math.round((impact.food_saved_kg || 0) / AVG_MEAL_WEIGHT_KG),
             co2Saved: impact.co2_avoided_kg || 0,
-            waterSaved: mealsToWaterL(impact.orders_count || 0),
-            energySaved: mealsToEnergyKwh(impact.orders_count || 0),
+            waterSaved: mealsToWaterL(
+                impact.total_meals_saved ?? Math.round((impact.food_saved_kg || 0) / AVG_MEAL_WEIGHT_KG)
+            ),
             moneySaved: impact.money_saved_xaf || 0,
             treesEquivalent: co2KgToTrees(impact.co2_avoided_kg || 0),
             foodSavedKg: impact.food_saved_kg || 0,
@@ -96,7 +97,6 @@ export default function ImpactPage() {
             mealsRescued: 0,
             co2Saved: 0,
             waterSaved: 0,
-            energySaved: 0,
             moneySaved: 0,
             treesEquivalent: 0,
             foodSavedKg: 0,
@@ -210,7 +210,7 @@ export default function ImpactPage() {
                     <CardContent className="p-3 sm:p-4 text-center">
                         <ShoppingBag className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 mx-auto mb-1 sm:mb-2" />
                         <p className="text-lg sm:text-2xl font-bold text-green-500">{impactData.mealsRescued}</p>
-                        <p className="text-[10px] sm:text-xs text-muted-foreground">Commandes</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Repas sauvés</p>
                     </CardContent>
                 </Card>
 
@@ -369,7 +369,7 @@ export default function ImpactPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
                         {(() => {
                             const carKm = co2KgToCarKm(impactData.co2Saved || 0);
-                            const ledHours = Math.round((impactData.energySaved || 0) * 100); // assume 10W LED -> 0.01 kW
+                            const waterLiters = Math.round(impactData.waterSaved || 0);
                             const trees = co2KgToTrees(impactData.co2Saved || 0);
                             return (
                                 <>
@@ -379,9 +379,9 @@ export default function ImpactPage() {
                                         <p className="text-xs sm:text-sm text-muted-foreground">de trajet en voiture évités</p>
                                     </div>
                                     <div className="text-center p-3 sm:p-4 rounded-lg bg-muted/30">
-                                        <p className="text-2xl sm:text-3xl mb-1 sm:mb-2">💡</p>
-                                        <p className="text-lg sm:text-xl font-bold text-foreground">{ledHours} heures</p>
-                                        <p className="text-xs sm:text-sm text-muted-foreground">d'éclairage LED économisées</p>
+                                        <p className="text-2xl sm:text-3xl mb-1 sm:mb-2">💧</p>
+                                        <p className="text-lg sm:text-xl font-bold text-foreground">{waterLiters.toLocaleString()} L</p>
+                                        <p className="text-xs sm:text-sm text-muted-foreground">d'eau douce économisés</p>
                                     </div>
                                     <div className="text-center p-3 sm:p-4 rounded-lg bg-muted/30">
                                         <p className="text-2xl sm:text-3xl mb-1 sm:mb-2">🌳</p>

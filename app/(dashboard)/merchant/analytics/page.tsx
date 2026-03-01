@@ -215,7 +215,7 @@ const MerchantAnalyticsPage = () => {
     {
       title: "Nourriture sauvée",
       value: impact ? `${impact.food_saved_kg.toFixed(1)} kg` : "0 kg",
-      change: `-${impact ? impact.co2_avoided_kg.toFixed(1) : 0}kg CO2`,
+      change: `${impact ? impact.co2_avoided_kg.toFixed(1) : 0} kg CO₂ évités`,
       trend: "up",
       icon: Package,
       color: "text-purple-600",

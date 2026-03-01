@@ -14,6 +14,8 @@ import type {
 
 // Mock preferences cache for now, as we focus on notifications table first
 const mockPreferences: Map<string, NotificationPreferences> = new Map();
+const NOTIFICATION_COLUMNS =
+  'id,user_id,type,title,message,data,is_read,created_at';
 
 /**
  * Get user notifications
@@ -37,7 +39,7 @@ export const getUserNotifications = async (
   try {
     let query = supabaseClient
       .from('notifications')
-      .select('*')
+      .select(NOTIFICATION_COLUMNS)
       .eq('user_id', userId);
 
     if (options?.unreadOnly) {
@@ -81,7 +83,7 @@ export const getUnreadCount = async (
   try {
     const { count, error } = await supabaseClient
       .from('notifications')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('is_read', false);
 
@@ -199,7 +201,7 @@ export const createNotification = async (
     const { data, error } = await supabaseClient
       .from('notifications')
       .insert(notification)
-      .select()
+      .select(NOTIFICATION_COLUMNS)
       .single();
 
     if (error) throw error;
