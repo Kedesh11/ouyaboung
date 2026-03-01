@@ -21,9 +21,11 @@ import {
     detectOperator
 } from '@/lib/phone-validation';
 import type { QGabonPaymentResponse } from '@/types/qgabon';
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
-const SUPABASE_FUNCTIONS_BASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, '')}/functions/v1`
+const { url: supabaseUrl } = getSupabasePublicEnv();
+const SUPABASE_FUNCTIONS_BASE_URL = supabaseUrl
+    ? `${supabaseUrl.replace(/\/$/, '')}/functions/v1`
     : null;
 
 const getFunctionUrl = (name: string): string | null => {

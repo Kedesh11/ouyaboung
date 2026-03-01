@@ -20,7 +20,7 @@ import type {
 } from '@/types/admin.types';
 
 const MERCHANT_LIST_COLUMNS =
-  'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at,owner_name,postal_code,siret';
+  'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
 
 // Transform DB merchant to MerchantRegistration
 const transformMerchant = (dbMerchant: any): MerchantRegistration => ({

@@ -13,6 +13,21 @@ import { DeferredAppEnhancements } from "@/components/app/DeferredAppEnhancement
 // const inter = Inter({ subsets: ["latin"] });
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://ouyaboung-eight.vercel.app";
+const DEV_SW_RESET_SCRIPT = `
+(function () {
+  if (typeof window === "undefined") return;
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      .catch(() => {});
+  }
+  if ("caches" in window) {
+    caches.keys()
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .catch(() => {});
+  }
+})();
+`;
 
 export const metadata: Metadata = {
     metadataBase: new URL(APP_BASE_URL),
@@ -86,6 +101,9 @@ export default function RootLayout({
         <html lang="fr" data-scroll-behavior="smooth" suppressHydrationWarning>
             {/* Fallback to standard sans-serif font to avoid build timeout with Google Fonts */}
             <body className={"font-sans antialiased"} suppressHydrationWarning>
+                {process.env.NODE_ENV === "development" ? (
+                    <script dangerouslySetInnerHTML={{ __html: DEV_SW_RESET_SCRIPT }} />
+                ) : null}
                 <SkipToContent />
                 <QueryProvider>
                     <AuthProvider>

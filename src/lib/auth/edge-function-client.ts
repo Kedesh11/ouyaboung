@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { supabaseClient } from "@/api/supabaseClient";
+import { getSupabasePublicEnv } from "@/lib/supabase/public-env";
 
 const TOKEN_REFRESH_GRACE_MS = 60 * 1000;
 const AUTH_TIMEOUT_MS = 7000;
@@ -93,8 +94,7 @@ export const callEdgeFunctionWithAuth = async <T>({
     };
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { url: supabaseUrl, anonKey } = getSupabasePublicEnv();
 
   if (!supabaseUrl || !anonKey) {
     return {
