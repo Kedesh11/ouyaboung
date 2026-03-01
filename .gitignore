@@ -37,3 +37,4 @@ dist-ssr
 /public/workbox-*.js
 /public/sw.js.map
 /public/worker-*.js
+/public/fallback-*.js

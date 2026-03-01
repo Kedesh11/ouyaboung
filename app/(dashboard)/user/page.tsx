@@ -30,6 +30,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import type { Order, FoodItem, UserImpact } from "@/types";
 import { AVG_MEAL_WEIGHT_KG, co2KgToTrees } from "@/lib/impactCalculations";
+import { getSupabasePublicEnv } from "@/lib/supabase/public-env";
 
 export default function UserDashboardPage() {
     const { user } = useAuth();
@@ -48,9 +49,10 @@ export default function UserDashboardPage() {
     // Calculate monthly growth percentage
     const calculateMonthlyGrowth = async (userId: string) => {
         try {
+            const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
             const supabase = (await import('@supabase/ssr')).createBrowserClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                supabaseUrl,
+                supabaseAnonKey
             );
 
             const now = new Date();

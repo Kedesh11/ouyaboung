@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env'
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
@@ -12,8 +13,7 @@ export async function middleware(request: NextRequest) {
     })
 
     // Environment variables
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv()
 
     if (!supabaseUrl || !supabaseAnonKey) {
         console.error('Missing Supabase environment variables')

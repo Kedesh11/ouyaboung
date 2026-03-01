@@ -42,7 +42,7 @@ export function DeferredAppEnhancements() {
           <SystemPushBridge />
           <OfflineIndicator />
           <OfflineSyncManager />
-          <InstallPrompt />
+          {process.env.NODE_ENV === "production" ? <InstallPrompt /> : null}
         </>
       ) : null}
     </>

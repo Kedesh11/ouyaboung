@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { createBrowserClient } from '@supabase/ssr';
+import { getSupabasePublicEnv } from "@/lib/supabase/public-env";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -136,9 +137,10 @@ const AdminTransactionsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Initialize Supabase client
+  const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
   const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    supabaseUrl,
+    supabaseAnonKey
   );
 
   // Fetch transactions

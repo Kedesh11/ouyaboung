@@ -5,10 +5,10 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
 // Environment variables for Supabase connection
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } = getSupabasePublicEnv();
 const isDev = process.env.NODE_ENV !== 'production';
 
 // Debug logging
