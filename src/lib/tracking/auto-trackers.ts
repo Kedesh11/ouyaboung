@@ -67,6 +67,66 @@ export function stopScrollTracker() {
 }
 
 // ------------------------------------------------------------
+// Product Dwell Time (Intersection Observer)
+// ------------------------------------------------------------
+const productDwellTimes = new Map<string, number>();
+let productObserver: IntersectionObserver | null = null;
+
+/**
+ * Initializes an IntersectionObserver to track how long product cards stay in view.
+ * Cards must have data-product-id attribute.
+ */
+export function startProductDwellTracker() {
+  if (typeof window === 'undefined' || productObserver) return;
+
+  productObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const productId = (entry.target as HTMLElement).dataset.productId;
+      if (!productId) return;
+
+      if (entry.isIntersecting) {
+        // Started viewing
+        productDwellTimes.set(productId, Date.now());
+      } else {
+        // Stopped viewing
+        const startTime = productDwellTimes.get(productId);
+        if (startTime) {
+          const duration = Date.now() - startTime;
+          if (duration >= 2000) { // Track only if viewed for > 2s
+            tracker.track(EventType.PRODUCT_DWELL, { 
+              product_id: productId, 
+              duration_ms: duration 
+            });
+          }
+          productDwellTimes.delete(productId);
+        }
+      }
+    });
+  }, { threshold: 0.5 }); // 50% must be visible
+
+  // Elements are observed via custom hook or manual call when list renders
+}
+
+export function observeProduct(el: HTMLElement) {
+  productObserver?.observe(el);
+}
+
+// ------------------------------------------------------------
+// Intent & Hesitation Signals
+// ------------------------------------------------------------
+
+/**
+ * Track "Intent Signals" like opening shipping details or hovering price info for a long time.
+ */
+export function trackIntentSignal(type: string, metadata: any = {}) {
+  tracker.track(EventType.INTENT_SIGNAL, { signal_type: type, ...metadata });
+}
+
+export function trackPriceHesitation(productId: string) {
+  tracker.track(EventType.PRICE_HESITATION, { product_id: productId });
+}
+
+// ------------------------------------------------------------
 // Time on Page / Page View
 // ------------------------------------------------------------
 export function trackPageView(route: string) {
@@ -75,7 +135,5 @@ export function trackPageView(route: string) {
 
 export function trackTimeOnPage(route: string, durationMs: number) {
   if (durationMs < 100) return; // ignore instant bounces
-  // Note: we can override the route so the time_on_page event 
-  // correctly attributes to the PREVIOUS route we just left.
   tracker.track(EventType.TIME_ON_PAGE, { duration_ms: durationMs }, route);
 }

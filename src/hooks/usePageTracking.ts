@@ -6,7 +6,14 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { trackPageView, trackTimeOnPage, startScrollTracker, stopScrollTracker, resetScrollTracker } from '@/lib/tracking/auto-trackers';
+import { 
+  trackPageView, 
+  trackTimeOnPage, 
+  startScrollTracker, 
+  stopScrollTracker, 
+  resetScrollTracker,
+  startProductDwellTracker 
+} from '@/lib/tracking/auto-trackers';
 
 /**
  * Hook to be instantiated ONE TIME centrally (e.g. inside a global AppEnhancement layout module).
@@ -47,6 +54,7 @@ export function usePageTracking() {
       // 4. Start scroll tracking for new route
       resetScrollTracker();
       startScrollTracker();
+      startProductDwellTracker();
 
       // Update refs
       lastRouteRef.current = currentRoute;
