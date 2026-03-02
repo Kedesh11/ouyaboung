@@ -18,6 +18,9 @@ export const EventType = {
   PURCHASE:          'purchase',
   ORDER_ABANDON:     'order_abandon',
   PRODUCT_VIEW:      'product_view',
+  PRODUCT_DWELL:     'product_dwell',
+  INTENT_SIGNAL:     'intent_signal',
+  PRICE_HESITATION:  'price_hesitation',
   SEARCH:            'search',
   CUSTOM:            'custom',
 } as const;
