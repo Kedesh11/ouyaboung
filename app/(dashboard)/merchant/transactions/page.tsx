@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createBrowserClient } from '@supabase/ssr';
-import { getSupabasePublicEnv } from "@/lib/supabase/public-env";
+import { supabaseClient } from "@/api/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -83,16 +82,14 @@ export default function MerchantTransactionsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState<MerchantTransaction | null>(null);
 
-    // Initialize Supabase client
-    const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
-    const supabase = createBrowserClient(
-        supabaseUrl,
-        supabaseAnonKey
-    );
+    // Use centralized Supabase client (singleton)
+    const supabase = supabaseClient;
 
     // Fetch merchant transactions
     const fetchTransactions = async () => {
         try {
+            if (!supabase) return;
+
             // Get current user
             const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -137,6 +134,8 @@ export default function MerchantTransactionsPage() {
 
     // Realtime subscription
     useEffect(() => {
+        if (!supabase) return;
+
         const channel = supabase
             .channel('merchant-transactions')
             .on('postgres_changes', {

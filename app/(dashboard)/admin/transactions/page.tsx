@@ -6,8 +6,7 @@
 // ============================================
 
 import { useState, useEffect } from "react";
-import { createBrowserClient } from '@supabase/ssr';
-import { getSupabasePublicEnv } from "@/lib/supabase/public-env";
+import { supabaseClient } from "@/api/supabaseClient";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -136,16 +135,14 @@ const AdminTransactionsPage = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Initialize Supabase client
-  const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
-  const supabase = createBrowserClient(
-    supabaseUrl,
-    supabaseAnonKey
-  );
+  // Use centralized Supabase client (singleton)
+  const supabase = supabaseClient;
 
   // Fetch transactions
   const fetchTransactions = async () => {
     try {
+      if (!supabase) return;
+
       const { data, error } = await supabase
         .from('merchant_transactions')
         .select(ADMIN_TRANSACTION_COLUMNS)
@@ -170,6 +167,8 @@ const AdminTransactionsPage = () => {
 
   // Realtime subscription
   useEffect(() => {
+    if (!supabase) return;
+
     const channel = supabase
       .channel('admin-transactions')
       .on('postgres_changes', {
