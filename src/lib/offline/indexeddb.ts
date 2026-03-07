@@ -1,6 +1,7 @@
 const OFFLINE_DB_NAME = "ouyaboung-offline-db";
-const OFFLINE_DB_VERSION = 1;
+const OFFLINE_DB_VERSION = 2;
 const OFFLINE_KV_STORE = "kv";
+const OFFLINE_TRACKING_STORE = "tracking-events";
 
 const hasIndexedDb = (): boolean =>
   typeof window !== "undefined" && typeof window.indexedDB !== "undefined";
@@ -15,6 +16,13 @@ const openOfflineDb = async (): Promise<IDBDatabase | null> => {
       const db = request.result;
       if (!db.objectStoreNames.contains(OFFLINE_KV_STORE)) {
         db.createObjectStore(OFFLINE_KV_STORE);
+      }
+      if (!db.objectStoreNames.contains(OFFLINE_TRACKING_STORE)) {
+        const trackingStore = db.createObjectStore(OFFLINE_TRACKING_STORE, {
+          keyPath: "idb_key",
+          autoIncrement: true,
+        });
+        trackingStore.createIndex("by_ts", "client_ts", { unique: false });
       }
     };
 

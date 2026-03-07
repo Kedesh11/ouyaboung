@@ -1,129 +1,244 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
-import { EventType, type DeviceType } from '@/lib/tracking/types';
+import { EventType } from '@/lib/tracking/types';
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
-// Remove top-level supabase client to fix build errors.
-// It will be instantiated inside the POST handler lazily.
+export const runtime = 'nodejs';
 
 // ============================================================
-// Types & Schemas
+// Validation Schema
 // ============================================================
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ])
+);
+
+const eventTypeValues = Object.values(EventType) as [string, ...string[]];
 
 const eventSchema = z.object({
-  event_type: z.nativeEnum(EventType).or(z.string()), // Allow custom strings for future extensions
-  route: z.string().max(1024),
-  session_id: z.string().max(128),
+  event_type: z.enum(eventTypeValues),
+  route: z.string().min(1).max(1024),
+  session_id: z.string().min(6).max(128),
   user_id: z.string().uuid().nullable(),
-  device_type: z.enum(['mobile', 'tablet', 'desktop', 'unknown']).catch('unknown' as DeviceType),
-  user_agent: z.string().max(1024).catch('unknown'),
-  referrer: z.string().max(2048).catch(''),
-  metadata: z.record(z.any()).catch({}),
-  client_ts: z.number().optional(), // For logical ordering if needed later
+  device_type: z.enum(['mobile', 'tablet', 'desktop', 'unknown']),
+  user_agent: z.string().max(1024),
+  referrer: z.string().max(2048),
+  metadata: z.record(z.string(), jsonValueSchema).default({}),
+  client_ts: z.number().int().positive(),
 });
 
 const batchSchema = z.object({
-  events: z.array(eventSchema).max(100), // Hard limit of 100 events per batch
+  events: z.array(eventSchema).min(1).max(100),
+  sent_at: z.number().int().positive().optional(),
 });
 
 // ============================================================
-// Simple In-Memory Rate Limiter (for single-instance / serverless)
-// For scalable setups, migrate to Upstash Redis.
+// Sliding Window Rate Limiting (per IP)
 // ============================================================
 
-interface RateLimitTracker {
-  count: number;
-  resetAt: number;
-}
-const rateLimiter = new Map<string, RateLimitTracker>();
-const WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 60;     // 60 req/min/IP = 1 per second average
+const RATE_WINDOW_MS = 60_000;
+const RATE_LIMIT_REQUESTS = 90;
+const rateWindow = new Map<string, number[]>();
 
-function enforceRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = rateLimiter.get(ip);
-
-  if (!record || now > record.resetAt) {
-    rateLimiter.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return true;
+const getRequestIp = (req: NextRequest): string => {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0]?.trim() || 'unknown';
   }
 
-  if (record.count >= MAX_REQUESTS) {
-    return false;
+  return req.headers.get('x-real-ip') || 'unknown';
+};
+
+const applyRateLimit = (ip: string) => {
+  const now = Date.now();
+  const history = rateWindow.get(ip) ?? [];
+  const active = history.filter((ts) => now - ts < RATE_WINDOW_MS);
+
+  if (active.length >= RATE_LIMIT_REQUESTS) {
+    const oldest = active[0] ?? now;
+    const retryAfterMs = RATE_WINDOW_MS - (now - oldest);
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+      resetAt: oldest + RATE_WINDOW_MS,
+    };
   }
 
-  record.count += 1;
-  return true;
-}
+  active.push(now);
+  rateWindow.set(ip, active);
 
-// Clean up stale IP records periodically to prevent memory leaks
-setInterval(() => {
-  const now = Date.now();
-  Array.from(rateLimiter.entries()).forEach(([ip, record]) => {
-    if (now > record.resetAt) rateLimiter.delete(ip);
-  });
-}, WINDOW_MS * 5);
+  return {
+    allowed: true,
+    remaining: Math.max(0, RATE_LIMIT_REQUESTS - active.length),
+    retryAfterSec: 0,
+    resetAt: now + RATE_WINDOW_MS,
+  };
+};
 
-// ============================================================
-// Handler
-// ============================================================
+const errorResponse = (
+  requestId: string,
+  status: number,
+  code: string,
+  message: string,
+  details?: unknown,
+  headers?: HeadersInit
+) =>
+  NextResponse.json(
+    {
+      success: false,
+      request_id: requestId,
+      error: {
+        code,
+        message,
+        details: details ?? null,
+      },
+    },
+    {
+      status,
+      headers,
+    }
+  );
 
 export async function POST(req: NextRequest) {
-  try {
-    const ip = req.headers.get('x-forwarded-for') ?? 'unknown_ip';
+  const requestId = crypto.randomUUID();
+  const ip = getRequestIp(req);
+  const limit = applyRateLimit(ip);
+  const isProduction = process.env.NODE_ENV === 'production';
 
-    if (!enforceRateLimit(ip)) {
-      return NextResponse.json(
-        { error: 'Too Many Requests' },
-        { status: 429, headers: { 'Retry-After': '60' } }
-      );
-    }
-
-    const rawBody = await req.json();
-    const result = batchSchema.safeParse(rawBody);
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: 'Invalid payload', details: result.error.issues },
-        { status: 400 }
-      );
-    }
-
-    const { events } = result.data;
-    if (events.length === 0) {
-      return NextResponse.json({ inserted: 0 });
-    }
-
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  if (!limit.allowed) {
+    return errorResponse(
+      requestId,
+      429,
+      'RATE_LIMITED',
+      'Too many requests. Please retry later.',
+      {
+        window_ms: RATE_WINDOW_MS,
+        max_requests: RATE_LIMIT_REQUESTS,
+      },
+      {
+        'Retry-After': String(limit.retryAfterSec),
+        'X-RateLimit-Limit': String(RATE_LIMIT_REQUESTS),
+        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': String(limit.resetAt),
+      }
     );
+  }
 
-    // Insert into user_events using the service_role key
-    // RLS explicitly blocks anon/authenticated access to this table.
-    const { error: dbError } = await supabaseAdmin
-      .from('user_events')
-      .insert(events.map(e => ({
-        event_type: e.event_type,
-        route: e.route,
-        session_id: e.session_id,
-        user_id: e.user_id,
-        device_type: e.device_type,
-        user_agent: e.user_agent,
-        referrer: e.referrer,
-        metadata: e.metadata,
-        // created_at is automatically handled by the database default value.
-      })));
+  const contentType = req.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return errorResponse(requestId, 415, 'INVALID_CONTENT_TYPE', 'Content-Type must be application/json');
+  }
 
-    if (dbError) {
-      console.error('[Analytics API] DB Insert Error:', dbError);
-      return NextResponse.json({ error: 'Database Error' }, { status: 500 });
+  let rawBody: unknown;
+  try {
+    rawBody = await req.json();
+  } catch {
+    return errorResponse(requestId, 400, 'INVALID_JSON', 'Request body must be valid JSON');
+  }
+
+  const parsed = batchSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return errorResponse(
+      requestId,
+      400,
+      'INVALID_PAYLOAD',
+      'Payload does not match expected schema.',
+      parsed.error.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      }))
+    );
+  }
+
+  const { url: supabaseUrl } = getSupabasePublicEnv();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
+  if (!supabaseUrl || !serviceRoleKey) {
+    if (!isProduction) {
+      return NextResponse.json(
+        {
+          success: true,
+          request_id: requestId,
+          accepted: parsed.data.events.length,
+          inserted: 0,
+          dropped: parsed.data.events.length,
+          warning: {
+            code: 'INGEST_DISABLED_DEV',
+            message: 'Tracking ingest disabled in development: missing Supabase server configuration.',
+          },
+        },
+        {
+          status: 202,
+          headers: {
+            'X-RateLimit-Limit': String(RATE_LIMIT_REQUESTS),
+            'X-RateLimit-Remaining': String(limit.remaining),
+            'X-RateLimit-Reset': String(limit.resetAt),
+          },
+        }
+      );
     }
 
-    return NextResponse.json({ inserted: events.length }, { status: 201 });
-
-  } catch (error) {
-    console.error('[Analytics API] Unexpected Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return errorResponse(requestId, 500, 'SUPABASE_CONFIG_MISSING', 'Supabase configuration is missing');
   }
+
+  const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+  const records = parsed.data.events.map((event) => ({
+    event_type: event.event_type,
+    route: event.route,
+    session_id: event.session_id,
+    user_id: event.user_id,
+    device_type: event.device_type,
+    user_agent: event.user_agent,
+    referrer: event.referrer,
+    metadata: event.metadata,
+  }));
+
+  const { error } = await supabaseAdmin
+    .from('user_events')
+    .insert(records);
+
+  if (error) {
+    return errorResponse(requestId, 500, 'DB_INSERT_FAILED', 'Failed to insert tracking events', {
+      message: error.message,
+      code: error.code,
+    });
+  }
+
+  return NextResponse.json(
+    {
+      success: true,
+      request_id: requestId,
+      accepted: parsed.data.events.length,
+      inserted: parsed.data.events.length,
+      dropped: 0,
+    },
+    {
+      status: 201,
+      headers: {
+        'X-RateLimit-Limit': String(RATE_LIMIT_REQUESTS),
+        'X-RateLimit-Remaining': String(limit.remaining),
+        'X-RateLimit-Reset': String(limit.resetAt),
+      },
+    }
+  );
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      Allow: 'POST, OPTIONS',
+    },
+  });
 }

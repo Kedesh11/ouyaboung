@@ -4,56 +4,169 @@
 // ============================================================
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabaseClient } from '@/api/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface UserIntelligence {
+  user_id?: string;
   intent_score: number;
   engagement_score: number;
   price_sensitivity_score: number;
   churn_risk_score: number;
   dynamic_segment: string;
+  source?: string;
+  updated_at?: string;
 }
 
-/**
- * Hook to fetch the real-time scoring and segmentation for the current user.
- * Allows UI components to personalize themselves.
- */
+export type IntelligenceStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface IntelligenceApiResponse {
+  success: boolean;
+  intelligence?: UserIntelligence;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+const EMPTY_INTELLIGENCE: UserIntelligence = {
+  intent_score: 0,
+  engagement_score: 0,
+  price_sensitivity_score: 0,
+  churn_risk_score: 0,
+  dynamic_segment: 'Regular',
+};
+
+const deriveRecommendation = (intel: UserIntelligence | null) => {
+  if (!intel) {
+    return {
+      banner: 'default',
+      message: 'Découvrez les meilleures offres près de chez vous.',
+    };
+  }
+
+  if (intel.price_sensitivity_score >= 60) {
+    return {
+      banner: 'discount_focus',
+      message: 'Mettez en avant les paniers les plus remisés.',
+    };
+  }
+
+  if (intel.intent_score >= 65 && intel.churn_risk_score < 40) {
+    return {
+      banner: 'high_intent',
+      message: 'Proposez une recommandation produit immédiate.',
+    };
+  }
+
+  if (intel.churn_risk_score >= 70) {
+    return {
+      banner: 'retention',
+      message: 'Afficher un incentive de retour (code promo ou panier vedette).',
+    };
+  }
+
+  return {
+    banner: 'exploration',
+    message: 'Continuer à enrichir le catalogue personnalisé.',
+  };
+};
+
 export function useCustomerIntelligence() {
   const { user, isAuthenticated } = useAuth();
+
   const [intelligence, setIntelligence] = useState<UserIntelligence | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<IntelligenceStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchIntelligence() {
-      if (!isAuthenticated || !user) {
-        setIntelligence(null);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        if (!supabaseClient) return;
-
-        const { data, error } = await supabaseClient
-          .rpc('get_my_intelligence')
-          .maybeSingle();
-
-        if (error) {
-          console.error('[Intelligence Hook] Error fetching data:', error);
-        } else if (data) {
-          setIntelligence(data as UserIntelligence);
-        }
-      } catch (err) {
-        console.error('[Intelligence Hook] Unexpected error:', err);
-      } finally {
-        setLoading(false);
-      }
+  const fetchIntelligence = useCallback(async () => {
+    if (!isAuthenticated || !user) {
+      setIntelligence(null);
+      setError(null);
+      setStatus('idle');
+      return;
     }
 
-    fetchIntelligence();
-  }, [user?.id, isAuthenticated]);
+    setStatus('loading');
+    setError(null);
 
-  return { intelligence, loading };
+    try {
+      let authHeader = '';
+      if (supabaseClient) {
+        const {
+          data: { session },
+        } = await supabaseClient.auth.getSession();
+        if (session?.access_token) {
+          authHeader = `Bearer ${session.access_token}`;
+        }
+      }
+
+      const response = await fetch('/api/analytics/intelligence', {
+        method: 'GET',
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+      });
+
+      if (!response.ok) {
+        const fallback = await response.json().catch(() => null) as IntelligenceApiResponse | null;
+        throw new Error(fallback?.error?.message || 'Failed to load intelligence profile');
+      }
+
+      const payload = (await response.json()) as IntelligenceApiResponse;
+      if (payload.success && payload.intelligence) {
+        setIntelligence(payload.intelligence);
+      } else {
+        setIntelligence(EMPTY_INTELLIGENCE);
+      }
+
+      setStatus('ready');
+    } catch (err) {
+      setStatus('error');
+      setError(err instanceof Error ? err.message : 'Unknown intelligence error');
+
+      // Fallback: use RPC if API route fails but session is valid.
+      try {
+        if (!supabaseClient) return;
+        const { data } = await supabaseClient.rpc('get_my_intelligence').maybeSingle();
+        if (data) {
+          const fallbackData = data as Partial<UserIntelligence>;
+          setIntelligence({
+            ...EMPTY_INTELLIGENCE,
+            ...fallbackData,
+          });
+          setStatus('ready');
+          setError(null);
+        }
+      } catch {
+        // Silent fallback failure.
+      }
+    }
+  }, [isAuthenticated, user]);
+
+  useEffect(() => {
+    void fetchIntelligence();
+  }, [fetchIntelligence]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const pollId = window.setInterval(() => {
+      void fetchIntelligence();
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(pollId);
+    };
+  }, [fetchIntelligence, isAuthenticated, user]);
+
+  const recommendation = useMemo(() => deriveRecommendation(intelligence), [intelligence]);
+
+  return {
+    intelligence,
+    status,
+    loading: status === 'loading',
+    error,
+    recommendation,
+    refresh: fetchIntelligence,
+  };
 }

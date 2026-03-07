@@ -12,18 +12,120 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const RATE_WINDOW_MS = 60_000
+const RATE_LIMIT_BY_IP = 80
+const RATE_LIMIT_BY_MERCHANT = 120
+
+const ipRateWindow = new Map<string, number[]>()
+const merchantRateWindow = new Map<string, number[]>()
+
+const getRequestIp = (req: Request): string => {
+    const cfIp = req.headers.get('cf-connecting-ip')
+    if (cfIp) return cfIp.trim()
+
+    const forwarded = req.headers.get('x-forwarded-for')
+    if (forwarded) {
+        const first = forwarded.split(',')[0]
+        if (first) return first.trim()
+    }
+
+    const realIp = req.headers.get('x-real-ip')
+    if (realIp) return realIp.trim()
+
+    return 'unknown'
+}
+
+const applyRateLimit = (store: Map<string, number[]>, key: string, limit: number) => {
+    const now = Date.now()
+    const history = store.get(key) ?? []
+    const active = history.filter((ts) => now - ts < RATE_WINDOW_MS)
+
+    if (active.length >= limit) {
+        const oldest = active[0] ?? now
+        const retryAfterMs = RATE_WINDOW_MS - (now - oldest)
+        return {
+            allowed: false,
+            retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+        }
+    }
+
+    active.push(now)
+    store.set(key, active)
+    return {
+        allowed: true,
+        retryAfterSec: 0,
+    }
+}
+
 const normalizePickupCode = (value: string): string =>
     value.toUpperCase().replace(/[^A-Z0-9]/g, '')
 
+const toUuidCandidate = (value: string): string | null => {
+    const compact = value.toLowerCase().replace(/[^a-f0-9]/g, '')
+    if (!/^[a-f0-9]{32}$/.test(compact)) return null
+
+    return [
+        compact.slice(0, 8),
+        compact.slice(8, 12),
+        compact.slice(12, 16),
+        compact.slice(16, 20),
+        compact.slice(20),
+    ].join('-')
+}
+
 const ORDER_SELECT =
-    'id,user_id,merchant_id,quantity,total_price,status,pickup_code,confirmed_at,consumed_at,consumed_by,food_item:food_items(name)'
+    'id,user_id,merchant_id,quantity,total_price,status,pickup_code,confirmed_at,consumed_at,consumed_by,created_at,food_item:food_items(name)'
 
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    if (req.method !== 'POST') {
+        return new Response(
+            JSON.stringify({
+                success: false,
+                error: 'Method not allowed',
+                code: 'METHOD_NOT_ALLOWED'
+            }),
+            { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+    }
+
     try {
+        const contentType = req.headers.get('content-type') || ''
+        if (!contentType.toLowerCase().includes('application/json')) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Invalid content type',
+                    code: 'INVALID_CONTENT_TYPE'
+                }),
+                { status: 415, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const requestIp = getRequestIp(req)
+        const ipLimit = applyRateLimit(ipRateWindow, requestIp, RATE_LIMIT_BY_IP)
+        if (!ipLimit.allowed) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Too many validation attempts from this IP',
+                    code: 'RATE_LIMITED_IP',
+                    retry_after: ipLimit.retryAfterSec,
+                }),
+                {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(ipLimit.retryAfterSec),
+                    }
+                }
+            )
+        }
+
         const authHeader = req.headers.get('Authorization')
         if (!authHeader) {
             return new Response(
@@ -51,7 +153,21 @@ serve(async (req) => {
             )
         }
 
-        const { pickup_code } = await req.json()
+        let requestPayload: { pickup_code?: unknown } | null = null
+        try {
+            requestPayload = await req.json() as { pickup_code?: unknown }
+        } catch {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Invalid JSON payload',
+                    code: 'INVALID_JSON'
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const pickup_code = requestPayload?.pickup_code
         const rawPickupCode = typeof pickup_code === 'string' ? pickup_code.trim() : ''
         const normalizedPickupCode =
             typeof pickup_code === 'string'
@@ -61,6 +177,17 @@ serve(async (req) => {
         if (!normalizedPickupCode) {
             return new Response(
                 JSON.stringify({ success: false, error: 'Missing pickup_code' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        if (!/^[A-Z0-9]{6,64}$/.test(normalizedPickupCode)) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Invalid pickup code format',
+                    code: 'INVALID_CODE_FORMAT'
+                }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
@@ -86,6 +213,26 @@ serve(async (req) => {
             )
         }
 
+        const merchantLimit = applyRateLimit(merchantRateWindow, merchant.id, RATE_LIMIT_BY_MERCHANT)
+        if (!merchantLimit.allowed) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'Too many validation attempts for this merchant account',
+                    code: 'RATE_LIMITED_MERCHANT',
+                    retry_after: merchantLimit.retryAfterSec,
+                }),
+                {
+                    status: 429,
+                    headers: {
+                        ...corsHeaders,
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(merchantLimit.retryAfterSec),
+                    }
+                }
+            )
+        }
+
         const selectByNormalized = await supabaseClient
             .from('orders')
             .select(ORDER_SELECT)
@@ -96,9 +243,11 @@ serve(async (req) => {
         let order = selectByNormalized.data
         let orderError = selectByNormalized.error
 
-        // Backward compatibility for environments where pickup_code_normalized
-        // migration has not been applied yet.
-        if (!order && orderError?.message?.includes('pickup_code_normalized')) {
+        // Backward compatibility and resilience across legacy payload formats.
+        const lookupShouldContinue =
+            !order && (!orderError || orderError?.message?.includes('pickup_code_normalized'))
+
+        if (lookupShouldContinue) {
             const fallbackCandidates = Array.from(
                 new Set(
                     [rawPickupCode, normalizedPickupCode]
@@ -118,25 +267,47 @@ serve(async (req) => {
                 if (!fallbackLookup.error && fallbackLookup.data) {
                     order = fallbackLookup.data
                     orderError = null
-                } else if (!fallbackLookup.error) {
-                    const recentLookup = await supabaseClient
-                        .from('orders')
-                        .select(ORDER_SELECT)
-                        .eq('merchant_id', merchant.id)
-                        .order('created_at', { ascending: false })
-                        .limit(250)
-
-                    if (!recentLookup.error && recentLookup.data) {
-                        order = recentLookup.data.find((candidateOrder) =>
-                            normalizePickupCode(candidateOrder.pickup_code || '') === normalizedPickupCode
-                        ) || null
-                        orderError = null
-                    } else {
-                        orderError = recentLookup.error
-                    }
-                } else {
+                } else if (fallbackLookup.error) {
                     orderError = fallbackLookup.error
+                } else {
+                    orderError = null
                 }
+            }
+        }
+
+        if (!order) {
+            const uuidCandidate = toUuidCandidate(rawPickupCode) || toUuidCandidate(normalizedPickupCode)
+            if (uuidCandidate) {
+                const lookupById = await supabaseClient
+                    .from('orders')
+                    .select(ORDER_SELECT)
+                    .eq('id', uuidCandidate)
+                    .eq('merchant_id', merchant.id)
+                    .maybeSingle()
+
+                if (!lookupById.error && lookupById.data) {
+                    order = lookupById.data
+                    orderError = null
+                }
+            }
+        }
+
+        if (!order) {
+            const recentLookup = await supabaseClient
+                .from('orders')
+                .select(ORDER_SELECT)
+                .eq('merchant_id', merchant.id)
+                .order('created_at', { ascending: false })
+                .limit(250)
+
+            if (!recentLookup.error && recentLookup.data) {
+                order = recentLookup.data.find((candidateOrder) =>
+                    normalizePickupCode(candidateOrder.pickup_code || '') === normalizedPickupCode
+                    || normalizePickupCode(candidateOrder.id || '') === normalizedPickupCode
+                ) || null
+                orderError = null
+            } else if (recentLookup.error) {
+                orderError = recentLookup.error
             }
         }
 
@@ -181,7 +352,7 @@ serve(async (req) => {
 
         const consumedAt = new Date().toISOString()
 
-        const { error: updateError } = await supabaseClient
+        const { data: updatedOrder, error: updateError } = await supabaseClient
             .from('orders')
             .update({
                 confirmed_at: order.confirmed_at ?? consumedAt,
@@ -191,6 +362,8 @@ serve(async (req) => {
             })
             .eq('id', order.id)
             .is('consumed_at', null)
+            .select('id')
+            .maybeSingle()
 
         if (updateError) {
             return new Response(
@@ -199,6 +372,17 @@ serve(async (req) => {
                     error: 'Erreur lors de la validation'
                 }),
                 { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        if (!updatedOrder) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: 'QR Code déjà utilisé',
+                    code: 'ALREADY_CONSUMED'
+                }),
+                { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 

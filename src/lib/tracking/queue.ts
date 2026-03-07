@@ -31,6 +31,11 @@ export class EventQueue {
     this.items.push(event);
   }
 
+  /** Add multiple events in-order. */
+  pushMany(events: TrackingEvent[]): void {
+    events.forEach((event) => this.push(event));
+  }
+
   /**
    * Dequeue up to `max` events from the head.
    * Returns the dequeued events (they are removed from the queue).
@@ -39,6 +44,18 @@ export class EventQueue {
     if (this.items.length === 0) return [];
     const batch = this.items.splice(0, max);
     return batch;
+  }
+
+  /** Requeue events at the front if a flush fails after dequeue. */
+  requeueFront(events: TrackingEvent[]): void {
+    if (!events.length) return;
+    this.items = [...events, ...this.items].slice(0, this.maxSize);
+  }
+
+  /** Inspect queue head without mutating state. */
+  peek(max = 100): TrackingEvent[] {
+    if (this.items.length === 0) return [];
+    return this.items.slice(0, max);
   }
 
   /** Current number of buffered events. */

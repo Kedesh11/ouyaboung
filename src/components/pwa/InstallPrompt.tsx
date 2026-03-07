@@ -5,6 +5,8 @@ import { X, Download, Share } from 'lucide-react';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { tracker } from '@/lib/tracking/tracker';
+import { EventType } from '@/lib/tracking/types';
 
 export function InstallPrompt() {
   const { isInstallable, isInstalled, promptInstall, isIOS } = usePWAInstall();
@@ -22,6 +24,10 @@ export function InstallPrompt() {
   const handleDismiss = () => {
     setIsDismissed(true);
     localStorage.setItem('pwa-install-dismissed', 'true');
+    tracker.track(EventType.CUSTOM, {
+      category: 'pwa',
+      action: 'install_prompt_closed',
+    });
   };
 
   const handleInstall = async () => {

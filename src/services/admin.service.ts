@@ -8,6 +8,7 @@ import { DB_TABLES } from '@/api/routes';
 import type {
   MerchantRegistration,
   AdminKPIs,
+  AdminTrafficMetrics,
   GeoDistribution,
   AdminActivity,
   MerchantValidationAction,
@@ -51,6 +52,50 @@ const transformMerchant = (dbMerchant: any): MerchantRegistration => ({
 
 // Service Functions
 export const adminService = {
+  getTrafficMetrics: async (windowDays: number = 14): Promise<AdminTrafficMetrics> => {
+    const safeWindowDays = Math.min(Math.max(windowDays, 7), 90);
+    const fallback: AdminTrafficMetrics = {
+      windowDays: safeWindowDays,
+      totalRegisteredUsers: 0,
+      visitorsToday: 0,
+      visitorsYesterday: 0,
+      visitorsGrowthPercent: 0,
+      dailyAverageVisitors: 0,
+      dailyVisitRatePercent: 0,
+      pageViewsToday: 0,
+      sessionsToday: 0,
+      pwaInstallsTotal: 0,
+      pwaInstallsLast30d: 0,
+      recurringVisitors7d: 0,
+      daily: [],
+    };
+
+    try {
+      const response = await fetch(`/api/admin/traffic-metrics?days=${safeWindowDays}`, {
+        method: 'GET',
+        credentials: 'same-origin',
+      });
+
+      if (!response.ok) {
+        return fallback;
+      }
+
+      const payload = await response.json() as {
+        success: boolean;
+        metrics?: AdminTrafficMetrics;
+      };
+
+      if (!payload.success || !payload.metrics) {
+        return fallback;
+      }
+
+      return payload.metrics;
+    } catch (error) {
+      console.warn('Failed to load traffic metrics:', error);
+      return fallback;
+    }
+  },
+
   // Get all clients (profiles with role = 'user') with aggregated orders
   getClients: async (): Promise<AdminClient[]> => {
     if (!isSupabaseConfigured()) {

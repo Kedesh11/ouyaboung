@@ -12,8 +12,17 @@ import {
   startScrollTracker, 
   stopScrollTracker, 
   resetScrollTracker,
-  startProductDwellTracker 
+  startProductDwellTracker,
+  stopProductDwellTracker,
+  startVisibilityTracker,
+  stopVisibilityTracker,
+  startIntentTracker,
+  stopIntentTracker,
+  startPriceSensitivityTracker,
+  stopPriceSensitivityTracker,
 } from '@/lib/tracking/auto-trackers';
+import { tracker } from '@/lib/tracking/tracker';
+import { EventType } from '@/lib/tracking/types';
 
 /**
  * Hook to be instantiated ONE TIME centrally (e.g. inside a global AppEnhancement layout module).
@@ -45,9 +54,17 @@ export function usePageTracking() {
 
       // 2. Stop scroll tracking on old route
       stopScrollTracker();
+      stopProductDwellTracker();
     }
 
     if (lastRoute !== currentRoute) {
+      if (lastRoute) {
+        tracker.track(EventType.ROUTE_CHANGE, {
+          from_route: lastRoute,
+          to_route: currentRoute,
+        });
+      }
+
       // 3. Emit page_view for the new route
       trackPageView(currentRoute);
 
@@ -55,6 +72,9 @@ export function usePageTracking() {
       resetScrollTracker();
       startScrollTracker();
       startProductDwellTracker();
+      startVisibilityTracker();
+      startIntentTracker();
+      startPriceSensitivityTracker();
 
       // Update refs
       lastRouteRef.current = currentRoute;
@@ -70,6 +90,10 @@ export function usePageTracking() {
         const durationMs = Date.now() - mountTimeRef.current;
         trackTimeOnPage(lastRoute, durationMs);
         stopScrollTracker();
+        stopProductDwellTracker();
+        stopVisibilityTracker();
+        stopIntentTracker();
+        stopPriceSensitivityTracker();
       }
     };
   }, []);
