@@ -44,6 +44,32 @@ export interface AdminKPIs {
   averageOrderValue: number;
 }
 
+// Admin Traffic Analytics
+export interface DailyTrafficPoint {
+  periodDate: string; // YYYY-MM-DD
+  visitors: number;
+  authenticatedVisitors: number;
+  sessions: number;
+  pageViews: number;
+  pwaInstalls: number;
+}
+
+export interface AdminTrafficMetrics {
+  windowDays: number;
+  totalRegisteredUsers: number;
+  visitorsToday: number;
+  visitorsYesterday: number;
+  visitorsGrowthPercent: number;
+  dailyAverageVisitors: number;
+  dailyVisitRatePercent: number;
+  pageViewsToday: number;
+  sessionsToday: number;
+  pwaInstallsTotal: number;
+  pwaInstallsLast30d: number;
+  recurringVisitors7d: number;
+  daily: DailyTrafficPoint[];
+}
+
 // Geographic Distribution
 export interface GeoDistribution {
   city: string;

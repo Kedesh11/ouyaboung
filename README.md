@@ -21,6 +21,7 @@
 - [Installation](#-installation)
 - [Scripts Disponibles](#-scripts-disponibles)
 - [Structure du Projet](#-structure-du-projet)
+- [API Tracking & Analytics](#-api-tracking--analytics)
 - [Documentation](#-documentation)
 - [Lighthouse Scores](#-lighthouse-scores)
 - [Roadmap](#roadmap)
@@ -257,7 +258,11 @@ ouyaboung/
 │   │   ├── merchant/            # Dashboard marchand
 │   │   └── user/                # Dashboard utilisateur
 │   ├── api/                     # API Routes
-│   │   └── analytics/vitals/    # RUM endpoint
+│   │   ├── analytics/events/    # Ingestion batch tracking
+│   │   ├── analytics/vitals/    # Web Vitals (RUM)
+│   │   ├── analytics/intelligence/ # Scoring utilisateur (read/write)
+│   │   ├── analytics/export/    # Export features analytics (JSON/CSV)
+│   │   └── admin/traffic-metrics/ # KPIs trafic dashboard admin
 │   ├── layout.tsx               # Layout racine
 │   ├── globals.css              # Styles globaux
 │   └── sitemap.ts               # Sitemap dynamique
@@ -294,6 +299,29 @@ ouyaboung/
 
 ---
 
+## 📡 API Tracking & Analytics
+
+Routes implémentées dans cette version :
+
+|Méthode|Route|Accès|Description|
+|-------|-----|-----|-----------|
+|`POST`|`/api/analytics/events`|Public (rate-limited)|Ingestion batch des événements de tracking (`user_events`)|
+|`OPTIONS`|`/api/analytics/events`|Public|Preflight CORS/allow methods|
+|`POST`|`/api/analytics/vitals`|Public|Collecte Web Vitals (LCP, INP, CLS, FCP, TTFB)|
+|`GET`|`/api/analytics/intelligence`|Utilisateur connecté (ou admin/service key)|Lecture du profil intelligence (scores + segment)|
+|`POST`|`/api/analytics/intelligence`|Admin ou `x-intelligence-key`|Écriture/upsert des scores d’intelligence|
+|`GET`|`/api/analytics/export`|Admin ou `x-analytics-export-key`|Export des features analytics (`json`/`csv`)|
+|`GET`|`/api/admin/traffic-metrics`|Admin|KPIs trafic: visiteurs/jour, taux de visite, installs PWA, récurrence|
+
+Variables d’environnement côté serveur (selon endpoints) :
+- `SUPABASE_SERVICE_ROLE_KEY` (requis pour les endpoints analytics/admin serveur)
+- `ANALYTICS_EXPORT_KEY` (optionnel, accès machine-to-machine export)
+- `INTELLIGENCE_API_KEY` (optionnel, accès machine-to-machine write intelligence)
+
+Référence complète des contrats API : `docs/analytics-api.md`.
+
+---
+
 ## 📚 Documentation
 
 - **[Implementation Plan](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/implementation_plan.md)** - Plan technique détaillé
@@ -301,6 +329,9 @@ ouyaboung/
 - **[Walkthrough](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/walkthrough.md)** - Documentation des 8 phases
 - **[Testing Guide](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/testing_guide.md)** - Procédures de validation
 - **[Lighthouse Results](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/lighthouse_results.md)** - Analyse détaillée
+- **[Analytics API](./docs/analytics-api.md)** - Endpoints tracking/intelligence/export
+- **[Intelligence Strategy](./brain/intelligence_strategy.md)** - KPIs, scoring, segmentation, roadmap ML
+- **[ML Pipeline Contract](./brain/ML_PIPELINE_CONTRACT.md)** - Contrat I/O pour intégration Python
 
 ---
 

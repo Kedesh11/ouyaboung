@@ -5,7 +5,7 @@
 "use client";
 
 import { useEffect, useRef } from 'react';
-import { observeProduct } from '@/lib/tracking/auto-trackers';
+import { observeProduct, unobserveProduct } from '@/lib/tracking/auto-trackers';
 
 /**
  * Hook to observe a product card and track its dwell time.
@@ -17,9 +17,15 @@ export function useProductTracking(productId: string | number) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (ref.current) {
-      observeProduct(ref.current);
-    }
+    const element = ref.current;
+    if (!element) return;
+
+    element.dataset.productId = String(productId);
+    observeProduct(element);
+
+    return () => {
+      unobserveProduct(element);
+    };
   }, [productId]);
 
   return ref;

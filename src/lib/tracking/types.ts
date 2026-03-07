@@ -30,7 +30,14 @@ export type EventType = typeof EventType[keyof typeof EventType];
 export type DeviceType = 'mobile' | 'tablet' | 'desktop' | 'unknown';
 
 /** Metadata payload – flexible JSON blob attached to any event. */
-export type EventMetadata = Record<string, string | number | boolean | null | undefined>;
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+export type EventMetadata = Record<string, JsonValue>;
 
 /**
  * A tracking event as built client-side before being sent.
@@ -55,6 +62,20 @@ export interface TrackingEvent {
  */
 export interface TrackingBatchPayload {
   events: TrackingEvent[];
+  sent_at?: number;
+}
+
+export interface TrackingIngestResponse {
+  success: boolean;
+  request_id: string;
+  accepted?: number;
+  inserted?: number;
+  dropped?: number;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
 }
 
 /** Configuration for the TrackingService singleton. */

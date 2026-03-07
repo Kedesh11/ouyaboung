@@ -12,15 +12,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Store,
-  Users,
   ShoppingBag,
   TrendingUp,
   DollarSign,
   Package,
   BarChart3,
+  Eye,
+  Smartphone,
+  UserRoundCheck,
+  UsersRound,
 } from "lucide-react";
 import { adminService } from "@/services/admin.service";
-import type { AdminKPIs, SalesStats, TopMerchant } from "@/types/admin.types";
+import type { AdminKPIs, SalesStats, TopMerchant, AdminTrafficMetrics } from "@/types/admin.types";
 import {
   BarChart,
   Bar,
@@ -42,6 +45,7 @@ const AdminAnalyticsPage = () => {
   const [kpis, setKPIs] = useState<AdminKPIs | null>(null);
   const [salesStats, setSalesStats] = useState<SalesStats[]>([]);
   const [topMerchants, setTopMerchants] = useState<TopMerchant[]>([]);
+  const [trafficMetrics, setTrafficMetrics] = useState<AdminTrafficMetrics | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
@@ -49,19 +53,26 @@ const AdminAnalyticsPage = () => {
   }, []);
 
   const loadData = async () => {
-    const [kpisData, statsData, merchantsData] = await Promise.all([
+    const [kpisData, statsData, merchantsData, trafficData] = await Promise.all([
       adminService.getKPIs(),
       adminService.getSalesStats(),
       adminService.getTopMerchants(),
+      adminService.getTrafficMetrics(14),
     ]);
     setKPIs(kpisData);
     setSalesStats(statsData);
     setTopMerchants(merchantsData);
+    setTrafficMetrics(trafficData);
   };
 
   const pieData = topMerchants.map(m => ({
     name: m.name,
     value: m.sales,
+  }));
+
+  const trafficChartData = (trafficMetrics?.daily || []).map((point) => ({
+    ...point,
+    periodLabel: point.periodDate.slice(5),
   }));
 
   return (
@@ -103,6 +114,38 @@ const AdminAnalyticsPage = () => {
         />
       </div>
 
+      {/* Traffic KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KPICard
+          title="Visiteurs aujourd'hui"
+          value={trafficMetrics?.visitorsToday?.toLocaleString() ?? '-'}
+          icon={Eye}
+          trend={{
+            value: Math.abs(Number(trafficMetrics?.visitorsGrowthPercent || 0)),
+            isPositive: Number(trafficMetrics?.visitorsGrowthPercent || 0) >= 0,
+          }}
+          variant="info"
+        />
+        <KPICard
+          title="Taux de visite"
+          value={trafficMetrics ? adminService.formatPercentage(trafficMetrics.dailyVisitRatePercent) : '-'}
+          icon={UsersRound}
+          variant="default"
+        />
+        <KPICard
+          title="Installations PWA (30j)"
+          value={trafficMetrics?.pwaInstallsLast30d?.toLocaleString() ?? '-'}
+          icon={Smartphone}
+          variant="warning"
+        />
+        <KPICard
+          title="Visiteurs récurrents (7j)"
+          value={trafficMetrics?.recurringVisitors7d?.toLocaleString() ?? '-'}
+          icon={UserRoundCheck}
+          variant="success"
+        />
+      </div>
+
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
@@ -117,6 +160,10 @@ const AdminAnalyticsPage = () => {
           <TabsTrigger value="merchants" className="gap-2">
             <Store className="w-4 h-4" />
             Commerces
+          </TabsTrigger>
+          <TabsTrigger value="traffic" className="gap-2">
+            <Eye className="w-4 h-4" />
+            Trafic
           </TabsTrigger>
         </TabsList>
 
@@ -275,6 +322,85 @@ const AdminAnalyticsPage = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="traffic">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Visiteurs et pages vues ({trafficMetrics?.windowDays ?? 14}j)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trafficChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="periodLabel" className="text-xs fill-muted-foreground" />
+                      <YAxis className="text-xs fill-muted-foreground" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--background))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="visitors"
+                        name="Visiteurs"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="pageViews"
+                        name="Pages vues"
+                        stroke="hsl(142, 76%, 36%)"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Installations PWA (quotidien)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={trafficChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="periodLabel" className="text-xs fill-muted-foreground" />
+                      <YAxis className="text-xs fill-muted-foreground" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--background))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Bar dataKey="pwaInstalls" name="Installations" fill="hsl(38, 92%, 50%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground">Installations totales</p>
+                    <p className="text-lg font-semibold">{trafficMetrics?.pwaInstallsTotal?.toLocaleString() ?? '-'}</p>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <p className="text-xs text-muted-foreground">Pages vues aujourd&apos;hui</p>
+                    <p className="text-lg font-semibold">{trafficMetrics?.pageViewsToday?.toLocaleString() ?? '-'}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

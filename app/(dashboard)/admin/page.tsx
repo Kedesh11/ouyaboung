@@ -27,10 +27,13 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Eye,
+  Smartphone,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { adminService } from "@/services/admin.service";
-import type { AdminKPIs, MerchantRegistration, AdminActivity, TopMerchant, GeoDistribution } from "@/types/admin.types";
+import type { AdminKPIs, MerchantRegistration, AdminActivity, TopMerchant, GeoDistribution, AdminTrafficMetrics } from "@/types/admin.types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -44,6 +47,7 @@ const AdminDashboardPage = () => {
   const { user } = useAuth();
   const [topMerchants, setTopMerchants] = useState<TopMerchant[]>([]);
   const [geoDistribution, setGeoDistribution] = useState<GeoDistribution[]>([]);
+  const [trafficMetrics, setTrafficMetrics] = useState<AdminTrafficMetrics | null>(null);
 
   const [kpis, setKPIs] = useState<AdminKPIs | null>(null);
   const [pendingMerchants, setPendingMerchants] = useState<MerchantRegistration[]>([]);
@@ -64,13 +68,14 @@ const AdminDashboardPage = () => {
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      const [kpisData, merchantsData, activitiesData, statsData, topMerchantsData, geoData] = await Promise.all([
+      const [kpisData, merchantsData, activitiesData, statsData, topMerchantsData, geoData, trafficData] = await Promise.all([
         adminService.getKPIs(),
         adminService.getMerchants('pending'),
         adminService.getRecentActivities(5),
         adminService.getSalesStats(),
         adminService.getTopMerchants(5),
         adminService.getGeoDistribution(),
+        adminService.getTrafficMetrics(14),
       ]);
       setKPIs(kpisData);
       setPendingMerchants(merchantsData);
@@ -78,6 +83,7 @@ const AdminDashboardPage = () => {
       setSalesStats(statsData);
       setTopMerchants(topMerchantsData);
       setGeoDistribution(geoData);
+      setTrafficMetrics(trafficData);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       toast.error("Erreur lors du chargement des données");
@@ -209,6 +215,34 @@ const AdminDashboardPage = () => {
           value={kpis?.totalSales?.toLocaleString() ?? '-'}
           icon={ShoppingBag}
           trend={{ value: 15, isPositive: true }}
+        />
+      </div>
+
+      {/* Traffic KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KPICard
+          title="Visiteurs aujourd'hui"
+          value={trafficMetrics?.visitorsToday?.toLocaleString() ?? '-'}
+          icon={Eye}
+          variant="info"
+        />
+        <KPICard
+          title="Taux de visite"
+          value={trafficMetrics ? adminService.formatPercentage(trafficMetrics.dailyVisitRatePercent) : '-'}
+          icon={UsersRound}
+          variant="default"
+        />
+        <KPICard
+          title="Installations PWA (30j)"
+          value={trafficMetrics?.pwaInstallsLast30d?.toLocaleString() ?? '-'}
+          icon={Smartphone}
+          variant="warning"
+        />
+        <KPICard
+          title="Visiteurs récurrents (7j)"
+          value={trafficMetrics?.recurringVisitors7d?.toLocaleString() ?? '-'}
+          icon={TrendingUp}
+          variant="success"
         />
       </div>
 

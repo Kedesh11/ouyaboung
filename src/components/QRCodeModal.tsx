@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { QRCodeSVG } from "qrcode.react";
-import { MapPin, Package, CreditCard, Clock } from "lucide-react";
+import { MapPin, Package, CreditCard, Clock, Check, Copy } from "lucide-react";
 
 interface QRCodeModalProps {
     open: boolean;
@@ -21,10 +23,41 @@ interface QRCodeModalProps {
 
 const QR_CENTER_BADGE_SRC = "/icons/qr-center-badge.svg";
 const QR_VISUAL_SIZE = 360;
-const QR_LOGO_SIZE = 52;
+const QR_LOGO_SIZE = 44;
+
+const normalizePickupCode = (value: string): string =>
+    value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+const formatPickupCode = (value: string): string =>
+    value.replace(/(.{4})/g, "$1 ").trim();
 
 export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) {
-    const pickupCode = order.pickup_code?.toUpperCase().replace(/[^A-Z0-9]/g, "") || order.id;
+    const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+
+    const pickupCode = useMemo(() => {
+        const explicitPickupCode = normalizePickupCode(order.pickup_code || "");
+        if (explicitPickupCode) return explicitPickupCode;
+        return normalizePickupCode(order.id || "");
+    }, [order.id, order.pickup_code]);
+
+    const usesFallbackReference = !normalizePickupCode(order.pickup_code || "");
+    const displayPickupCode = pickupCode ? formatPickupCode(pickupCode) : "INDISPONIBLE";
+
+    useEffect(() => {
+        if (copyState === "idle") return;
+        const timeoutId = window.setTimeout(() => setCopyState("idle"), 1800);
+        return () => window.clearTimeout(timeoutId);
+    }, [copyState]);
+
+    const handleCopyCode = async () => {
+        if (!pickupCode) return;
+        try {
+            await navigator.clipboard.writeText(pickupCode);
+            setCopyState("copied");
+        } catch {
+            setCopyState("error");
+        }
+    };
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
@@ -39,23 +72,29 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                         <div className="flex flex-col items-center rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                             <div className="w-full rounded-2xl bg-slate-100/90 p-3 sm:p-4">
                                 <div className="mx-auto w-full max-w-[332px] rounded-xl bg-white p-3 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 sm:p-4">
-                                    <QRCodeSVG
-                                        value={pickupCode}
-                                        size={QR_VISUAL_SIZE}
-                                        level="H"
-                                        fgColor="#153D40"
-                                        bgColor="#FFFFFF"
-                                        marginSize={8}
-                                        boostLevel={true}
-                                        title="QR Code de retrait"
-                                        className="mx-auto h-auto w-full max-w-[300px]"
-                                        imageSettings={{
-                                            src: QR_CENTER_BADGE_SRC,
-                                            width: QR_LOGO_SIZE,
-                                            height: QR_LOGO_SIZE,
-                                            excavate: true,
-                                        }}
-                                    />
+                                    {pickupCode ? (
+                                        <QRCodeSVG
+                                            value={pickupCode}
+                                            size={QR_VISUAL_SIZE}
+                                            level="H"
+                                            fgColor="#153D40"
+                                            bgColor="#FFFFFF"
+                                            marginSize={8}
+                                            boostLevel={true}
+                                            title="QR Code de retrait"
+                                            className="mx-auto h-auto w-full max-w-[300px]"
+                                            imageSettings={{
+                                                src: QR_CENTER_BADGE_SRC,
+                                                width: QR_LOGO_SIZE,
+                                                height: QR_LOGO_SIZE,
+                                                excavate: true,
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="flex min-h-[300px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-600">
+                                            Code de retrait indisponible.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <p className="mt-3 text-center text-xs text-muted-foreground">
@@ -63,15 +102,43 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                             </p>
                         </div>
 
-                        {/* Code de retrait (desktop/tablette uniquement) */}
-                        <div className="hidden rounded-lg bg-gray-50 p-3 md:block">
-                            <p className="text-xs text-muted-foreground mb-1">Code de retrait</p>
-                            <p className="text-sm font-mono text-black bg-white px-2.5 py-1.5 rounded border break-all">
-                                {pickupCode}
+                        <div className="rounded-lg bg-gray-50 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                                <p className="text-xs text-muted-foreground">Code de retrait</p>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleCopyCode}
+                                    className="h-7 px-2 text-xs"
+                                    disabled={!pickupCode}
+                                >
+                                    {copyState === "copied" ? (
+                                        <>
+                                            <Check className="mr-1 h-3.5 w-3.5" />
+                                            Copie
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Copy className="mr-1 h-3.5 w-3.5" />
+                                            Copier
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                            <p className="rounded border bg-white px-2.5 py-1.5 font-mono text-sm tracking-[0.08em] text-black break-all">
+                                {displayPickupCode}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                                En cas de probleme de scan, communiquez ce code au marchand
+                            <p className="mt-2 text-xs text-muted-foreground">
+                                {usesFallbackReference
+                                    ? "Ce code est base sur la reference commande. Donnez-le au marchand en cas de scan impossible."
+                                    : "En cas de probleme de scan, communiquez ce code au marchand."}
                             </p>
+                            {copyState === "error" && (
+                                <p className="mt-1 text-xs text-red-600">
+                                    Copie automatique indisponible sur ce navigateur.
+                                </p>
+                            )}
                         </div>
                     </div>
 

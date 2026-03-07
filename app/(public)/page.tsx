@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MapPin, Store } from "lucide-react";
+import { PersonalizedBanner } from "@/components/analytics/PersonalizedBanner";
 
 export default function Home() {
     return (
@@ -33,6 +34,10 @@ export default function Home() {
                                     Je suis commerçant
                                 </Button>
                             </Link>
+                        </div>
+
+                        <div className="mx-auto mt-6 max-w-2xl">
+                            <PersonalizedBanner />
                         </div>
 
                         {/* <p

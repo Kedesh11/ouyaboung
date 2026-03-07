@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ouyaboung ML Pipeline Contract",
+  "type": "object",
+  "required": ["version", "generated_at", "features"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "intent_score",
+          "engagement_score",
+          "price_sensitivity_score",
+          "churn_risk_score",
+          "total_sessions",
+          "total_page_views",
+          "total_product_views",
+          "total_add_to_carts",
+          "total_purchases",
+          "last_active_at"
+        ],
+        "properties": {
+          "user_id": { "type": "string", "format": "uuid" },
+          "intent_score": { "type": "number", "minimum": 0, "maximum": 100 },
+          "engagement_score": { "type": "number", "minimum": 0, "maximum": 100 },
+          "price_sensitivity_score": { "type": "number", "minimum": 0, "maximum": 100 },
+          "churn_risk_score": { "type": "number", "minimum": 0, "maximum": 100 },
+          "total_sessions": { "type": "integer", "minimum": 0 },
+          "total_page_views": { "type": "integer", "minimum": 0 },
+          "total_product_views": { "type": "integer", "minimum": 0 },
+          "total_add_to_carts": { "type": "integer", "minimum": 0 },
+          "total_purchases": { "type": "integer", "minimum": 0 },
+          "total_checkout_intents": { "type": "integer", "minimum": 0 },
+          "total_price_hesitations": { "type": "integer", "minimum": 0 },
+          "total_product_dwell_ms": { "type": "number", "minimum": 0 },
+          "total_time_on_page_ms": { "type": "number", "minimum": 0 },
+          "last_active_at": { "type": ["string", "null"], "format": "date-time" },
+          "dynamic_segment": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
