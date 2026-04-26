@@ -74,16 +74,27 @@ const deriveRecommendation = (intel: UserIntelligence | null) => {
 };
 
 export function useCustomerIntelligence() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, session, loading: authLoading, isAuthenticated } = useAuth();
 
   const [intelligence, setIntelligence] = useState<UserIntelligence | null>(null);
   const [status, setStatus] = useState<IntelligenceStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const fetchIntelligence = useCallback(async () => {
+    if (authLoading) {
+      setStatus('idle');
+      return;
+    }
+
     if (!isAuthenticated || !user) {
       setIntelligence(null);
       setError(null);
+      setStatus('idle');
+      return;
+    }
+
+    const accessToken = session?.access_token;
+    if (!accessToken) {
       setStatus('idle');
       return;
     }
@@ -92,20 +103,16 @@ export function useCustomerIntelligence() {
     setError(null);
 
     try {
-      let authHeader = '';
-      if (supabaseClient) {
-        const {
-          data: { session },
-        } = await supabaseClient.auth.getSession();
-        if (session?.access_token) {
-          authHeader = `Bearer ${session.access_token}`;
-        }
-      }
-
       const response = await fetch('/api/analytics/intelligence', {
         method: 'GET',
-        headers: authHeader ? { Authorization: authHeader } : undefined,
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
+
+      if (response.status === 401) {
+        setStatus('idle');
+        setError(null);
+        return;
+      }
 
       if (!response.ok) {
         const fallback = await response.json().catch(() => null) as IntelligenceApiResponse | null;
@@ -141,14 +148,14 @@ export function useCustomerIntelligence() {
         // Silent fallback failure.
       }
     }
-  }, [isAuthenticated, user]);
+  }, [authLoading, isAuthenticated, session?.access_token, user]);
 
   useEffect(() => {
     void fetchIntelligence();
   }, [fetchIntelligence]);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (authLoading || !isAuthenticated || !user || !session?.access_token) return;
 
     const pollId = window.setInterval(() => {
       void fetchIntelligence();
@@ -157,7 +164,7 @@ export function useCustomerIntelligence() {
     return () => {
       window.clearInterval(pollId);
     };
-  }, [fetchIntelligence, isAuthenticated, user]);
+  }, [authLoading, fetchIntelligence, isAuthenticated, session?.access_token, user]);
 
   const recommendation = useMemo(() => deriveRecommendation(intelligence), [intelligence]);
 

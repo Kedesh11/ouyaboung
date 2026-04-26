@@ -35,13 +35,14 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const isDev = process.env.NODE_ENV !== 'production';
+  const authDebugEnabled = process.env.NEXT_PUBLIC_AUTH_DEBUG === 'true';
   const debugLog = (...args: unknown[]) => {
-    if (isDev) {
+    if (isDev && authDebugEnabled) {
       console.log(...args);
     }
   };
   const debugWarn = (...args: unknown[]) => {
-    if (isDev) {
+    if (isDev && authDebugEnabled) {
       console.warn(...args);
     }
   };
@@ -79,10 +80,66 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     let mounted = true;
 
     let safetyTimeout: NodeJS.Timeout;
+    const resolveRoleFromUser = (authUser: User): UserRole =>
+      ((authUser.user_metadata?.role || authUser.app_metadata?.role || 'user') as UserRole);
+
+    const hydrateProfileState = (authUser: User) => {
+      const fallbackRole = resolveRoleFromUser(authUser);
+      setUserRole(fallbackRole);
+
+      if (fallbackRole !== 'merchant') {
+        setIsVerifiedMerchant(false);
+      }
+
+      void (async () => {
+        if (!supabaseClient) return;
+
+        const { data: profile, error: profileError } = await supabaseClient
+          .from('profiles')
+          .select('role')
+          .eq('user_id', authUser.id)
+          .single();
+
+        if (!mounted) return;
+
+        if (profileError) {
+          debugWarn('[AuthContext] Error fetching profile, keeping metadata role:', profileError);
+          if (fallbackRole === 'merchant') {
+            const { data: merchant } = await supabaseClient
+              .from('merchants')
+              .select('is_verified')
+              .eq('user_id', authUser.id)
+              .maybeSingle();
+            if (mounted) {
+              setIsVerifiedMerchant(!!merchant?.is_verified);
+            }
+          }
+          return;
+        }
+
+        if (profile?.role) {
+          setUserRole(profile.role as UserRole);
+        }
+
+        const roleToCheck = (profile?.role || fallbackRole) as UserRole;
+        if (roleToCheck === 'merchant') {
+          const { data: merchant } = await supabaseClient
+            .from('merchants')
+            .select('is_verified')
+            .eq('user_id', authUser.id)
+            .maybeSingle();
+          if (mounted) {
+            setIsVerifiedMerchant(!!merchant?.is_verified);
+          }
+        } else if (mounted) {
+          setIsVerifiedMerchant(false);
+        }
+      })();
+    };
 
     const initializeAuth = async () => {
       try {
-        if (isDev) {
+        if (isDev && authDebugEnabled) {
           console.log('=== INITIALISATION AUTH CONTEXT ===');
           console.time('Auth Init Total');
         }
@@ -110,51 +167,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (mounted && initialSession) {
           setSession(initialSession);
           setUser(initialSession.user);
-
-          // Fetch user profile from database
-          debugLog('[AuthContext] Fetching profile for user:', initialSession.user.id);
-          const { data: profile, error: profileError } = await supabaseClient
-            .from('profiles')
-            .select('role')
-            .eq('user_id', initialSession.user.id)
-            .single();
-
-          debugLog('[AuthContext] Profile fetch result:', {
-            profile,
-            profileError,
-            hasProfile: !!profile,
-            role: profile?.role
-          });
-
-          if (profileError) {
-            console.error('[AuthContext] Error fetching user profile:', profileError);
-            // Fallback to metadata
-            const role = initialSession.user.user_metadata?.role ||
-              initialSession.user.app_metadata?.role ||
-              'user';
-            debugLog('[AuthContext] Using fallback role from metadata:', role);
-            setUserRole(role as UserRole);
-          } else if (profile) {
-            debugLog('[AuthContext] Setting role from profile:', profile.role);
-            setUserRole(profile.role as UserRole);
-
-            // If merchant, check verification status
-            if (profile.role === 'merchant') {
-              const { data: merchant } = await supabaseClient
-                .from('merchants')
-                .select('is_verified')
-                .eq('user_id', initialSession.user.id)
-                .maybeSingle();
-              setIsVerifiedMerchant(!!merchant?.is_verified);
-            }
-          } else {
-            // No profile found, use metadata as fallback
-            const role = initialSession.user.user_metadata?.role ||
-              initialSession.user.app_metadata?.role ||
-              'user';
-            debugLog('[AuthContext] No profile found, using metadata role:', role);
-            setUserRole(role as UserRole);
-          }
+          hydrateProfileState(initialSession.user);
         }
       } catch (error: any) {
         // Ignore AbortError which is expected during cleanup/fast refresh
@@ -165,7 +178,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } finally {
         if (mounted) {
           clearTimeout(safetyTimeout);
-          if (isDev) {
+          if (isDev && authDebugEnabled) {
             console.timeEnd('Auth Init Total');
           }
           debugLog('Auth initialization complete, setting loading=false');
@@ -191,43 +204,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            debugLog('[AuthContext] Auth state change: fetching profile for', session.user.id);
-            const { data: profile, error: profileError } = await supabaseClient
-              .from('profiles')
-              .select('role')
-              .eq('user_id', session.user.id)
-              .single();
-
-            if (profileError) {
-              debugWarn('[AuthContext] Error fetching profile on auth change:', profileError);
-              const role = session.user.user_metadata?.role ||
-                session.user.app_metadata?.role ||
-                'user';
-              debugLog('[AuthContext] Using fallback role:', role);
-              setUserRole(role as UserRole);
-            } else if (profile) {
-              debugLog('[AuthContext] Role updated from profile:', profile.role);
-              setUserRole(profile.role as UserRole);
-            } else {
-              const role = session.user.user_metadata?.role ||
-                session.user.app_metadata?.role ||
-                'user';
-              debugLog('[AuthContext] No profile found on auth change, using fallback:', role);
-              setUserRole(role as UserRole);
-            }
-
-            // Check merchant status
-            const roleToCheck = profile?.role || session.user.user_metadata?.role;
-            if (roleToCheck === 'merchant') {
-              const { data: merchant } = await supabaseClient
-                .from('merchants')
-                .select('is_verified')
-                .eq('user_id', session.user.id)
-                .maybeSingle();
-              setIsVerifiedMerchant(!!merchant?.is_verified);
-            } else {
-              setIsVerifiedMerchant(false);
-            }
+            hydrateProfileState(session.user);
           } else {
             setUserRole(null);
             setIsVerifiedMerchant(false);

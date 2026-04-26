@@ -17,7 +17,7 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-const PAYMENT_FLOW_ENABLED = false
+const PAYMENT_FLOW_ENABLED = true
 
 serve(async (req) => {
     // Handle CORS preflight

@@ -4,24 +4,27 @@
 
 import { expect, afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
-import '@testing-library/jest-dom/vitest';
 
 // Cleanup after each test
 afterEach(() => {
-    cleanup();
+    if (typeof document !== 'undefined') {
+        cleanup();
+    }
 });
 
 // Mock environment variables
 vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co');
 vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test-anon-key');
 
-// Mock navigator
-Object.defineProperty(window, 'navigator', {
-    value: {
-        userAgent: 'Mozilla/5.0 (Test Browser)',
-    },
-    writable: true,
-});
+// Mock navigator when running in DOM-like environments
+if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'navigator', {
+        value: {
+            userAgent: 'Mozilla/5.0 (Test Browser)',
+        },
+        writable: true,
+    });
+}
 
 // Mock crypto for testing
 if (!global.crypto) {

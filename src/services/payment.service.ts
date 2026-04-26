@@ -35,7 +35,7 @@ const getFunctionUrl = (name: string): string | null => {
 
 // Flow de paiement temporairement desactive.
 // Garder a false pour reactiver sans supprimer l'implementation existante.
-export const PAYMENT_FLOW_ENABLED = false;
+export const PAYMENT_FLOW_ENABLED = true;
 
 const paymentDisabledResponse = (): ApiResponse<PaymentInitiationResponse> => ({
     success: false,

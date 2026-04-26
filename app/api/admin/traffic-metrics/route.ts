@@ -45,14 +45,13 @@ const resolveAdminAuth = async (req: NextRequest): Promise<AuthResult> => {
   const authHeader = req.headers.get('authorization');
 
   if (authHeader?.toLowerCase().startsWith('bearer ')) {
-    const authClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const token = authHeader.substring(7).trim();
+    const authClient = createClient(supabaseUrl, anonKey);
 
     const {
       data: { user },
       error: userError,
-    } = await authClient.auth.getUser();
+    } = await authClient.auth.getUser(token);
 
     if (userError || !user) {
       return { ok: false, status: 401, reason: 'Unauthenticated' };
