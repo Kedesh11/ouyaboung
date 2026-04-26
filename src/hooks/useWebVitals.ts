@@ -37,7 +37,7 @@ const sendToAnalytics = (metric: Metric) => {
 
 const reportMetric = (metric: Metric) => {
   // Log in development
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_WEB_VITALS_DEBUG === 'true') {
     console.log(`[Web Vitals] ${metric.name}:`, {
       value: metric.value,
       rating: metric.rating,

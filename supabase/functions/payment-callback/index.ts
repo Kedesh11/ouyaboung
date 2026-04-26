@@ -13,12 +13,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveFinalStatus } from '../_shared/payment-status.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-const PAYMENT_FLOW_ENABLED = false
+const PAYMENT_FLOW_ENABLED = true
 
 const getProvidedWebhookSecret = (req: Request): string => {
     const bearer = req.headers.get('authorization')
@@ -97,7 +98,7 @@ serve(async (req) => {
 
         const { data: transaction, error: txError } = await supabaseClient
             .from('transactions')
-            .select('id,status,order_id')
+            .select('id,status,order_id,user_id,merchant_id,reference')
             .eq('reference', reference)
             .single()
 
@@ -115,8 +116,7 @@ serve(async (req) => {
         // 4. MISE À JOUR TRANSACTION
         // ===================================================================
 
-        const newStatus = data.status === 'SUCCESS' ? 'SUCCESS' :
-            data.status === 'FAILED' ? 'FAILED' : 'PENDING'
+        const newStatus = resolveFinalStatus(data?.status, data?.status_code)
 
         const { error: updateError } = await supabaseClient
             .from('transactions')
@@ -159,6 +159,80 @@ serve(async (req) => {
                 console.error('[Payment Callback] Order update error:', orderError)
             } else {
                 console.log('[Payment Callback] Order confirmed:', transaction.order_id)
+            }
+        }
+
+        if (newStatus === 'SUCCESS' || newStatus === 'FAILED') {
+            const { data: merchantProfile } = await supabaseClient
+                .from('merchants')
+                .select('user_id')
+                .eq('id', transaction.merchant_id)
+                .maybeSingle()
+
+            const userNotification = newStatus === 'SUCCESS'
+                ? {
+                    user_id: transaction.user_id,
+                    type: 'system',
+                    title: 'Paiement confirme',
+                    message: 'Votre paiement mobile est valide. Votre commande est confirmee.',
+                    data: {
+                        transaction_id: transaction.id,
+                        order_id: transaction.order_id,
+                        reference: transaction.reference,
+                        payment_status: newStatus,
+                    },
+                }
+                : {
+                    user_id: transaction.user_id,
+                    type: 'system',
+                    title: 'Paiement non valide',
+                    message: 'Le paiement n’a pas ete valide. Reessayez ou changez de moyen de paiement.',
+                    data: {
+                        transaction_id: transaction.id,
+                        order_id: transaction.order_id,
+                        reference: transaction.reference,
+                        payment_status: newStatus,
+                    },
+                }
+
+            const notifications: Array<Record<string, unknown>> = [userNotification]
+
+            if (merchantProfile?.user_id) {
+                notifications.push(
+                    newStatus === 'SUCCESS'
+                        ? {
+                            user_id: merchantProfile.user_id,
+                            type: 'system',
+                            title: 'Paiement client confirme',
+                            message: `Le paiement de la commande ${transaction.order_id} est valide.`,
+                            data: {
+                                transaction_id: transaction.id,
+                                order_id: transaction.order_id,
+                                reference: transaction.reference,
+                                payment_status: newStatus,
+                            },
+                        }
+                        : {
+                            user_id: merchantProfile.user_id,
+                            type: 'system',
+                            title: 'Paiement client echoue',
+                            message: `Le paiement de la commande ${transaction.order_id} n’a pas ete valide.`,
+                            data: {
+                                transaction_id: transaction.id,
+                                order_id: transaction.order_id,
+                                reference: transaction.reference,
+                                payment_status: newStatus,
+                            },
+                        }
+                )
+            }
+
+            const { error: notificationError } = await supabaseClient
+                .from('notifications')
+                .insert(notifications)
+
+            if (notificationError) {
+                console.error('[Payment Callback] Notification error:', notificationError)
             }
         }
 

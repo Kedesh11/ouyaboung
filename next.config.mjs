@@ -40,6 +40,16 @@ const nextConfig = {
         deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
         imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     },
+    experimental: {
+        optimizePackageImports: [
+            'lucide-react',
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-tooltip',
+            'recharts',
+        ],
+    },
 
     // HTTP Headers for caching
     async headers() {
@@ -66,7 +76,7 @@ const nextConfig = {
     },
 };
 
-const config = withPWA({
+const pwaConfig = {
     dest: 'public',
     register: true,
     skipWaiting: true,
@@ -125,6 +135,11 @@ const config = withPWA({
     ],
     publicExcludes: ['!robots.txt', '!sitemap.xml', '!manifest.json'],
     buildExcludes: [/middleware-manifest\.json$/],
-})(nextConfig);
+};
+
+const config =
+    process.env.NODE_ENV === 'development'
+        ? nextConfig
+        : withPWA(pwaConfig)(nextConfig);
 
 export default config;

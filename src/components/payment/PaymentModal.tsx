@@ -240,7 +240,7 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                         </div>
                         <div>
                             <h3 className="font-semibold text-lg">Paiement Initié !</h3>
-                            <p className="text-muted-foreground">Validez la notification USSD sur votre téléphone.</p>
+                            <p className="text-muted-foreground">Validez la notification USSD sur votre téléphone puis saisissez votre code secret pour confirmer le paiement.</p>
                         </div>
                     </div>
                 )}

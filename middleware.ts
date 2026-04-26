@@ -4,6 +4,10 @@ import { getSupabasePublicEnv } from '@/lib/supabase/public-env'
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
+    const isUserRoute = pathname.startsWith('/user');
+    const isMerchantRoute = pathname.startsWith('/merchant') && !pathname.startsWith('/merchant/register');
+    const isAdminRoute = pathname.startsWith('/admin');
+    const isAuthPage = pathname === '/auth' || pathname === '/forgot-password' || pathname.startsWith('/auth/reset');
 
     // Create an unmodified response first
     let response = NextResponse.next({
@@ -52,26 +56,32 @@ export async function middleware(request: NextRequest) {
     let userRole: string | null = null
 
     if (user) {
-        // Fetch user profile to get role
-        try {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('user_id', user.id)
-                .single()
+        const metadataRole = typeof user.user_metadata?.role === 'string'
+            ? user.user_metadata.role
+            : (typeof user.app_metadata?.role === 'string' ? user.app_metadata.role : null)
+        userRole = metadataRole
 
-            userRole = profile?.role || user.user_metadata?.role || 'user'
-        } catch (e) {
-            console.error('Error fetching role in middleware:', e)
-            userRole = user.user_metadata?.role || 'user'
+        let shouldLookupProfileRole = !userRole && (isUserRoute || isMerchantRoute || isAdminRoute || isAuthPage)
+
+        if (!shouldLookupProfileRole) {
+            if (isAdminRoute && userRole !== 'admin') shouldLookupProfileRole = true;
+            if (isMerchantRoute && userRole !== 'merchant') shouldLookupProfileRole = true;
+        }
+
+        if (shouldLookupProfileRole) {
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('user_id', user.id)
+                    .single()
+
+                userRole = profile?.role || 'user'
+            } catch {
+                userRole = 'user'
+            }
         }
     }
-
-    // Define protected routes
-    const isUserRoute = pathname.startsWith('/user');
-    const isMerchantRoute = pathname.startsWith('/merchant') && !pathname.startsWith('/merchant/register');
-    const isAdminRoute = pathname.startsWith('/admin');
-    const isAuthPage = pathname === '/auth' || pathname === '/forgot-password' || pathname.startsWith('/auth/reset');
 
     // Redirect authenticated users away from auth pages
     if (isAuthPage && user) {
@@ -81,7 +91,6 @@ export async function middleware(request: NextRequest) {
             'user': '/user',
         };
         const redirectPath = redirectMap[userRole || 'user'] || '/';
-        console.log(`[Middleware] Redirecting authenticated user (role: ${userRole}) to ${redirectPath}`);
         return NextResponse.redirect(new URL(redirectPath, request.url));
     }
 

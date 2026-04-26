@@ -10,9 +10,10 @@ import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 // Environment variables for Supabase connection
 const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } = getSupabasePublicEnv();
 const isDev = process.env.NODE_ENV !== 'production';
+const isSupabaseDebugEnabled = process.env.NEXT_PUBLIC_SUPABASE_DEBUG === 'true';
 
 // Debug logging
-if (typeof window !== 'undefined' && isDev) {
+if (typeof window !== 'undefined' && isDev && isSupabaseDebugEnabled) {
   console.log('🔍 [Supabase Client Debug]', {
     urlProvided: !!SUPABASE_URL,
     keyProvided: !!SUPABASE_ANON_KEY,
@@ -31,7 +32,7 @@ export const getSupabaseClient = (): SupabaseClient | null => {
   }
 
   if (!supabaseInstance) {
-    if (isDev) {
+    if (isDev && isSupabaseDebugEnabled) {
       console.log('🔧 Creating Supabase Browser Client (SSR-compatible)...');
     }
 
@@ -41,7 +42,7 @@ export const getSupabaseClient = (): SupabaseClient | null => {
       SUPABASE_ANON_KEY
     );
 
-    if (isDev) {
+    if (isDev && isSupabaseDebugEnabled) {
       console.log('✅ Supabase Browser Client created successfully');
     }
   }

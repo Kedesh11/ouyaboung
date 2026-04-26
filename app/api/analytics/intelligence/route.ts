@@ -68,14 +68,13 @@ const resolveAuthContext = async (req: NextRequest): Promise<AuthContext> => {
 
   const authHeader = req.headers.get('authorization');
   if (authHeader?.toLowerCase().startsWith('bearer ')) {
-    const authClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const token = authHeader.substring(7).trim();
+    const authClient = createClient(supabaseUrl, anonKey);
 
     const {
       data: { user },
       error,
-    } = await authClient.auth.getUser();
+    } = await authClient.auth.getUser(token);
 
     if (error || !user) {
       return {
@@ -95,7 +94,7 @@ const resolveAuthContext = async (req: NextRequest): Promise<AuthContext> => {
 
     return {
       authenticated: true,
-      isAdmin: (profile?.role || user.user_metadata?.role) === 'admin',
+      isAdmin: (profile?.role || user.user_metadata?.role || user.app_metadata?.role) === 'admin',
       userId: user.id,
       viaServiceKey: false,
     };
@@ -138,7 +137,7 @@ const resolveAuthContext = async (req: NextRequest): Promise<AuthContext> => {
 
   return {
     authenticated: true,
-    isAdmin: (profile?.role || user.user_metadata?.role) === 'admin',
+    isAdmin: (profile?.role || user.user_metadata?.role || user.app_metadata?.role) === 'admin',
     userId: user.id,
     viaServiceKey: false,
   };

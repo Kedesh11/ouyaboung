@@ -6,12 +6,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { resolveFinalStatus } from '../_shared/payment-status.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-const PAYMENT_FLOW_ENABLED = false
+const PAYMENT_FLOW_ENABLED = true
 
 const generateScanFriendlyPickupCode = (): string =>
     `PK${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`
@@ -136,7 +137,7 @@ serve(async (req) => {
 
         const { data: transaction, error: txError } = await supabaseClient
             .from('transactions')
-            .select('id,status,order_id')
+            .select('id,status,order_id,user_id,merchant_id,reference')
             .eq('reference', reference)
             .single()
 
@@ -178,12 +179,7 @@ serve(async (req) => {
         // ===================================================================
 
         // Mapper le statut Q-Gabon vers notre statut interne
-        let finalStatus = 'PENDING'
-        if (status === 'SUCCESS' && code === 200) {
-            finalStatus = 'SUCCESS'
-        } else if (status === 'FAILED' || code !== 200) {
-            finalStatus = 'FAILED'
-        }
+        const finalStatus = resolveFinalStatus(status, code)
 
         const { error: updateError } = await supabaseClient
             .from('transactions')
@@ -243,6 +239,80 @@ serve(async (req) => {
                 console.error('[Moov Callback] Order update error:', orderError)
             } else {
                 console.log('[Moov Callback] Order confirmed:', transaction.order_id, 'QR Code:', pickupCode)
+            }
+        }
+
+        if (finalStatus === 'SUCCESS' || finalStatus === 'FAILED') {
+            const { data: merchantProfile } = await supabaseClient
+                .from('merchants')
+                .select('user_id,business_name')
+                .eq('id', transaction.merchant_id)
+                .maybeSingle()
+
+            const userNotification = finalStatus === 'SUCCESS'
+                ? {
+                    user_id: transaction.user_id,
+                    type: 'system',
+                    title: 'Paiement confirme',
+                    message: 'Votre paiement mobile est valide. Votre commande est confirmee.',
+                    data: {
+                        transaction_id: transaction.id,
+                        order_id: transaction.order_id,
+                        reference: transaction.reference,
+                        payment_status: finalStatus,
+                    },
+                }
+                : {
+                    user_id: transaction.user_id,
+                    type: 'system',
+                    title: 'Paiement non valide',
+                    message: 'Le paiement n’a pas ete valide. Reessayez ou changez de moyen de paiement.',
+                    data: {
+                        transaction_id: transaction.id,
+                        order_id: transaction.order_id,
+                        reference: transaction.reference,
+                        payment_status: finalStatus,
+                    },
+                }
+
+            const notifications: Array<Record<string, unknown>> = [userNotification]
+
+            if (merchantProfile?.user_id) {
+                notifications.push(
+                    finalStatus === 'SUCCESS'
+                        ? {
+                            user_id: merchantProfile.user_id,
+                            type: 'system',
+                            title: 'Paiement client confirme',
+                            message: `Le paiement de la commande ${transaction.order_id} est valide.`,
+                            data: {
+                                transaction_id: transaction.id,
+                                order_id: transaction.order_id,
+                                reference: transaction.reference,
+                                payment_status: finalStatus,
+                            },
+                        }
+                        : {
+                            user_id: merchantProfile.user_id,
+                            type: 'system',
+                            title: 'Paiement client echoue',
+                            message: `Le paiement de la commande ${transaction.order_id} n’a pas ete valide.`,
+                            data: {
+                                transaction_id: transaction.id,
+                                order_id: transaction.order_id,
+                                reference: transaction.reference,
+                                payment_status: finalStatus,
+                            },
+                        }
+                )
+            }
+
+            const { error: notificationError } = await supabaseClient
+                .from('notifications')
+                .insert(notifications)
+
+            if (notificationError) {
+                console.error('[Moov Callback] Notification error:', notificationError)
             }
         }
 
