@@ -42,34 +42,34 @@ const deriveRecommendation = (intel: UserIntelligence | null) => {
   if (!intel) {
     return {
       banner: 'default',
-      message: 'Découvrez les meilleures offres près de chez vous.',
+      message: 'Découvrez les meilleures offres anti-gaspi près de chez vous.',
     };
   }
 
   if (intel.price_sensitivity_score >= 60) {
     return {
       banner: 'discount_focus',
-      message: 'Mettez en avant les paniers les plus remisés.',
+      message: 'Profitez de prix encore plus réduits sur nos paniers du moment !',
     };
   }
 
   if (intel.intent_score >= 65 && intel.churn_risk_score < 40) {
     return {
       banner: 'high_intent',
-      message: 'Proposez une recommandation produit immédiate.',
+      message: 'Une sélection spéciale vous attend. Ne laissez pas ces produits se perdre !',
     };
   }
 
   if (intel.churn_risk_score >= 70) {
     return {
       banner: 'retention',
-      message: 'Afficher un incentive de retour (code promo ou panier vedette).',
+      message: 'Heureux de vous revoir ! Découvrez les nouveautés de vos commerçants favoris.',
     };
   }
 
   return {
     banner: 'exploration',
-    message: 'Continuer à enrichir le catalogue personnalisé.',
+    message: 'Explorez de nouveaux horizons gourmands et sauvez la planète.',
   };
 };
 
