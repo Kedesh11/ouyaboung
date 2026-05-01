@@ -15,6 +15,13 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Settings,
   Bell,
   Shield,
@@ -22,7 +29,8 @@ import {
   Globe,
   Database,
   Save,
-  Loader2
+  Loader2,
+  UserCog
 } from "lucide-react";
 import { toast } from "sonner";
 import { adminService } from "@/services/admin.service";
@@ -33,6 +41,13 @@ const AdminSettingsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(null);
   const { preferences, updatePreferences } = useNotifications();
+  
+  // Role Management State
+  const [users, setUsers] = useState<{ email: string, fullName: string }[]>([]);
+  const [userEmail, setUserEmail] = useState("");
+  const [newRole, setNewRole] = useState("user");
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   // Load platform settings separately from notifications (which are loaded by the hook)
   useEffect(() => {
@@ -48,6 +63,26 @@ const AdminSettingsPage = () => {
       }
     };
     loadSettings();
+  }, []);
+
+  // Load users for role management
+  useEffect(() => {
+    const loadUsers = async () => {
+      setIsLoadingUsers(true);
+      try {
+        const data = await adminService.getClients();
+        // Sort by email for easier finding
+        const formattedUsers = data
+          .map(u => ({ email: u.email, fullName: u.fullName }))
+          .sort((a, b) => a.email.localeCompare(b.email));
+        setUsers(formattedUsers);
+      } catch (error) {
+        console.error("Failed to load users:", error);
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+    loadUsers();
   }, []);
 
   const handleSaveGeneral = async () => {
@@ -75,6 +110,24 @@ const AdminSettingsPage = () => {
         error: 'Erreur lors de l\'enregistrement'
       }
     );
+  };
+  
+  const handleUpdateRole = async () => {
+    if (!userEmail || !userEmail.includes('@')) {
+      toast.error("Veuillez entrer un email valide");
+      return;
+    }
+    
+    setIsUpdatingRole(true);
+    try {
+      await adminService.updateUserRole(userEmail, newRole);
+      toast.success(`Le rôle de ${userEmail} a été mis à jour vers ${newRole}`);
+      setUserEmail("");
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de la mise à jour du rôle");
+    } finally {
+      setIsUpdatingRole(false);
+    }
   };
 
   // Helper to update local state deep keys
@@ -120,6 +173,10 @@ const AdminSettingsPage = () => {
           <TabsTrigger value="security" className="gap-2">
             <Shield className="w-4 h-4" />
             Sécurité
+          </TabsTrigger>
+          <TabsTrigger value="users" className="gap-2">
+            <UserCog className="w-4 h-4" />
+            Utilisateurs
           </TabsTrigger>
         </TabsList>
 
@@ -318,6 +375,77 @@ const AdminSettingsPage = () => {
               Enregistrer Maintenance
             </Button>
           </div>
+        </TabsContent>
+
+        <TabsContent value="users">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <UserCog className="w-4 h-4" />
+                Gestion des Rôles
+              </CardTitle>
+              <CardDescription>
+                Modifiez le rôle d'un utilisateur existant via son adresse email.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="userEmail">Email de l'utilisateur</Label>
+                  <Select value={userEmail} onValueChange={setUserEmail}>
+                    <SelectTrigger id="userEmail">
+                      <SelectValue placeholder={isLoadingUsers ? "Chargement..." : "Sélectionner un email"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.length === 0 ? (
+                        <SelectItem value="none" disabled>Aucun utilisateur trouvé</SelectItem>
+                      ) : (
+                        users.map((u) => (
+                          <SelectItem key={u.email} value={u.email}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{u.email}</span>
+                              <span className="text-xs text-muted-foreground">{u.fullName}</span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="newRole">Nouveau rôle</Label>
+                  <Select value={newRole} onValueChange={setNewRole}>
+                    <SelectTrigger id="newRole">
+                      <SelectValue placeholder="Sélectionner un rôle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">Utilisateur (Client)</SelectItem>
+                      <SelectItem value="merchant">Marchand</SelectItem>
+                      <SelectItem value="admin">Administrateur</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="bg-muted/50 p-4 rounded-lg border border-dashed border-muted-foreground/20">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Attention :</strong> Changer le rôle d'un utilisateur modifie ses permissions immédiatement. 
+                  Assurez-vous que l'email est correct avant de valider.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <Button 
+                  onClick={handleUpdateRole} 
+                  disabled={isUpdatingRole || !userEmail}
+                  className="gap-2"
+                >
+                  {isUpdatingRole ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Mettre à jour le rôle
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

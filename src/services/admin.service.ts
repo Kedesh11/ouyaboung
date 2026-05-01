@@ -670,6 +670,29 @@ export const adminService = {
     }
     return true;
   },
+
+  updateUserRole: async (email: string, role: string) => {
+    try {
+      const response = await fetch('/api/admin/users/role', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, role }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Erreur lors de la mise à jour du rôle');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in updateUserRole:', error);
+      throw error;
+    }
+  },
 };
 
 export default adminService;
