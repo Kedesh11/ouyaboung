@@ -83,17 +83,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const resolveRoleFromUser = (authUser: User): UserRole =>
       ((authUser.user_metadata?.role || authUser.app_metadata?.role || 'user') as UserRole);
 
-    const hydrateProfileState = (authUser: User) => {
+    const hydrateProfileState = async (authUser: User) => {
       const fallbackRole = resolveRoleFromUser(authUser);
-      setUserRole(fallbackRole);
-
-      if (fallbackRole !== 'merchant') {
-        setIsVerifiedMerchant(false);
+      
+      if (!supabaseClient) {
+        setUserRole(fallbackRole);
+        return;
       }
 
-      void (async () => {
-        if (!supabaseClient) return;
-
+      try {
         const { data: profile, error: profileError } = await supabaseClient
           .from('profiles')
           .select('role')
@@ -103,26 +101,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (!mounted) return;
 
         if (profileError) {
-          debugWarn('[AuthContext] Error fetching profile, keeping metadata role:', profileError);
-          if (fallbackRole === 'merchant') {
-            const { data: merchant } = await supabaseClient
-              .from('merchants')
-              .select('is_verified')
-              .eq('user_id', authUser.id)
-              .maybeSingle();
-            if (mounted) {
-              setIsVerifiedMerchant(!!merchant?.is_verified);
-            }
-          }
-          return;
-        }
-
-        if (profile?.role) {
+          debugWarn('[AuthContext] Error fetching profile, using metadata role:', profileError);
+          setUserRole(fallbackRole);
+        } else if (profile?.role) {
           setUserRole(profile.role as UserRole);
+        } else {
+          setUserRole(fallbackRole);
         }
 
-        const roleToCheck = (profile?.role || fallbackRole) as UserRole;
-        if (roleToCheck === 'merchant') {
+        // Handle merchant verification status
+        const currentRole = profile?.role || fallbackRole;
+        if (currentRole === 'merchant') {
           const { data: merchant } = await supabaseClient
             .from('merchants')
             .select('is_verified')
@@ -134,7 +123,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else if (mounted) {
           setIsVerifiedMerchant(false);
         }
-      })();
+      } catch (error) {
+        debugWarn('[AuthContext] Unexpected error in hydrateProfileState:', error);
+        if (mounted) setUserRole(fallbackRole);
+      }
     };
 
     const initializeAuth = async () => {
@@ -167,7 +159,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (mounted && initialSession) {
           setSession(initialSession);
           setUser(initialSession.user);
-          hydrateProfileState(initialSession.user);
+          await hydrateProfileState(initialSession.user);
         }
       } catch (error: any) {
         // Ignore AbortError which is expected during cleanup/fast refresh
@@ -204,7 +196,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            hydrateProfileState(session.user);
+            await hydrateProfileState(session.user);
           } else {
             setUserRole(null);
             setIsVerifiedMerchant(false);
