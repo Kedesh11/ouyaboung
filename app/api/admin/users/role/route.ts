@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Update role
+    // 2. Update role in profiles table
     const { error: updateError } = await adminClient
       .from('profiles')
       .update({ role, updated_at: new Date().toISOString() })
@@ -161,6 +161,22 @@ export async function POST(req: NextRequest) {
 
     if (updateError) {
       throw updateError;
+    }
+
+    // 3. Sync role in auth metadata (essential for session/JWT consistency)
+    // We update both user_metadata (for client-side) and app_metadata (for JWT/middleware)
+    const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(
+      profile.user_id,
+      { 
+        user_metadata: { role },
+        app_metadata: { role } 
+      }
+    );
+
+    if (authUpdateError) {
+      console.error('Failed to sync auth metadata:', authUpdateError);
+      // We don't throw here to avoid rollback if profile update succeeded, 
+      // but it's good to log it.
     }
 
     // 3. Log activity
