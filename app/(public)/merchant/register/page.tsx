@@ -50,8 +50,14 @@ import {
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { requireSupabaseClient } from "@/api/supabaseClient";
-import { register } from "@/services";
+import {
+  register,
+  registerMerchant,
+  getMyMerchantProfile,
+  updateMerchantProfile,
+  updateMerchantLogoByUserId,
+} from "@/services";
+import { uploadMerchantDocument } from "@/services/storage.service";
 
 // Validation schema
 const merchantFormSchema = z.object({
@@ -147,26 +153,12 @@ const MerchantRegisterPage = () => {
 
   const uploadFileToSupabase = async (file: File, path: string) => {
     try {
-      const supabase = requireSupabaseClient();
-
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${path}/${fileName}`;
-
-      const { error } = await supabase.storage
-        .from('merchant-documents')
-        .upload(filePath, file);
-
-      if (error) {
-        console.error('Error uploading file:', error);
-        throw error;
+      const uploadResult = await uploadMerchantDocument(path, file);
+      if (!uploadResult.success || !uploadResult.data) {
+        throw new Error(uploadResult.error?.message || 'Upload failed');
       }
 
-      const { data } = supabase.storage
-        .from('merchant-documents')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
+      return uploadResult.data.publicUrl;
     } catch (error) {
       console.error('Supabase client error:', error);
       return null;
@@ -373,8 +365,6 @@ const MerchantRegisterPage = () => {
     console.log("=== Registration Started (Robust Flow) ===");
 
     try {
-      const supabase = requireSupabaseClient();
-
       // Prepare metadata for the Trigger
       // We pass all textual data here so the Trigger handles the INSERT into 'merchants' table.
       const metadata = {
@@ -408,80 +398,52 @@ const MerchantRegisterPage = () => {
       const user = authResult.data.user;
       let merchantId: string | null = null;
 
-      const slugBase = data.business_name
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 36);
-      const slug = `${slugBase || "commerce"}-${Math.floor(Math.random() * 100000)}`;
-
       // 2. Ensure merchant row exists in pending state
       if (session) {
-        const { data: existingMerchant } = await supabase
-          .from("merchants")
-          .select("id, is_verified")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        const existingMerchantResult = await getMyMerchantProfile(user.id);
+        const existingMerchant = existingMerchantResult.success ? existingMerchantResult.data : null;
 
         if (existingMerchant?.id) {
           merchantId = existingMerchant.id;
 
-          // Keep already approved merchants unchanged, otherwise enforce pending state.
           if (!existingMerchant.is_verified) {
-            const { error: updateError } = await supabase
-              .from("merchants")
-              .update({
-                business_name: data.business_name,
-                business_type: data.business_type,
-                description: data.description,
-                address: data.address,
-                city: data.city,
-                quartier: data.quartier,
-                phone: data.phone,
-                email: data.email,
-                latitude: data.latitude ?? null,
-                longitude: data.longitude ?? null,
-                is_verified: false,
-                is_active: false,
-                is_refused: false,
-              })
-              .eq("id", existingMerchant.id);
-
-            if (updateError) {
-              console.warn("[MerchantRegister] Failed to refresh pending merchant", updateError);
-            }
-          }
-        } else {
-          const { data: merchantRow, error: createMerchantError } = await supabase
-            .from("merchants")
-            .insert({
-              user_id: user.id,
-              business_name: data.business_name,
-              business_type: data.business_type,
+            const updateResult = await updateMerchantProfile(existingMerchant.id, {
+              businessName: data.business_name,
+              businessType: data.business_type as any,
               description: data.description,
               address: data.address,
-              city: data.city,
+              city: data.city as any,
               quartier: data.quartier,
               phone: data.phone,
               email: data.email,
-              latitude: data.latitude ?? null,
-              longitude: data.longitude ?? null,
-              is_verified: false,
-              is_active: false,
-              is_refused: false,
-              rating: 0,
-              total_reviews: 0,
-              slug,
-            })
-            .select("id")
-            .single();
+              latitude: data.latitude,
+              longitude: data.longitude,
+              isActive: false,
+            });
 
-          if (createMerchantError) {
-            console.warn("[MerchantRegister] Failed to create merchant row", createMerchantError);
+            if (!updateResult.success) {
+              console.warn("[MerchantRegister] Failed to refresh pending merchant", updateResult.error);
+            }
+          }
+        } else {
+          const createResult = await registerMerchant({
+            userId: user.id,
+            businessName: data.business_name,
+            businessType: data.business_type as any,
+            description: data.description,
+            address: data.address,
+            city: data.city as any,
+            quartier: data.quartier,
+            phone: data.phone,
+            email: data.email,
+            latitude: data.latitude,
+            longitude: data.longitude,
+          });
+
+          if (!createResult.success) {
+            console.warn("[MerchantRegister] Failed to create merchant row", createResult.error);
           } else {
-            merchantId = merchantRow.id;
+            merchantId = createResult.data?.id || null;
           }
         }
       }
@@ -505,7 +467,7 @@ const MerchantRegisterPage = () => {
         // 4. Update Merchant Record with Logo if uploaded
         if (logoUrl) {
           console.log("Updating merchant with Logo URL...");
-          await supabase.from('merchants').update({ logo_url: logoUrl }).eq('user_id', user.id);
+          await updateMerchantLogoByUserId(user.id, logoUrl);
         }
 
         // 5. Notify admins (internal notification + email)

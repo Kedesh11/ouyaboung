@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { EventType } from '@/lib/tracking/types';
 import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
+import { applyRateLimit, getRequestIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -48,43 +49,6 @@ const batchSchema = z.object({
 
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 90;
-const rateWindow = new Map<string, number[]>();
-
-const getRequestIp = (req: NextRequest): string => {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0]?.trim() || 'unknown';
-  }
-
-  return req.headers.get('x-real-ip') || 'unknown';
-};
-
-const applyRateLimit = (ip: string) => {
-  const now = Date.now();
-  const history = rateWindow.get(ip) ?? [];
-  const active = history.filter((ts) => now - ts < RATE_WINDOW_MS);
-
-  if (active.length >= RATE_LIMIT_REQUESTS) {
-    const oldest = active[0] ?? now;
-    const retryAfterMs = RATE_WINDOW_MS - (now - oldest);
-    return {
-      allowed: false,
-      remaining: 0,
-      retryAfterSec: Math.max(1, Math.ceil(retryAfterMs / 1000)),
-      resetAt: oldest + RATE_WINDOW_MS,
-    };
-  }
-
-  active.push(now);
-  rateWindow.set(ip, active);
-
-  return {
-    allowed: true,
-    remaining: Math.max(0, RATE_LIMIT_REQUESTS - active.length),
-    retryAfterSec: 0,
-    resetAt: now + RATE_WINDOW_MS,
-  };
-};
 
 const errorResponse = (
   requestId: string,
@@ -112,8 +76,11 @@ const errorResponse = (
 
 export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
-  const ip = getRequestIp(req);
-  const limit = applyRateLimit(ip);
+  const ip = getRequestIp(req.headers);
+  const limit = await applyRateLimit(`analytics-events:${ip}`, {
+    windowMs: RATE_WINDOW_MS,
+    maxRequests: RATE_LIMIT_REQUESTS,
+  });
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (!limit.allowed) {

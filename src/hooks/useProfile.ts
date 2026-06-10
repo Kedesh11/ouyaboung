@@ -29,6 +29,7 @@ export const useProfile = () => {
       setLoading(false);
       return;
     }
+    const client = supabaseClient;
 
     const fetchProfile = async () => {
       try {
@@ -36,7 +37,7 @@ export const useProfile = () => {
         setError(null);
 
         // First, try to get existing profile
-        const { data: existingProfile, error: fetchError } = await supabaseClient
+        const { data: existingProfile, error: fetchError } = await client
           .from('profiles')
           .select(PROFILE_COLUMNS)
           .eq('user_id', user.id)
@@ -61,7 +62,7 @@ export const useProfile = () => {
           role: user.user_metadata?.role || user.app_metadata?.role || 'user',
         };
 
-        const { data: createdProfile, error: createError } = await supabaseClient
+        const { data: createdProfile, error: createError } = await client
           .from('profiles')
           .insert(newProfile)
           .select(PROFILE_COLUMNS)
@@ -85,9 +86,11 @@ export const useProfile = () => {
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!profile || !user) return { success: false, error: 'No profile or user' };
+    if (!supabaseClient) return { success: false, error: 'Supabase client indisponible' };
+    const client = supabaseClient;
 
     try {
-      const { data, error } = await supabaseClient
+      const { data, error } = await client
         .from('profiles')
         .update(updates)
         .eq('user_id', user.id)

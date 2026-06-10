@@ -66,6 +66,7 @@ export function SystemPushBridge() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (loading || !isAuthenticated || !user || !supabaseClient) return;
+    const client = supabaseClient;
 
     let active = true;
 
@@ -106,7 +107,7 @@ export function SystemPushBridge() {
     };
 
     const loadPushPreference = async () => {
-      const { data, error } = await supabaseClient
+      const { data, error } = await client
         .from("profiles")
         .select("preferences")
         .eq("user_id", user.id)
@@ -122,7 +123,7 @@ export function SystemPushBridge() {
 
     void loadPushPreference();
 
-    const channel = supabaseClient
+    const channel = client
       .channel(`push-notifications:${user.id}`)
       .on(
         "postgres_changes",
@@ -147,7 +148,7 @@ export function SystemPushBridge() {
 
     return () => {
       active = false;
-      supabaseClient.removeChannel(channel);
+      client.removeChannel(channel);
     };
   }, [loading, isAuthenticated, user, fallbackRoute]);
 

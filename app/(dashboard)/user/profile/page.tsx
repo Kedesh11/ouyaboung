@@ -23,7 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getAuthUser, updateProfile as updateAuthProfile } from "@/services/auth.service";
 import { updateProfile as updateUserProfile, getProfile as getDbProfile } from "@/services/user.service";
-import { requireSupabaseClient } from "@/api/supabaseClient";
+import { uploadAvatar } from "@/services/storage.service";
 import { compressImage, isImageFile, getBase64Size } from "@/utils/imageCompression";
 
 export default function ProfilePage() {
@@ -169,8 +169,6 @@ export default function ProfilePage() {
             console.log("Starting upload process...");
             const { data: auth } = await getAuthUser();
             const userId = auth?.user?.id;
-            const client = requireSupabaseClient();
-
             if (!userId) throw new Error("Erreur d'authentification");
 
             console.log("Compressing image...");
@@ -196,40 +194,12 @@ export default function ProfilePage() {
                 uploadExt = 'jpg';
             }
 
-            const fileName = `${userId}-${Math.random().toString(36).slice(2)}.${uploadExt}`;
-            const filePath = `${fileName}`;
-
-            // Upload to 'avatars' bucket
-            let publicUrl: string | null = null;
-            {
-                console.log("Uploading to storage:", filePath);
-                const { error: uploadError, data: uploadData } = await client.storage
-                    .from('avatars')
-                    .upload(filePath, uploadBlob, { contentType: uploadMime, upsert: true });
-
-                if (uploadError) console.error("Upload error:", uploadError);
-                else console.log("Upload success:", uploadData);
-
-                if (uploadError && /Bucket not found/i.test(uploadError.message || '')) {
-                    console.log("Bucket not found, trying public bucket...");
-                    const altPath = `avatars/${filePath}`;
-                    const { error: altErr } = await client.storage
-                        .from('public')
-                        .upload(altPath, uploadBlob, { contentType: uploadMime, upsert: true });
-                    if (altErr) throw altErr;
-                    const { data: altUrl } = client.storage.from('public').getPublicUrl(altPath);
-                    publicUrl = altUrl.publicUrl;
-                } else if (uploadError) {
-                    throw uploadError;
-                } else {
-                    const { data: urlData } = client.storage
-                        .from('avatars')
-                        .getPublicUrl(filePath);
-                    publicUrl = urlData.publicUrl;
-                }
+            const uploadResult = await uploadAvatar(userId, uploadBlob, uploadExt || 'jpg');
+            if (!uploadResult.success || !uploadResult.data) {
+                throw new Error(uploadResult.error?.message || "Erreur lors de l'upload");
             }
 
-            if (!publicUrl) throw new Error("Impossible d'obtenir l'URL publique de l'image.");
+            const publicUrl = uploadResult.data.publicUrl;
 
             // Update user metadata with new avatar URL
             const updateRes = await updateAuthProfile({ avatar_url: publicUrl });

@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabaseClient } from "@/api/supabaseClient";
+import {
+    getUserPaymentTransactions,
+    subscribeToTransactions,
+    unsubscribeChannel,
+} from "@/services";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -121,32 +125,14 @@ export default function UserTransactionsPage() {
     const [statusFilter, setStatusFilter] = useState<'all' | 'SUCCESS' | 'PENDING' | 'FAILED' | 'CANCELLED' | 'TIMEOUT'>('all');
     const [searchText, setSearchText] = useState('');
 
-    // Use centralized Supabase client (singleton)
-    const supabase = supabaseClient;
-
-    // Fetch user transactions
     const fetchTransactions = async () => {
         try {
-            if (!supabase) return;
-
-            // Get current user
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-            if (userError || !user) {
-                throw new Error('Non authentifié');
+            const result = await getUserPaymentTransactions();
+            if (!result.success || !result.data) {
+                throw new Error(result.error?.message || 'Erreur lors du chargement');
             }
 
-            // Fetch transactions for this user
-            const { data, error } = await supabase
-                .from('merchant_transactions')
-                .select(USER_TRANSACTION_COLUMNS)
-                .eq('customer_id', user.id)
-                .order('transaction_date', { ascending: false })
-                .range(0, 499);
-
-            if (error) throw error;
-
-            setTransactions((data || []) as unknown as UserTransaction[]);
+            setTransactions(result.data as unknown as UserTransaction[]);
         } catch (error) {
             console.error('Error fetching transactions:', error);
             toast.error('Erreur lors du chargement de vos transactions');
@@ -162,27 +148,16 @@ export default function UserTransactionsPage() {
 
     // Realtime subscription
     useEffect(() => {
-        if (!supabase) return;
-
-        const channel = supabase
-            .channel('user-transactions')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'transactions'
-            }, () => {
-                // If on page 1, refresh immediately
-                if (currentPage === 1) {
-                    fetchTransactions();
-                } else {
-                    // Otherwise, show a notification badge
-                    setHasNewTransactions(true);
-                }
-            })
-            .subscribe();
+        const channel = subscribeToTransactions('user-transactions', () => {
+            if (currentPage === 1) {
+                fetchTransactions();
+            } else {
+                setHasNewTransactions(true);
+            }
+        });
 
         return () => {
-            channel.unsubscribe();
+            unsubscribeChannel(channel);
         };
     }, [currentPage]);
 

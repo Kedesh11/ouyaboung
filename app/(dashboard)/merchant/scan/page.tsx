@@ -16,8 +16,7 @@ import {
     Loader2,
     XCircle,
 } from "lucide-react";
-import { supabaseClient } from "@/api/supabaseClient";
-import { callEdgeFunctionWithAuth } from "@/lib/auth/edge-function-client";
+import { validatePickupCode } from "@/services/qr.service";
 import {
     extractPickupCode,
     isLikelyPickupCode,
@@ -199,41 +198,16 @@ export default function ScanQRPage() {
         try {
             const isRunActive = () => validationRunIdRef.current === runId;
 
-            if (!supabaseClient) {
-                throw new Error("Supabase client not initialized");
-            }
-
-            const edgeResult = await callEdgeFunctionWithAuth<ValidateQrApiResponse>({
-                functionName: "validate-qr",
-                body: { pickup_code: normalizedPickupCode },
-                retryOnUnauthorized: true,
-                timeoutMs: 9000,
-            });
+            const edgeResult = await validatePickupCode(normalizedPickupCode, { timeoutMs: 9000 });
             if (!isRunActive()) return false;
 
             if (!edgeResult.ok) {
                 const statusCode = edgeResult.status;
-                const defaultError =
-                    statusCode === 0
-                        ? "La validation a expire (timeout) ou la connexion est indisponible."
-                        : statusCode === 401
-                            ? "Acces non autorise. Reconnectez-vous puis reessayez."
-                            : statusCode === 403
-                                ? "Compte marchand non autorise pour valider cette commande."
-                                : "Erreur lors de la validation du code.";
 
-                setResult({
+                setResult(edgeResult.result || {
                     success: false,
-                    error: edgeResult.error?.error || edgeResult.error?.message || defaultError,
-                    code:
-                        edgeResult.error?.code ||
-                        (statusCode === 0
-                            ? "NETWORK_OR_TIMEOUT"
-                            : statusCode === 401
-                                ? "UNAUTHORIZED"
-                                : statusCode === 403
-                                    ? "FORBIDDEN"
-                                    : "VALIDATION_ERROR"),
+                    error: "Erreur lors de la validation du code.",
+                    code: "VALIDATION_ERROR",
                 });
 
                 if (statusCode === 401) {
@@ -242,7 +216,7 @@ export default function ScanQRPage() {
                 return false;
             }
 
-            const payload = edgeResult.data;
+            const payload = edgeResult.result;
             if (payload?.success) {
                 setResult({
                     success: true,

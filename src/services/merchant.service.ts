@@ -69,6 +69,22 @@ export const getMerchantBySlugName = async (slug: string): Promise<ApiResponse<M
   return getMerchantBySlug(slug);
 };
 
+export const updateMerchantLogoByUserId = async (
+  userId: string,
+  logoUrl: string
+): Promise<ApiResponse<Merchant>> => {
+  const merchantResult = await getMerchantByUserId(userId);
+  if (!merchantResult.success || !merchantResult.data) {
+    return {
+      data: null,
+      error: merchantResult.error || { code: 'MERCHANT_NOT_FOUND', message: 'Profil marchand introuvable' },
+      success: false,
+    };
+  }
+
+  return updateMerchant(merchantResult.data.id, { logo_url: logoUrl });
+};
+
 /**
  * Register as a new merchant
  */
@@ -99,6 +115,42 @@ export const registerMerchant = async (data: {
     latitude: data.latitude,
     longitude: data.longitude,
     opening_hours: data.openingHours,
+    is_verified: false,
+    is_active: false,
+    is_refused: false,
+  });
+};
+
+/**
+ * Create a default merchant profile for an authenticated user (pending validation).
+ */
+export const createDefaultMerchantProfile = async (input: {
+  userId: string;
+  businessName: string;
+  businessType?: MerchantType;
+  description?: string;
+  address?: string;
+  city?: GabonCity;
+  quartier?: string;
+  phone?: string;
+  email?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  logoUrl?: string | null;
+}): Promise<ApiResponse<Merchant>> => {
+  return createMerchant({
+    user_id: input.userId,
+    business_name: input.businessName,
+    business_type: input.businessType || 'other',
+    description: input.description || '',
+    address: input.address || 'À compléter',
+    city: input.city || 'Libreville',
+    quartier: input.quartier || 'À compléter',
+    phone: input.phone || 'À compléter',
+    email: input.email || '',
+    latitude: input.latitude ?? undefined,
+    longitude: input.longitude ?? undefined,
+    logo_url: input.logoUrl ?? undefined,
     is_verified: false,
     is_active: false,
     is_refused: false,

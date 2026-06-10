@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabaseClient } from "@/api/supabaseClient";
+import {
+    getMerchantPaymentTransactions,
+    subscribeToTransactions,
+    unsubscribeChannel,
+} from "@/services";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -82,43 +86,14 @@ export default function MerchantTransactionsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState<MerchantTransaction | null>(null);
 
-    // Use centralized Supabase client (singleton)
-    const supabase = supabaseClient;
-
-    // Fetch merchant transactions
     const fetchTransactions = async () => {
         try {
-            if (!supabase) return;
-
-            // Get current user
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-            if (userError || !user) {
-                throw new Error('Non authentifié');
+            const result = await getMerchantPaymentTransactions(200);
+            if (!result.success || !result.data) {
+                throw new Error(result.error?.message || 'Erreur lors du chargement');
             }
 
-            // Get merchant ID from profiles
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('merchant_id')
-                .eq('user_id', user.id)
-                .single();
-
-            if (!profile?.merchant_id) {
-                throw new Error('Profil marchand non trouvé');
-            }
-
-            // Fetch transactions for this merchant
-            const { data, error } = await supabase
-                .from('merchant_transactions')
-                .select(MERCHANT_TRANSACTION_COLUMNS)
-                .eq('merchant_id', profile.merchant_id)
-                .order('transaction_date', { ascending: false })
-                .range(0, 199);
-
-            if (error) throw error;
-
-            setTransactions((data || []) as unknown as MerchantTransaction[]);
+            setTransactions(result.data as unknown as MerchantTransaction[]);
         } catch (error) {
             console.error('Error fetching transactions:', error);
             toast.error('Erreur lors du chargement des transactions');
@@ -134,21 +109,12 @@ export default function MerchantTransactionsPage() {
 
     // Realtime subscription
     useEffect(() => {
-        if (!supabase) return;
-
-        const channel = supabase
-            .channel('merchant-transactions')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'transactions'
-            }, () => {
-                fetchTransactions();
-            })
-            .subscribe();
+        const channel = subscribeToTransactions('merchant-transactions', () => {
+            fetchTransactions();
+        });
 
         return () => {
-            channel.unsubscribe();
+            unsubscribeChannel(channel);
         };
     }, []);
 

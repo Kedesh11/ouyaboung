@@ -33,7 +33,8 @@ import type { MerchantType, GabonCity, DayHours, OpeningHours } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { getMyMerchantProfile, updateMerchantProfile } from "@/services/merchant.service";
 import { resolveUserLocation } from "@/services";
-import { supabaseClient } from "@/api/supabaseClient";
+import { createDefaultMerchantProfile } from "@/services/merchant.service";
+import { uploadMerchantAsset } from "@/services/storage.service";
 
 const MERCHANT_TYPES: { value: MerchantType; label: string }[] = [
   { value: "bakery", label: "Boulangerie" },
@@ -152,7 +153,7 @@ const MerchantProfilePage = () => {
   };
 
   const handleCreateProfile = async () => {
-    if (!user || !supabaseClient) return;
+    if (!user) return;
 
     setIsCreatingProfile(true);
     try {
@@ -162,18 +163,10 @@ const MerchantProfilePage = () => {
         user.user_metadata?.full_name ||
         "Mon Commerce";
 
-      const safeSlugBase = businessName
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 36);
-
-      const payload = {
-        user_id: user.id,
-        business_name: businessName,
-        business_type: profile.business_type || "other",
+      const result = await createDefaultMerchantProfile({
+        userId: user.id,
+        businessName,
+        businessType: profile.business_type || "other",
         description: profile.description || "",
         address: profile.address || "À compléter",
         city: profile.city || "Libreville",
@@ -182,23 +175,14 @@ const MerchantProfilePage = () => {
         email: profile.email || user.email || "",
         latitude: profile.latitude || null,
         longitude: profile.longitude || null,
-        logo_url: profile.logo_url || null,
-        rating: 0,
-        total_reviews: 0,
-        is_verified: false,
-        is_active: false,
-        is_refused: false,
-        slug: `${safeSlugBase || "commerce"}-${Math.floor(Math.random() * 100000)}`,
-      };
+        logoUrl: profile.logo_url || null,
+      });
 
-      const { data, error } = await supabaseClient
-        .from("merchants")
-        .insert(payload)
-        .select()
-        .single();
+      if (!result.success || !result.data) {
+        throw new Error(result.error?.message || "Erreur lors de la création du profil");
+      }
 
-      if (error) throw error;
-
+      const data = result.data;
       setMerchantId(data.id);
       setIsProfileMissing(false);
       setMerchantStatus("pending");
@@ -349,23 +333,17 @@ const MerchantProfilePage = () => {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user || !supabaseClient) return;
+    if (!file || !user) return;
 
     try {
       setIsLoading(true);
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `merchants/${fileName}`;
+      const uploadResult = await uploadMerchantAsset('merchants', file);
+      if (!uploadResult.success || !uploadResult.data) {
+        throw new Error(uploadResult.error?.message || "Erreur lors de l'upload");
+      }
 
-      const { error: uploadError } = await supabaseClient.storage
-        .from('avatars')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabaseClient.storage.from('avatars').getPublicUrl(filePath);
-
-      setProfile(prev => ({ ...prev, logo_url: data.publicUrl }));
+      const publicUrl = uploadResult.data.publicUrl;
+      setProfile(prev => ({ ...prev, logo_url: publicUrl }));
       toast.success("Logo téléchargé avec succès");
     } catch (error) {
       console.error(error);

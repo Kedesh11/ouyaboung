@@ -16,7 +16,9 @@ import {
   addOrderReview,
   getActiveOrders as getActiveOrdersApi,
 } from '@/api';
-import { cancelOrderViaRPC } from '@/api/orders-rpc.api';
+import { cancelOrderViaRPC as cancelOrderViaRPCApi } from '@/api/orders-rpc.api';
+
+export { cancelOrderViaRPCApi as cancelOrderViaRPC };
 import { OFFLINE_ACTION_TYPES } from '@/lib/offline/actions';
 import { isBrowserOffline, isLikelyOfflineError } from '@/lib/offline/cache';
 import { enqueueOfflineQueueItem } from '@/lib/offline/queue';
