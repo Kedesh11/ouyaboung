@@ -254,11 +254,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshUser = async () => {
     try {
-      const { data: { user: refreshedUser } } = await supabaseClient?.auth.getUser() || { data: {} };
+      const client = supabaseClient;
+      if (!client) return;
+
+      const { data: { user: refreshedUser } } = await client.auth.getUser();
       if (refreshedUser) {
         setUser(refreshedUser);
 
-        const { data: profile } = await supabaseClient
+        const { data: profile } = await client
           .from('profiles')
           .select('role')
           .eq('user_id', refreshedUser.id)
@@ -276,7 +279,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Refresh merchant status
         const roleToCheck = profile?.role || refreshedUser.user_metadata?.role;
         if (roleToCheck === 'merchant') {
-          const { data: merchant } = await supabaseClient
+          const { data: merchant } = await client
             .from('merchants')
             .select('is_verified')
             .eq('user_id', refreshedUser.id)

@@ -1,5 +1,5 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "ouyaboung",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -47,7 +47,7 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@react-leaflet/core": "^2.1.0",
     "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.89.0",
+    "@supabase/supabase-js": "^2.108.1",
     "@tanstack/react-query": "^5.83.0",
     "@types/geoip-lite": "^1.4.4",
     "@yudiel/react-qr-scanner": "^2.5.1",

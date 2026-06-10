@@ -45,7 +45,7 @@ const MerchantLayout = ({ children, title, subtitle }: MerchantLayoutProps) => {
 
     // Load Notifications Count
     const countRes = await getUnreadCount(user.id);
-    if (countRes.success) {
+    if (countRes.success && countRes.data !== null) {
       setUnreadCount(countRes.data);
     }
   };

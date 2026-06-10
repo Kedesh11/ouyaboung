@@ -80,7 +80,14 @@ export interface GeoDistribution {
 // Recent Activity
 export interface AdminActivity {
   id: string;
-  type: 'merchant_registration' | 'merchant_validated' | 'merchant_refused' | 'sale_completed' | 'product_added';
+  type:
+    | 'merchant_registration'
+    | 'merchant_validated'
+    | 'merchant_refused'
+    | 'sale_completed'
+    | 'product_added'
+    | 'test_activity'
+    | (string & {});
   description: string;
   timestamp: Date;
   metadata?: Record<string, unknown>;

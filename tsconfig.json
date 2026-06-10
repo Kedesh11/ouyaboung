@@ -6,12 +6,12 @@
         "./src/*"
       ]
     },
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "noUnusedParameters": false,
     "skipLibCheck": true,
     "allowJs": true,
     "noUnusedLocals": false,
-    "strictNullChecks": false,
+    "strictNullChecks": true,
     "target": "es5",
     "lib": [
       "dom",

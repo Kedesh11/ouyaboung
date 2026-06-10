@@ -1,8 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit, getRequestIp } from '@/lib/rate-limit';
+
+const RATE_WINDOW_MS = 60_000;
+const RATE_LIMIT_REQUESTS = 120;
 
 // API route to collect Web Vitals metrics
 export async function POST(request: NextRequest) {
   try {
+    const ip = getRequestIp(request.headers);
+    const limit = await applyRateLimit(`analytics-vitals:${ip}`, {
+      windowMs: RATE_WINDOW_MS,
+      maxRequests: RATE_LIMIT_REQUESTS,
+    });
+
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(limit.retryAfterSec),
+            'X-RateLimit-Limit': String(RATE_LIMIT_REQUESTS),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(limit.resetAt),
+          },
+        }
+      );
+    }
+
     const metric = await request.json();
     
     // Validate metric structure

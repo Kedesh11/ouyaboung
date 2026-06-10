@@ -4,7 +4,8 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { AppNotification, NotificationGroup, NotificationPreferences } from '@/types/notification.types';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -18,13 +19,15 @@ import {
   updatePreferences as apiUpdatePreferences,
 } from '@/services/notification.service';
 import { getAuthUser } from '@/services';
-import { supabaseClient } from '@/api/supabaseClient';
+import { subscribeToTableChanges, unsubscribeChannel } from '@/services/realtime.service';
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const subscriptionInstanceRef = useRef(`notif-${Math.random().toString(36).slice(2)}`);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   const load = useCallback(async (opts?: { unreadOnly?: boolean; limit?: number }) => {
     setIsLoading(true);
@@ -69,58 +72,47 @@ export const useNotifications = () => {
 
   useEffect(() => {
     let isMounted = true;
-    let subscription: any = null;
 
-    const loadWithCheck = async () => {
-      if (isMounted) {
-        await load();
-      }
-    };
+    const init = async () => {
+      if (!isMounted) return;
+      await load();
 
-    loadWithCheck();
-
-    // Set up real-time subscription
-    const setupSubscription = async () => {
       try {
         const { data } = await getAuthUser();
         const userId = data?.user?.id;
+        if (!userId || !isMounted) return;
 
-        if (!userId || !supabaseClient || !isMounted) return;
+        if (channelRef.current) {
+          unsubscribeChannel(channelRef.current);
+          channelRef.current = null;
+        }
 
-        subscription = supabaseClient
-          .channel('public:notifications')
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'notifications',
-              filter: `user_id=eq.${userId}`,
-            },
-            (payload) => {
-              // Reload on any change to user's notifications
-              if (isMounted && (payload.new || payload.old)) {
-                load();
-              }
+        channelRef.current = subscribeToTableChanges({
+          channelName: `notifications:${userId}:${subscriptionInstanceRef.current}`,
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+          onPayload: (payload) => {
+            const change = payload as { new?: unknown; old?: unknown };
+            if (isMounted && (change.new || change.old)) {
+              load();
             }
-          )
-          .subscribe();
-      } catch (error: any) {
-        // Ignore AbortError which is expected during cleanup/fast refresh
-        if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+          },
+        });
+      } catch (error: unknown) {
+        const err = error as { name?: string; message?: string };
+        if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
           return;
         }
         console.error('Error setting up notification subscription:', error);
       }
     };
 
-    setupSubscription();
+    init();
 
     return () => {
       isMounted = false;
-      if (subscription) {
-        supabaseClient?.removeChannel(subscription);
-      }
+      unsubscribeChannel(channelRef.current);
+      channelRef.current = null;
     };
   }, [load]);
 

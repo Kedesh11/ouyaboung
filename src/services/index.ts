@@ -49,6 +49,8 @@ export {
   formatMerchantImpact,
   isMerchantOpenNow,
   getMerchantTypeName,
+  createDefaultMerchantProfile,
+  updateMerchantLogoByUserId,
 } from './merchant.service';
 
 // Inventory Service
@@ -92,7 +94,34 @@ export {
   canReview,
   formatOrderForDisplay,
   calculateTotalSavings,
+  cancelOrderViaRPC,
 } from './order.service';
+
+// Storage Service
+export {
+  uploadToBucket,
+  uploadAvatar,
+  uploadMerchantAsset,
+  uploadMerchantDocument,
+} from './storage.service';
+
+// Realtime Service
+export {
+  subscribeToTableChanges,
+  unsubscribeChannel,
+  subscribeToOrders,
+  subscribeToTransactions,
+} from './realtime.service';
+
+// Payment Transactions Service
+export {
+  getUserPaymentTransactions,
+  getMerchantPaymentTransactions,
+  getAdminPaymentTransactions,
+} from './payment-transactions.service';
+
+// QR Service
+export { validatePickupCode } from './qr.service';
 
 // Impact Service
 export {

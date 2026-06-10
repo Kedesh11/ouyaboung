@@ -354,7 +354,7 @@ const SearchPage = () => {
             if (isValidCoord(merchantLat, merchantLng)) {
                 distanceMap[item.id] = calculateDistanceKm(userLocation, {
                     latitude: merchantLat,
-                    longitude: merchantLng,
+                    longitude: merchantLng as number,
                 });
             }
         });

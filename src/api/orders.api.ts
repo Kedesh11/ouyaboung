@@ -181,14 +181,14 @@ export const getOrderById = async (
     };
   }
 
-  const order: Order = data ? {
+  const order = data ? {
     ...data,
     food_item: toOne(data.food_items) ?? undefined,
     merchant: toOne(data.merchants) ?? undefined,
-  } : null;
+  } as Order : null;
 
   return {
-    data: order as Order,
+    data: order,
     error: null,
     success: true,
   };
@@ -215,14 +215,14 @@ export const getOrderByTrackingCode = async (
     };
   }
 
-  const order: Order = data ? {
+  const order = data ? {
     ...data,
     food_item: toOne(data.food_items) ?? undefined,
     merchant: toOne(data.merchants) ?? undefined,
-  } : null;
+  } as Order : null;
 
   return {
-    data: order as Order,
+    data: order,
     error: null,
     success: true,
   };

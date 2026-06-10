@@ -6,7 +6,11 @@
 // ============================================
 
 import { useState, useEffect } from "react";
-import { supabaseClient } from "@/api/supabaseClient";
+import {
+  getAdminPaymentTransactions,
+  subscribeToTransactions,
+  unsubscribeChannel,
+} from "@/services";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -135,23 +139,14 @@ const AdminTransactionsPage = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Use centralized Supabase client (singleton)
-  const supabase = supabaseClient;
-
-  // Fetch transactions
   const fetchTransactions = async () => {
     try {
-      if (!supabase) return;
+      const result = await getAdminPaymentTransactions();
+      if (!result.success || !result.data) {
+        throw new Error(result.error?.message || 'Erreur lors du chargement');
+      }
 
-      const { data, error } = await supabase
-        .from('merchant_transactions')
-        .select(ADMIN_TRANSACTION_COLUMNS)
-        .order('transaction_date', { ascending: false })
-        .range(0, 499);
-
-      if (error) throw error;
-
-      setTransactions((data || []) as unknown as Transaction[]);
+      setTransactions(result.data as unknown as Transaction[]);
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast.error('Erreur lors du chargement des transactions');
@@ -167,21 +162,12 @@ const AdminTransactionsPage = () => {
 
   // Realtime subscription
   useEffect(() => {
-    if (!supabase) return;
-
-    const channel = supabase
-      .channel('admin-transactions')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'transactions'
-      }, () => {
-        fetchTransactions(); // Refresh on any change
-      })
-      .subscribe();
+    const channel = subscribeToTransactions('admin-transactions', () => {
+      fetchTransactions();
+    });
 
     return () => {
-      channel.unsubscribe();
+      unsubscribeChannel(channel);
     };
   }, []);
 

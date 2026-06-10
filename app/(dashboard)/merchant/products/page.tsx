@@ -38,7 +38,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getMerchantItems, formatPrice, isExpiringSoon, getCategoryName, getMyMerchantProfile, updateListing } from "@/services";
 import type { FoodItem } from "@/types";
 import { toast } from "sonner";
-import { supabaseClient } from "@/api/supabaseClient";
+import { createDefaultMerchantProfile } from "@/services/merchant.service";
 
 const MerchantProductsContent = () => {
   const { user } = useAuth();
@@ -88,37 +88,23 @@ const MerchantProductsContent = () => {
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
 
   const handleCreateProfile = async () => {
-    if (!user || !supabaseClient) return;
+    if (!user) return;
     setIsCreatingProfile(true);
     try {
-      // Create a default merchant profile based on user metadata or defaults
       const businessName = user.user_metadata?.full_name || "Mon Commerce";
-      
-      const { data, error } = await supabaseClient
-        .from('merchants')
-        .insert({
-          user_id: user.id,
-          business_name: businessName,
-          business_type: 'other', // Default
-          description: '',
-          address: 'À compléter',
-          city: 'Libreville',
-          quartier: 'À compléter',
-          phone: user.user_metadata?.phone || 'À compléter',
-          email: user.email || '',
-          is_active: false,
-          is_verified: false,
-          is_refused: false,
-          rating: 0,
-          total_reviews: 0,
-          // Generate a simple slug
-          slug: (businessName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + Math.floor(Math.random() * 10000)).slice(0, 50)
-        })
-        .select()
-        .single();
+      const result = await createDefaultMerchantProfile({
+        userId: user.id,
+        businessName,
+        businessType: "other",
+        phone: user.user_metadata?.phone || "À compléter",
+        email: user.email || "",
+      });
 
-      if (error) throw error;
+      if (!result.success || !result.data) {
+        throw new Error(result.error?.message || "Erreur lors de la création du profil");
+      }
 
+      const data = result.data;
       if (data) {
         toast.success("Profil commerçant créé. En attente de validation admin.");
         setMerchantId(data.id);

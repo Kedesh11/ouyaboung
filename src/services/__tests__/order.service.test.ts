@@ -51,6 +51,7 @@ import {
   canCancel,
   canReview,
   cancel,
+  cancelOrderViaRPC,
   complete,
   confirm,
   createReservation,
@@ -120,6 +121,19 @@ describe("order.service", () => {
 
     expect(result.success).toBe(true);
     expect(result.data?.id).toBe("order-1");
+  });
+
+  it("re-exports cancelOrderViaRPC through the service layer", async () => {
+    mocks.cancelOrderViaRPC.mockResolvedValue({
+      success: true,
+      data: { id: "order-1", status: "cancelled" },
+      error: null,
+    });
+
+    const result = await cancelOrderViaRPC("order-1", "changed mind");
+
+    expect(result.success).toBe(true);
+    expect(mocks.cancelOrderViaRPC).toHaveBeenCalledWith("order-1", "changed mind");
   });
 
   it("filters active orders only", async () => {

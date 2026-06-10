@@ -28,10 +28,11 @@ import {
 import {
     getAuthUser,
     getUserOrders,
+    cancelOrderViaRPC,
+    subscribeToOrders,
+    unsubscribeChannel,
 } from "@/services";
-import { cancelOrderViaRPC } from "@/api";
 import PaymentModal from "@/components/payment/PaymentModal";
-import { supabaseClient } from "@/api/supabaseClient";
 import { toast } from "sonner";
 
 // Dynamic import for QRCodeModal - only loads when needed
@@ -255,60 +256,44 @@ export default function ReservationsPage() {
 
     // Realtime Subscription
     useEffect(() => {
-        if (!supabaseClient) return;
+        const channel = subscribeToOrders((payload) => {
+            const change = payload as { eventType?: string; new?: { id?: string; status?: string } };
+            console.log('[ReservationsPage] Realtime update received:', change);
 
-        const channel = supabaseClient
-            .channel('orders-realtime')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
-                    schema: 'public',
-                    table: 'orders',
-                },
-                (payload) => {
-                    console.log('[ReservationsPage] Realtime update received:', payload);
-                    
-                    // Handle INSERT - new reservation
-                    if (payload.eventType === 'INSERT') {
-                        if (currentPageRef.current === 1) {
-                            // If on page 1, we could refetch, but for now just show notification
-                            toast.info('Nouvelle réservation créée !');
-                        } else {
-                            // Show badge to go to page 1
-                            setHasNewReservations(true);
-                        }
-                        return;
-                    }
-                    
-                    // Handle UPDATE
-                    if (payload.eventType === 'UPDATE') {
-                        const updatedOrder = payload.new as any;
-                        
-                        setReservations((prev) => 
-                            prev.map((r) => {
-                                if (r.id === updatedOrder.id) {
-                                    // Check if status changed to confirmed
-                                    if (r.status !== 'confirmed' && updatedOrder.status === 'confirmed') {
-                                        toast.success(`La commande pour ${r.productName} a été confirmée !`);
-                                    }
-                                    return { ...r, status: updatedOrder.status };
-                                }
-                                return r;
-                            })
-                        );
-                    }
+            if (change.eventType === 'INSERT') {
+                if (currentPageRef.current === 1) {
+                    toast.info('Nouvelle réservation créée !');
+                } else {
+                    setHasNewReservations(true);
                 }
-            )
-            .subscribe((status) => {
-                 console.log('[ReservationsPage] Realtime subscription status:', status);
-                 setRealtimeStatus(status);
-            });
+                return;
+            }
+
+            if (change.eventType === 'UPDATE') {
+                const updatedOrder = change.new;
+                if (!updatedOrder?.id) return;
+
+                setReservations((prev) =>
+                    prev.map((r) => {
+                        if (r.id === updatedOrder.id) {
+                            if (r.status !== 'confirmed' && updatedOrder.status === 'confirmed') {
+                                toast.success(`La commande pour ${r.productName} a été confirmée !`);
+                            }
+                            return { ...r, status: updatedOrder.status || r.status };
+                        }
+                        return r;
+                    })
+                );
+            }
+        }, (status) => {
+            console.log('[ReservationsPage] Realtime subscription status:', status);
+            setRealtimeStatus(status);
+        });
 
         return () => {
-             supabaseClient.removeChannel(channel);
+            unsubscribeChannel(channel);
         };
-    }, []); // Subscribe only once on mount
+    }, []);
 
     const handleCancel = async (reservationId: string) => {
         if (!confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) {
