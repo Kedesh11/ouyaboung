@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 
 import {
   Bell,
@@ -33,8 +34,11 @@ import {
   getNotificationPreferences,
   updateNotificationPreferences,
   getMyMerchantProfile,
-  updateMerchantProfile
+  updateMerchantProfile,
+  getMerchantPayoutAccounts,
+  createMerchantPayoutAccount,
 } from "@/services";
+import type { MerchantPayoutAccount, PayoutOperator } from "@/services";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -45,6 +49,13 @@ const MerchantSettingsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [payoutAccounts, setPayoutAccounts] = useState<MerchantPayoutAccount[]>([]);
+  const [isSavingPayout, setIsSavingPayout] = useState(false);
+  const [payoutForm, setPayoutForm] = useState({
+    operator: "airtel" as PayoutOperator,
+    label: "",
+    msisdn: "",
+  });
 
   const [notifications, setNotifications] = useState({
     newOrder: true,
@@ -91,6 +102,8 @@ const MerchantSettingsPage = () => {
           const { data: merchantData } = await getMyMerchantProfile(userData.user.id);
           if (merchantData) {
             setMerchantId(merchantData.id);
+            const { data: payoutData } = await getMerchantPayoutAccounts(merchantData.id);
+            setPayoutAccounts(payoutData || []);
           }
         }
       } catch (e) {
@@ -138,6 +151,46 @@ const MerchantSettingsPage = () => {
         toast.error("Une erreur est survenue");
       }
     }
+  };
+
+  const handleCreatePayoutAccount = async () => {
+    if (!merchantId) {
+      toast.error("Profil marchand introuvable");
+      return;
+    }
+
+    setIsSavingPayout(true);
+    const result = await createMerchantPayoutAccount({
+      merchantId,
+      operator: payoutForm.operator,
+      label: payoutForm.label,
+      msisdn: payoutForm.msisdn,
+      isDefault: payoutAccounts.length === 0,
+    });
+    setIsSavingPayout(false);
+
+    if (!result.success || !result.data) {
+      toast.error(result.error?.message || "Impossible d'ajouter ce compte de reversement");
+      return;
+    }
+
+    setPayoutAccounts((current) => [result.data!, ...current]);
+    setPayoutForm({ operator: "airtel", label: "", msisdn: "" });
+    toast.success("Compte Mobile Money soumis pour validation");
+  };
+
+  const getPayoutStatusLabel = (status: MerchantPayoutAccount["verification_status"]) => {
+    if (status === "verified") return "Verifie";
+    if (status === "rejected") return "Refuse";
+    if (status === "disabled") return "Desactive";
+    return "En attente";
+  };
+
+  const getPayoutStatusClassName = (status: MerchantPayoutAccount["verification_status"]) => {
+    if (status === "verified") return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+    if (status === "rejected") return "bg-red-500/10 text-red-600 border-red-500/20";
+    if (status === "disabled") return "bg-muted text-muted-foreground";
+    return "bg-amber-500/10 text-amber-700 border-amber-500/20";
   };
 
   const handleDeleteAccount = () => {
@@ -304,6 +357,113 @@ const MerchantSettingsPage = () => {
                     />
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Payout Accounts */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-primary" />
+                Reversements Mobile Money
+              </CardTitle>
+              <CardDescription>
+                Ajoutez le numero Airtel ou Libertis/Moov qui recevra les reversements apres validation admin.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Validation requise</AlertTitle>
+                <AlertDescription>
+                  Les paiements sont bloques tant qu&apos;aucun compte de reversement n&apos;est verifie avec son Disbursement ID SingPay.
+                </AlertDescription>
+              </Alert>
+
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={payoutForm.operator === "airtel" ? "default" : "outline"}
+                    onClick={() => setPayoutForm((current) => ({ ...current, operator: "airtel" }))}
+                  >
+                    Airtel Money
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={payoutForm.operator === "moov" ? "default" : "outline"}
+                    onClick={() => setPayoutForm((current) => ({ ...current, operator: "moov" }))}
+                  >
+                    Libertis/Moov Money
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="payout-label">Libelle</Label>
+                  <Input
+                    id="payout-label"
+                    value={payoutForm.label}
+                    onChange={(event) => setPayoutForm((current) => ({ ...current, label: event.target.value }))}
+                    placeholder="Ex: Caisse principale"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="payout-msisdn">Numero Mobile Money</Label>
+                  <Input
+                    id="payout-msisdn"
+                    value={payoutForm.msisdn}
+                    onChange={(event) => setPayoutForm((current) => ({ ...current, msisdn: event.target.value }))}
+                    placeholder={payoutForm.operator === "airtel" ? "77157904 ou 074787355" : "62053671 ou 066282310"}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Prefixes acceptes: {payoutForm.operator === "airtel" ? "74, 77, 76" : "66, 62, 65"}.
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleCreatePayoutAccount}
+                  disabled={isSavingPayout || !merchantId}
+                  className="w-full"
+                >
+                  {isSavingPayout && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Soumettre pour validation
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                {payoutAccounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aucun compte de reversement configure.
+                  </p>
+                ) : (
+                  payoutAccounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{account.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {account.operator === "airtel" ? "Airtel Money" : "Libertis/Moov Money"} · {account.normalized_msisdn}
+                        </p>
+                      </div>
+                      <Badge className={getPayoutStatusClassName(account.verification_status)}>
+                        {getPayoutStatusLabel(account.verification_status)}
+                      </Badge>
+                    </div>
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

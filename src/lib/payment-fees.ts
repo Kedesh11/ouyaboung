@@ -1,14 +1,8 @@
 /**
- * Calcul des frais de paiement Q-Gabon (Airtel Money)
+ * Calcul d'affichage du paiement Mobile Money SingPay
  * 
- * IMPORTANT: Les frais sont entièrement à la charge du client
- * 
- * Structure des frais:
- * - Airtel: 3% du montant transféré
- * - PVIT: 3% du montant transféré
- * - Application: 3% du montant transféré (MODIFIABLE)
- * 
- * Total: 9% du montant de base
+ * La commission plateforme est calculee cote serveur dans le settlement.
+ * Elle n'est pas surchargee au client dans l'ecran de paiement.
  */
 
 /**
@@ -18,13 +12,13 @@ export interface PaymentFees {
     /** Montant de base (panier) en XAF */
     baseAmount: number;
 
-    /** Frais Airtel Money (3%) en XAF */
+    /** Frais operateur factures au client en XAF */
     airtelFees: number;
 
-    /** Frais PVIT (3%) en XAF */
+    /** Frais provider factures au client en XAF */
     pvitFees: number;
 
-    /** Frais Application (3% - modifiable) en XAF */
+    /** Frais application factures au client en XAF */
     appFees: number;
 
     /** Total des frais (airtel + pvit + app) en XAF */
@@ -35,17 +29,15 @@ export interface PaymentFees {
 }
 
 /**
- * Taux de frais (constantes)
- * 
- * NOTE: Seul APP_FEE_RATE peut être modifié selon les besoins métier.
- * Les taux Airtel et PVIT sont imposés par l'API Q-Gabon.
+ * Taux de frais visibles cote client.
+ * La commission plateforme SingPay/Ouyaboung est geree par le ledger de settlement.
  */
-const AIRTEL_FEE_RATE = 0.03;  // 3% - FIXE
-const PVIT_FEE_RATE = 0.03;    // 3% - FIXE
-const APP_FEE_RATE = 0.03;     // 3% - MODIFIABLE
+const AIRTEL_FEE_RATE = 0;
+const PVIT_FEE_RATE = 0;
+const APP_FEE_RATE = 0;
 
 /**
- * Calcule les frais de paiement pour une transaction Q-Gabon
+ * Calcule le montant a afficher pour une transaction SingPay
  * 
  * Fonction isolée et pure pour faciliter:
  * - Les tests unitaires
@@ -60,11 +52,11 @@ const APP_FEE_RATE = 0.03;     // 3% - MODIFIABLE
  * const fees = calculatePaymentFees(1000);
  * // {
  * //   baseAmount: 1000,
- * //   airtelFees: 30,
- * //   pvitFees: 30,
- * //   appFees: 30,
- * //   totalFees: 90,
- * //   finalAmount: 1090
+ * //   airtelFees: 0,
+ * //   pvitFees: 0,
+ * //   appFees: 0,
+ * //   totalFees: 0,
+ * //   finalAmount: 1000
  * // }
  * ```
  */

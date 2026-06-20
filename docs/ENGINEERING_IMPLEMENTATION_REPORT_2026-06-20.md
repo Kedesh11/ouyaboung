@@ -24,6 +24,7 @@ Les principaux axes traites sont:
 - filtrage des boutiques dans un rayon de 2 km, 5 km ou 10 km, avec 10 km par defaut;
 - affichage d'un marqueur par boutique ayant des produits disponibles;
 - documentation des risques prioritaires;
+- cadrage du futur paiement SingPay marketplace: wallet principal Ouyaboung + reversements dynamiques vers boutiques/admin;
 - durcissement CI, lint et tests.
 
 Les verifications globales ont ete executees a plusieurs etapes:
@@ -66,6 +67,20 @@ Motif:
 ### 2.3 Present document
 
 Le present rapport consolide tout le chantier en un seul document de reference.
+
+### 2.4 `docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md`
+
+Document cree apres decision metier indiquant que chaque boutique doit encaisser sur son propre compte.
+
+Il formalise:
+
+- le modele cible `order -> food_item -> merchant -> merchant_payment_account`;
+- les tables proposees;
+- le flux d'initiation;
+- le flux callback;
+- les contraintes de securite;
+- les impacts Edge Functions et dashboards;
+- la decision de traiter ce changement comme un chantier paiement dedie.
 
 ## 3. Reservation et stock
 
@@ -885,6 +900,11 @@ Recommandation:
 
 - appliquer la migration avant toute mise en production.
 
+Statut repo:
+
+- migration `20260620130000_create_order_atomic.sql` deja creee;
+- application effective a faire sur l'environnement Supabase cible.
+
 ## 15.2 PostGIS non utilise
 
 Le filtrage distance utilise:
@@ -901,6 +921,14 @@ Recommandation future:
 - RPC `nearby_available_merchants`;
 - tri distance cote SQL.
 
+Statut repo:
+
+- migration `20260620160000_merchant_geo_rpc.sql` ajoutee;
+- elle cree la colonne generee `merchants.location`;
+- elle cree l'index GiST `merchants_location_gist_idx`;
+- elle cree la RPC `nearby_available_merchants`;
+- l'application production de cette migration reste a faire sur Supabase.
+
 ## 15.3 Gestion des boutiques sans coordonnees
 
 La carte n'affiche plus les boutiques sans latitude/longitude.
@@ -915,6 +943,13 @@ Recommandation:
 - rendre la geolocalisation boutique obligatoire ou fortement guidee dans l'onboarding marchand;
 - ajouter un controle admin des boutiques sans coordonnees.
 
+Statut repo:
+
+- l'inscription marchand exige maintenant la capture d'une position GPS;
+- le profil marchand refuse la sauvegarde si la boutique n'a pas de coordonnees;
+- le fallback IP est desactive pour la capture boutique afin d'eviter une position approximative;
+- un controle admin des boutiques sans coordonnees reste un complement utile.
+
 ## 15.4 Secrets paiement
 
 Le durcissement depend de la presence des secrets en production.
@@ -924,6 +959,13 @@ Recommandation:
 - verifier la configuration Vercel/Supabase avant mise en service;
 - auditer les logs apres les premiers callbacks reels.
 
+Statut repo:
+
+- le paiement SingPay cible est documente dans `docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md`;
+- la decision la plus recente est: encaissement sur wallet principal Ouyaboung, puis reversements dynamiques vers numeros Airtel/Moov verifies des boutiques et de l'admin;
+- les secrets globaux restent requis tant que le chantier multi-tenant n'est pas implemente;
+- la verification effective reste dependante de l'environnement de deploiement.
+
 ## 15.5 Gestion npm vs bun
 
 Le projet utilise `npm ci` en CI, mais le depot contient possiblement des traces d'autres gestionnaires.
@@ -932,6 +974,12 @@ Recommandation:
 
 - confirmer officiellement npm comme gestionnaire standard;
 - nettoyer les lockfiles concurrents si l'equipe valide.
+
+Statut repo:
+
+- npm est confirme comme standard dans ce chantier;
+- `package-lock.json` est conserve;
+- `bun.lockb` est supprime.
 
 ## 16. Etat final fonctionnel
 
@@ -954,6 +1002,24 @@ A la fin de ce chantier:
 - la CI execute maintenant les tests unitaires;
 - le lint utilise ESLint CLI;
 - les risques prioritaires sont documentes.
+
+## 16.1 Paiement SingPay marketplace
+
+Le socle SingPay est maintenant implemente:
+
+- migration `20260620190000_singpay_marketplace_payments.sql`;
+- wallet principal via `platform_payment_wallets`;
+- comptes payout boutiques/admin via `merchant_payout_accounts` et `admin_payout_accounts`;
+- ledger provider via `payment_transactions`;
+- ledger de reversement via `payment_settlements`;
+- Edge Functions `initiate-airtel`, `initiate-moov`, `initiate-payment`, `payment-callback`, `airtel-callback` et `moov-callback` raccordees a SingPay;
+- ancien affichage de frais client remplace par un total sans surcharge Q-Gabon;
+- commission plateforme geree cote settlement avec `PLATFORM_COMMISSION_RATE`.
+
+Garde-fous:
+
+- `SINGPAY_REQUIRE_VERIFIED_PAYOUT=true` bloque un paiement si la boutique n'a pas de payout verifie;
+- `SINGPAY_TRANSFERS_ENABLED=false` empeche les reversements reels tant que les tests SingPay ne sont pas valides;
 
 ## 17. Checklist de reprise pour un autre developpeur
 

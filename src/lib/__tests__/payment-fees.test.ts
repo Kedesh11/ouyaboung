@@ -4,16 +4,16 @@ describe("payment-fees", () => {
   it("calculates fees correctly for integer amount", () => {
     const fees = calculatePaymentFees(1000);
     expect(fees.baseAmount).toBe(1000);
-    expect(fees.airtelFees).toBe(30);
-    expect(fees.pvitFees).toBe(30);
-    expect(fees.appFees).toBe(30);
-    expect(fees.totalFees).toBe(90);
-    expect(fees.finalAmount).toBe(1090);
+    expect(fees.airtelFees).toBe(0);
+    expect(fees.pvitFees).toBe(0);
+    expect(fees.appFees).toBe(0);
+    expect(fees.totalFees).toBe(0);
+    expect(fees.finalAmount).toBe(1000);
   });
 
   it("rounds each fee component", () => {
     const fees = calculatePaymentFees(999);
-    expect(fees.airtelFees).toBe(Math.round(999 * 0.03));
+    expect(fees.airtelFees).toBe(0);
     expect(fees.totalFees).toBe(fees.airtelFees + fees.pvitFees + fees.appFees);
   });
 
@@ -26,10 +26,10 @@ describe("payment-fees", () => {
   it("returns fee rates for display", () => {
     const rates = getFeeRates();
     expect(rates).toEqual({
-      airtel: 3,
-      pvit: 3,
-      app: 3,
-      total: 9,
+      airtel: 0,
+      pvit: 0,
+      app: 0,
+      total: 0,
     });
   });
 });

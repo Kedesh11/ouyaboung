@@ -69,8 +69,8 @@ describe("payment.service integration", () => {
         data: {
           transactionId: "tx-1",
           qGabonReference: "ref-1",
-          totalAmount: 1090,
-          fees: { airtel: 30, pvit: 30, app: 30, total: 90 },
+          totalAmount: 1000,
+          fees: { airtel: 0, pvit: 0, app: 0, total: 0 },
           status: "PENDING",
           message: "Paiement initié avec succès",
           transaction: { id: "tx-1" },
@@ -171,8 +171,8 @@ describe("payment.service integration", () => {
         data: {
           transactionId: "tx-moov",
           qGabonReference: "ref-moov",
-          totalAmount: 1090,
-          fees: { airtel: 30, pvit: 30, app: 30, total: 90 },
+          totalAmount: 1000,
+          fees: { airtel: 0, pvit: 0, app: 0, total: 0 },
           status: "PENDING",
           message: "Paiement Moov initié",
           transaction: { id: "tx-moov" },

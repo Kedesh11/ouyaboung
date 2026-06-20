@@ -47,6 +47,7 @@ import {
   Loader2,
   Leaf,
   Lock,
+  LocateFixed,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -56,6 +57,8 @@ import {
   getMyMerchantProfile,
   updateMerchantProfile,
   updateMerchantLogoByUserId,
+  resolveUserLocation,
+  formatLocationAccuracy,
 } from "@/services";
 import { uploadMerchantDocument } from "@/services/storage.service";
 
@@ -73,8 +76,16 @@ const merchantFormSchema = z.object({
   address: z.string().min(5, "Adresse requise"),
   city: z.string().min(1, "Ville requise"),
   quartier: z.string().min(2, "Quartier requis"),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  latitude: z.number()
+    .min(-90, "Latitude invalide")
+    .max(90, "Latitude invalide")
+    .optional()
+    .refine((value) => typeof value === "number", "Position GPS obligatoire"),
+  longitude: z.number()
+    .min(-180, "Longitude invalide")
+    .max(180, "Longitude invalide")
+    .optional()
+    .refine((value) => typeof value === "number", "Position GPS obligatoire"),
 
   // Step 3: Documents
   rccm_number: z.string().optional(),
@@ -109,6 +120,7 @@ const MerchantRegisterPage = () => {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<{
     logo?: File;
     rccm?: File;
@@ -173,7 +185,7 @@ const MerchantRegisterPage = () => {
         fieldsToValidate = ['business_name', 'business_type', 'description'];
         break;
       case 2:
-        fieldsToValidate = ['email', 'password', 'phone', 'address', 'city', 'quartier'];
+        fieldsToValidate = ['email', 'password', 'phone', 'address', 'city', 'quartier', 'latitude', 'longitude'];
         break;
       case 3:
         // Documents are optional
@@ -188,6 +200,36 @@ const MerchantRegisterPage = () => {
 
   const prevStep = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleGeolocation = async () => {
+    setIsLocating(true);
+    toast.info("Acquisition de la position de votre boutique...");
+
+    try {
+      const result = await resolveUserLocation({
+        forceRefresh: true,
+        timeoutMs: 15000,
+        maximumAgeMs: 0,
+        enableHighAccuracy: true,
+        fallbackToIp: false,
+        requestBrowserPermission: true,
+        retryLowAccuracy: true,
+      });
+
+      if (!result.success || !result.data) {
+        toast.error(result.error?.message || "Impossible d'obtenir une position GPS fiable.");
+        return;
+      }
+
+      form.setValue("latitude", result.data.latitude, { shouldDirty: true, shouldValidate: true });
+      form.setValue("longitude", result.data.longitude, { shouldDirty: true, shouldValidate: true });
+      toast.success("Position GPS enregistrée", {
+        description: formatLocationAccuracy(result.data),
+      });
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   const renderStep3 = () => (
@@ -769,6 +811,59 @@ const MerchantRegisterPage = () => {
           )}
         />
       </div>
+
+      <FormField
+        control={form.control}
+        name="latitude"
+        render={() => (
+          <FormItem>
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <FormLabel>Position GPS de la boutique *</FormLabel>
+                  <FormDescription>
+                    Cette position permet aux clients de voir votre boutique dans le bon rayon sur la carte.
+                  </FormDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="gap-2"
+                  onClick={handleGeolocation}
+                  disabled={isLocating}
+                >
+                  {isLocating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <LocateFixed className="w-4 h-4" />
+                  )}
+                  {isLocating ? "Localisation..." : "Obtenir la position"}
+                </Button>
+              </div>
+              <div className="rounded-md bg-muted/50 p-2 text-xs font-mono">
+                {typeof form.watch("latitude") === "number" && typeof form.watch("longitude") === "number" ? (
+                  <span className="text-primary font-medium">
+                    {form.watch("latitude")?.toFixed(6)}, {form.watch("longitude")?.toFixed(6)}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Aucune position GPS enregistrée</span>
+                )}
+              </div>
+              <FormMessage />
+            </div>
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="longitude"
+        render={() => (
+          <FormItem className="space-y-0">
+            <FormMessage />
+          </FormItem>
+        )}
+      />
     </motion.div>
   );
 
