@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import {
   getAdminPaymentTransactions,
+  syncSingPayTransactionStatus,
   subscribeToTransactions,
   unsubscribeChannel,
 } from "@/services";
@@ -46,7 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, ShoppingBag, DollarSign, TrendingUp, Eye, Calendar, Receipt, Filter } from "lucide-react";
+import { Search, ShoppingBag, DollarSign, TrendingUp, Eye, Calendar, Receipt, Filter, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -57,6 +58,8 @@ interface Transaction {
   transaction_date: string;
   payment_status: string;
   q_gabon_reference: string;
+  provider_reference: string;
+  provider: string;
   base_amount: number;
   airtel_fees: number;
   pvit_fees: number;
@@ -74,6 +77,14 @@ interface Transaction {
   operator_fees: number;
   status_code: string;
   message: string;
+  provider_transaction_id: string;
+  provider_status: string;
+  provider_result: string;
+  platform_commission: number;
+  settlement_status: string;
+  disbursement_id: string;
+  provider_transfer_reference: string;
+  provider_transfer_status: string;
   // Order info
   order_id: string;
   order_quantity: number;
@@ -138,6 +149,7 @@ const AdminTransactionsPage = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [syncingReference, setSyncingReference] = useState<string | null>(null);
 
   const fetchTransactions = async () => {
     try {
@@ -179,6 +191,7 @@ const AdminTransactionsPage = () => {
   const filteredTransactions = transactions.filter(tx => {
     const query = searchQuery.toLowerCase();
     const matchesSearch = (
+      tx.provider_reference?.toLowerCase().includes(query) ||
       tx.q_gabon_reference?.toLowerCase().includes(query) ||
       tx.customer_name?.toLowerCase().includes(query) ||
       tx.merchant_name?.toLowerCase().includes(query) ||
@@ -215,6 +228,29 @@ const AdminTransactionsPage = () => {
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
     setCurrentPage(1);
+  };
+
+  const handleSyncTransaction = async (tx: Transaction) => {
+    const reference = tx.provider_reference || tx.q_gabon_reference;
+    if (!reference && !tx.provider_transaction_id) {
+      toast.error("Reference SingPay indisponible");
+      return;
+    }
+
+    setSyncingReference(reference || tx.provider_transaction_id);
+    const result = await syncSingPayTransactionStatus({
+      reference: reference || undefined,
+      transactionId: tx.provider_transaction_id || undefined,
+    });
+    setSyncingReference(null);
+
+    if (!result.success) {
+      toast.error(result.error?.message || "Synchronisation impossible");
+      return;
+    }
+
+    toast.success("Statut SingPay synchronise");
+    fetchTransactions();
   };
 
   return (
@@ -366,11 +402,12 @@ const AdminTransactionsPage = () => {
                   {paginatedTransactions.map((tx) => {
                     const status = STATUS_MAP[tx.payment_status as keyof typeof STATUS_MAP] ||
                       { label: tx.payment_status, variant: 'secondary' as const };
+                    const reference = tx.provider_reference || tx.q_gabon_reference;
 
                     return (
                       <TableRow key={tx.transaction_id}>
                         <TableCell className="font-mono text-sm">
-                          {tx.q_gabon_reference || 'N/A'}
+                          {reference || 'N/A'}
                         </TableCell>
                         <TableCell className="font-medium">
                           {tx.customer_name || 'Inconnu'}
@@ -392,7 +429,15 @@ const AdminTransactionsPage = () => {
                             {status.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSyncTransaction(tx)}
+                            disabled={syncingReference === reference}
+                          >
+                            <RefreshCw className={`w-4 h-4 ${syncingReference === reference ? "animate-spin" : ""}`} />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -455,9 +500,9 @@ const AdminTransactionsPage = () => {
             <div className="space-y-6">
               {/* Référence */}
               <div className="space-y-2">
-                <h3 className="font-semibold text-sm text-muted-foreground">Référence Q-Gabon</h3>
+                <h3 className="font-semibold text-sm text-muted-foreground">Référence provider</h3>
                 <p className="font-mono text-sm bg-muted p-2 rounded">
-                  {selectedTransaction.q_gabon_reference}
+                  {selectedTransaction.provider_reference || selectedTransaction.q_gabon_reference}
                 </p>
               </div>
 
@@ -483,7 +528,7 @@ const AdminTransactionsPage = () => {
                   </div>
                   {selectedTransaction.q_gabon_fees > 0 && (
                     <div className="flex justify-between text-blue-600">
-                      <span>Frais Q-Gabon (total):</span>
+                      <span>Commission plateforme:</span>
                       <span className="font-medium">{formatCurrency(selectedTransaction.q_gabon_fees)}</span>
                     </div>
                   )}
@@ -494,6 +539,10 @@ const AdminTransactionsPage = () => {
                   <div className="flex justify-between text-green-600">
                     <span>Revenu commerce:</span>
                     <span className="font-medium">{formatCurrency(selectedTransaction.merchant_revenue)}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Settlement:</span>
+                    <span>{selectedTransaction.settlement_status || 'non cree'}</span>
                   </div>
                 </div>
               </div>
@@ -529,10 +578,12 @@ const AdminTransactionsPage = () => {
                   <p className="font-medium">{selectedTransaction.operator}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Code statut</p>
-                  <Badge variant={selectedTransaction.status_code === '200' ? 'default' : 'destructive'}>
-                    {selectedTransaction.status_code || 'N/A'}
-                  </Badge>
+                  <p className="text-muted-foreground">Statut SingPay</p>
+                  <p className="font-medium">{selectedTransaction.provider_status || selectedTransaction.status_code || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Resultat SingPay</p>
+                  <p className="font-medium">{selectedTransaction.provider_result || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Statut paiement</p>
@@ -548,10 +599,10 @@ const AdminTransactionsPage = () => {
                 </div>
               </div>
 
-              {/* Q-Gabon Technical Data */}
+              {/* Provider Technical Data */}
               {(selectedTransaction.q_gabon_fees > 0 || selectedTransaction.operator_owner_charge) && (
                 <div className="space-y-2 border-t pt-4">
-                  <h3 className="font-semibold text-sm text-muted-foreground">🔧 Données Techniques Q-Gabon</h3>
+                  <h3 className="font-semibold text-sm text-muted-foreground">Données techniques provider</h3>
                   <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded text-xs space-y-1">
                     {selectedTransaction.operator_fees > 0 && (
                       <div className="flex justify-between">
@@ -597,8 +648,8 @@ const AdminTransactionsPage = () => {
                 <h3 className="font-semibold text-sm text-muted-foreground">Identifiants</h3>
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Transaction ID:</span>
-                    <span className="font-mono">{selectedTransaction.q_gabon_transaction_id || 'N/A'}</span>
+                    <span className="text-muted-foreground">Transaction provider:</span>
+                    <span className="font-mono">{selectedTransaction.provider_transaction_id || selectedTransaction.q_gabon_transaction_id || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Merchant Ref ID:</span>

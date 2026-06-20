@@ -1,11 +1,10 @@
 /**
- * Service de paiement - Airtel Money via Q-Gabon
+ * Service de paiement - Mobile Money via SingPay
  * 
  * Architecture:
  * 1. Validation téléphone stricte (9 chiffres, préfixes Airtel)
- * 2. Calcul des frais (3% + 3% + 3% = 9%)
- * 3. Appel Edge Function avec auth token
- * 4. Edge Function → API Q-Gabon → Callback webhook
+ * 2. Appel Edge Function avec auth token
+ * 3. Edge Function -> API SingPay -> Callback webhook
  * 5. Mise à jour table transactions
  */
 
@@ -59,8 +58,9 @@ export interface PaymentInitiationRequest {
 
 export interface PaymentInitiationResponse {
     transactionId: string;  // ID de notre transaction interne
-    qGabonReference: string; // Référence Q-Gabon
-    totalAmount: number;    // Montant total avec frais
+    qGabonReference: string; // Reference historique, contient la reference SingPay/Ouyaboung
+    singPayReference?: string;
+    totalAmount: number;    // Montant total paye
     fees: {
         airtel: number;
         pvit: number;
@@ -84,14 +84,13 @@ export type { PaymentFees };
 // ============================================
 
 /**
- * Initie un paiement Airtel Money via Q-Gabon
+ * Initie un paiement Airtel Money via SingPay
  * 
  * Processus:
  * 1. Validation du numéro de téléphone
- * 2. Calcul automatique des frais
- * 3. Récupération du token d'authentification
- * 4. Appel à l'Edge Function
- * 5. Edge Function crée la transaction et appelle Q-Gabon
+ * 2. Récupération du token d'authentification
+ * 3. Appel à l'Edge Function
+ * 4. Edge Function crée la transaction et appelle SingPay
  * 
  * @param request - Détails du paiement
  * @returns Réponse avec ID transaction et détails frais
@@ -246,6 +245,7 @@ export const initiateAirtelPayment = async (
             data: {
                 transactionId: data.data.transactionId,
                 qGabonReference: data.data.qGabonReference,
+                singPayReference: data.data.singPayReference,
                 totalAmount: data.data.totalAmount,
                 fees: data.data.fees,
                 status: data.data.status || 'PENDING',
@@ -270,7 +270,7 @@ export const initiateAirtelPayment = async (
 };
 
 /**
- * Initie un paiement Moov Money via Q-Gabon
+ * Initie un paiement Moov Money via SingPay
  * 
  * @param request - Détails du paiement
  * @returns Réponse avec ID transaction et détails frais
@@ -411,6 +411,7 @@ export const initiateMoovPayment = async (
             data: {
                 transactionId: data.data.transactionId,
                 qGabonReference: data.data.qGabonReference,
+                singPayReference: data.data.singPayReference,
                 totalAmount: data.data.totalAmount,
                 fees: data.data.fees,
                 status: data.data.status || 'PENDING',

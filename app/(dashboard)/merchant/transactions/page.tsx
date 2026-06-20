@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import {
     getMerchantPaymentTransactions,
+    syncSingPayTransactionStatus,
     subscribeToTransactions,
     unsubscribeChannel,
 } from "@/services";
@@ -10,6 +11,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     Dialog,
     DialogContent,
@@ -24,7 +32,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag } from "lucide-react";
+import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag, RefreshCw, Filter } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -35,6 +43,8 @@ interface MerchantTransaction {
     transaction_date: string;
     payment_status: string;
     q_gabon_reference: string;
+    provider_reference: string;
+    provider: string;
     base_amount: number;
     total_amount: number;
     merchant_revenue: number;
@@ -42,6 +52,14 @@ interface MerchantTransaction {
     payment_phone_number: string;
     operator: string;
     status_code: string;
+    provider_transaction_id: string;
+    provider_status: string;
+    provider_result: string;
+    platform_commission: number;
+    settlement_status: string;
+    disbursement_id: string;
+    provider_transfer_reference: string;
+    provider_transfer_status: string;
     product_name: string;
     customer_name: string;
     customer_phone: string;
@@ -81,10 +99,21 @@ const STATUS_MAP = {
     TIMEOUT: { label: 'Expiré', variant: 'destructive' as const, icon: Receipt }
 };
 
+const STATUS_FILTERS = [
+    { value: "all", label: "Tous les statuts" },
+    { value: "SUCCESS", label: "Payé" },
+    { value: "PENDING", label: "En attente" },
+    { value: "FAILED", label: "Échoué" },
+    { value: "TIMEOUT", label: "Expiré" },
+    { value: "CANCELLED", label: "Annulé" },
+];
+
 export default function MerchantTransactionsPage() {
     const [transactions, setTransactions] = useState<MerchantTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState<MerchantTransaction | null>(null);
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [syncingReference, setSyncingReference] = useState<string | null>(null);
 
     const fetchTransactions = async () => {
         try {
@@ -120,6 +149,33 @@ export default function MerchantTransactionsPage() {
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('fr-FR').format(amount) + ' XAF';
+    };
+
+    const filteredTransactions = transactions.filter((tx) => (
+        statusFilter === "all" ? true : tx.payment_status === statusFilter
+    ));
+
+    const handleSyncTransaction = async (tx: MerchantTransaction) => {
+        const reference = tx.provider_reference || tx.q_gabon_reference;
+        if (!reference && !tx.provider_transaction_id) {
+            toast.error("Reference SingPay indisponible");
+            return;
+        }
+
+        setSyncingReference(reference || tx.provider_transaction_id);
+        const result = await syncSingPayTransactionStatus({
+            reference: reference || undefined,
+            transactionId: tx.provider_transaction_id || undefined,
+        });
+        setSyncingReference(null);
+
+        if (!result.success) {
+            toast.error(result.error?.message || "Synchronisation impossible");
+            return;
+        }
+
+        toast.success("Statut SingPay synchronise");
+        fetchTransactions();
     };
 
     // Calculate stats
@@ -218,6 +274,26 @@ export default function MerchantTransactionsPage() {
                 </Card>
             </div>
 
+            <div className="flex justify-end">
+                <div className="w-full sm:w-[220px]">
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger>
+                            <div className="flex items-center gap-2">
+                                <Filter className="w-4 h-4" />
+                                <SelectValue placeholder="Statut" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {STATUS_FILTERS.map((filter) => (
+                                <SelectItem key={filter.value} value={filter.value}>
+                                    {filter.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             {/* Transactions Table */}
             <Card>
                 <CardHeader>
@@ -230,7 +306,7 @@ export default function MerchantTransactionsPage() {
                                 <Skeleton key={i} className="h-12 w-full" />
                             ))}
                         </div>
-                    ) : transactions.length === 0 ? (
+                    ) : filteredTransactions.length === 0 ? (
                         <div className="text-center py-12 text-muted-foreground">
                             <Receipt className="w-12 h-12 mx-auto mb-3 opacity-50" />
                             <p className="font-medium">Aucune vente</p>
@@ -252,14 +328,15 @@ export default function MerchantTransactionsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {transactions.map((tx) => {
+                                {filteredTransactions.map((tx) => {
                                     const status = STATUS_MAP[tx.payment_status as keyof typeof STATUS_MAP] ||
                                         { label: tx.payment_status, variant: 'secondary' as const, icon: Receipt };
+                                    const reference = tx.provider_reference || tx.q_gabon_reference;
 
                                     return (
                                         <TableRow key={tx.transaction_id}>
                                             <TableCell className="font-mono text-sm">
-                                                {tx.q_gabon_reference || 'N/A'}
+                                                {reference || 'N/A'}
                                             </TableCell>
                                             <TableCell className="font-medium">
                                                 {tx.customer_name}
@@ -278,7 +355,15 @@ export default function MerchantTransactionsPage() {
                                                     {status.label}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right space-x-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleSyncTransaction(tx)}
+                                                    disabled={syncingReference === reference}
+                                                >
+                                                    <RefreshCw className={`w-4 h-4 ${syncingReference === reference ? "animate-spin" : ""}`} />
+                                                </Button>
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
@@ -311,7 +396,7 @@ export default function MerchantTransactionsPage() {
                             <div className="space-y-2">
                                 <h3 className="font-semibold text-sm text-muted-foreground">Référence</h3>
                                 <p className="font-mono text-sm bg-muted p-2 rounded">
-                                    {selectedTransaction.q_gabon_reference}
+                                    {selectedTransaction.provider_reference || selectedTransaction.q_gabon_reference}
                                 </p>
                             </div>
 
@@ -324,8 +409,8 @@ export default function MerchantTransactionsPage() {
                                         <span className="font-medium">{formatCurrency(selectedTransaction.base_amount)}</span>
                                     </div>
                                     <div className="flex justify-between text-muted-foreground">
-                                        <span className="text-xs">Frais totaux:</span>
-                                        <span className="text-xs">{formatCurrency(selectedTransaction.total_amount - selectedTransaction.base_amount)}</span>
+                                        <span className="text-xs">Commission plateforme:</span>
+                                        <span className="text-xs">{formatCurrency(selectedTransaction.platform_commission || 0)}</span>
                                     </div>
                                     {selectedTransaction.q_gabon_fees > 0 && (
                                         <div className="flex justify-between text-blue-600">
@@ -340,6 +425,10 @@ export default function MerchantTransactionsPage() {
                                     <div className="flex justify-between text-green-600 font-bold">
                                         <span>Votre revenu:</span>
                                         <span>{formatCurrency(selectedTransaction.merchant_revenue)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-muted-foreground">
+                                        <span>Reversement:</span>
+                                        <span>{selectedTransaction.settlement_status || 'non cree'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -367,10 +456,12 @@ export default function MerchantTransactionsPage() {
                                     <p className="font-medium">{selectedTransaction.operator}</p>
                                 </div>
                                 <div>
-                                    <p className="text-muted-foreground">Code statut</p>
-                                    <Badge variant={selectedTransaction.status_code === '200' ? 'default' : 'destructive'}>
-                                        {selectedTransaction.status_code || 'N/A'}
-                                    </Badge>
+                                    <p className="text-muted-foreground">Statut SingPay</p>
+                                    <p className="font-medium">{selectedTransaction.provider_status || selectedTransaction.status_code || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Résultat SingPay</p>
+                                    <p className="font-medium">{selectedTransaction.provider_result || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-muted-foreground">Statut paiement</p>

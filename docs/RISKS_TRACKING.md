@@ -70,13 +70,35 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 
 ## R6 - Hygiene de depot et installabilite
 
-**Statut:** correction partielle appliquee  
+**Statut:** corrige cote depot  
 **Risque:** `.env.example` est ignore, deux lockfiles coexistent, et des artefacts de couverture/performance sont versionnes.  
 **Impact:** onboarding moins fiable, installations divergentes, depot alourdi.
 
-**Decision d'ingenierie:** versionner `.env.example`, choisir npm comme gestionnaire effectif puisque la CI utilise `npm ci`, et documenter le nettoyage des artefacts.
+**Decision d'ingenierie:** versionner `.env.example`, choisir npm comme gestionnaire effectif puisque la CI utilise `npm ci`, et supprimer le lockfile Bun concurrent.
 
 **Criteres d'acceptation:**
 - `.env.example` peut etre suivi par Git. **Fait via exception `.gitignore`.**
-- Un seul gestionnaire de dependances est recommande. **A faire: supprimer `bun.lockb` si l'equipe confirme npm comme standard.**
+- Un seul gestionnaire de dependances est recommande. **Fait: `bun.lockb` supprime, `package-lock.json` conserve.**
 - Les artefacts generes sont clairement distingues des sources. **A faire: decider si `coverage/` et `lighthouse-results/` restent versionnes.**
+
+## R7 - Paiement non multi-tenant
+
+**Statut:** socle implemente, activation production a valider  
+**Risque:** le paiement Q-Gabon actuel reste structure autour d'une configuration plateforme globale sans ledger de reversement dynamique. Le modele cible SingPay impose un portefeuille principal Ouyaboung, des beneficiaires Airtel/Moov verifies et des settlements idempotents.  
+**Impact:** mauvais destinataire de reversement, commission incorrecte, double paiement marchand, reconciliation difficile, risque de melanger les transactions de plusieurs boutiques.
+
+**Decision d'ingenierie:** ne pas modifier partiellement le paiement dans ce lot. Documenter l'architecture cible SingPay avec wallet principal et reversements dynamiques, puis ouvrir un chantier paiement specifique couvrant schema, Edge Functions, callbacks, dashboard marchand, admin, settlement et tests.
+
+**Criteres d'acceptation du futur chantier:**
+- Ouyaboung possede un wallet principal SingPay actif par environnement. **Socle fait via `platform_payment_wallets` + variables env.**
+- Chaque boutique possede un ou plusieurs numeros payout Airtel/Moov verifies. **Schema/RLS faits, UI dediee a finaliser.**
+- L'admin peut aussi configurer des numeros payout Airtel/Moov verifies. **Schema/RLS faits, UI dediee a finaliser.**
+- L'Edge Function resout le wallet principal, le marchand et le payout depuis `order -> food_item -> merchant`, jamais depuis le client. **Fait.**
+- Les callbacks confirment une transaction interne rattachee a la commande, a la boutique et au wallet principal. **Fait.**
+- Les settlements calculent commission plateforme et montant net marchand. **Fait avec `PLATFORM_COMMISSION_RATE`.**
+- Les reversements SingPay sont idempotents et traces avant/apres `POST /transfer`. **Socle fait, activation protegee par `SINGPAY_TRANSFERS_ENABLED=false`.**
+- Les comptes payout sont proteges par RLS et validation admin. **Fait cote schema.**
+- Les secrets SingPay restent serveur uniquement. **Fait cote variables serveur.**
+- Les statuts SingPay sont mappes vers les statuts internes sans confirmer une commande tant que le resultat provider n'est pas `Success`. **Fait.**
+
+**Documentation cible:** `docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md` et `docs/SINGPAY_SWAGGER_ANALYSIS.md`.

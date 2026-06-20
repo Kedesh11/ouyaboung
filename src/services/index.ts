@@ -118,7 +118,17 @@ export {
   getUserPaymentTransactions,
   getMerchantPaymentTransactions,
   getAdminPaymentTransactions,
+  syncSingPayTransactionStatus,
 } from './payment-transactions.service';
+
+export {
+  getMerchantPayoutAccounts,
+  createMerchantPayoutAccount,
+} from './payout.service';
+export type {
+  MerchantPayoutAccount,
+  PayoutOperator,
+} from './payout.service';
 
 // QR Service
 export { validatePickupCode } from './qr.service';

@@ -107,7 +107,7 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                         {PAYMENT_FLOW_ENABLED ? (
                             <>
                                 <CreditCard className="w-5 h-5" />
-                                Paiement Mobile (Q-Gabon)
+                                Paiement Mobile (SingPay)
                             </>
                         ) : (
                             <>
@@ -171,16 +171,8 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                                     <span>{fees.baseAmount.toLocaleString()} XAF</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Frais Opérateur (3%):</span>
-                                    <span>{fees.airtelFees.toLocaleString()} XAF</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Frais PVIT (3%):</span>
-                                    <span>{fees.pvitFees.toLocaleString()} XAF</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Frais App (3%):</span>
-                                    <span>{fees.appFees.toLocaleString()} XAF</span>
+                                    <span className="text-muted-foreground">Frais client:</span>
+                                    <span>{fees.totalFees.toLocaleString()} XAF</span>
                                 </div>
                                 <div className="border-t border-border mt-2 pt-2 flex justify-between font-bold text-lg">
                                     <span>Total à payer:</span>
@@ -211,25 +203,25 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                                 )}
                                 onClick={() => setOperator('MOOV')}
                             >
-                                <span className="font-bold">Moov Money</span>
+                                <span className="font-bold">Libertis/Moov</span>
                             </Button>
                         </div>
 
                         {/* Phone Number */}
                         <div className="grid gap-2">
-                            <Label htmlFor="phone">Numéro {operator === 'AIRTEL' ? 'Airtel' : 'Moov'} Money</Label>
+                            <Label htmlFor="phone">Numéro {operator === 'AIRTEL' ? 'Airtel' : 'Libertis/Moov'} Money</Label>
                             <div className="relative">
                                 <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     id="phone"
-                                    placeholder={operator === 'AIRTEL' ? "07 xx xx xx" : "06 xx xx xx"}
+                                    placeholder={operator === 'AIRTEL' ? "77157904 ou 074787355" : "62053671 ou 066282310"}
                                     className="pl-9"
                                     value={phoneNumber}
                                     onChange={(e) => setPhoneNumber(e.target.value)}
                                 />
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Format: {operator === 'AIRTEL' ? '07' : '06'}xxxxxx (9 chiffres total)
+                                Prefixes acceptes: {operator === 'AIRTEL' ? '74, 77, 76' : '66, 62, 65'}
                             </p>
                         </div>
                     </div>

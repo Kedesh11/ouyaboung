@@ -216,6 +216,9 @@ const MerchantProfilePage = () => {
     if (!profile.email.trim()) {
       return "L'email est obligatoire";
     }
+    if (profile.latitude === 0 || profile.longitude === 0) {
+      return "La position GPS de la boutique est obligatoire";
+    }
     if (profile.latitude !== 0 && (profile.latitude < -90 || profile.latitude > 90)) {
       return "Latitude invalide";
     }
@@ -296,7 +299,9 @@ const MerchantProfilePage = () => {
         timeoutMs: 15000,
         maximumAgeMs: 0,
         enableHighAccuracy: true,
-        fallbackToIp: true,
+        fallbackToIp: false,
+        requestBrowserPermission: true,
+        retryLowAccuracy: true,
       });
 
       if (result.success && result.data) {
