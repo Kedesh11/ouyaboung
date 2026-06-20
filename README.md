@@ -1,4 +1,4 @@
-# 🌱 Ouyaboung - Anti-gaspillage Alimentaire
+# Ouyaboung - Anti-gaspillage Alimentaire
 
 > Plateforme de mise en relation entre commerçants et consommateurs pour réduire le gaspillage alimentaire au Gabon
 
@@ -12,7 +12,7 @@
 
 ---
 
-## 📋 Table des Matières
+## Table des Matières
 
 - [À Propos](#-à-propos)
 - [Fonctionnalités](#-fonctionnalités)
@@ -29,44 +29,44 @@
 
 ---
 
-## 🌍 À Propos
+## À Propos
 
 Ouyaboung est une application web progressive (PWA) qui permet aux commerçants de vendre leurs invendus de qualité à prix réduit, contribuant ainsi à la lutte contre le gaspillage alimentaire au Gabon.
 
 ### Objectifs
 
-- ♻️ **Réduire le gaspillage** : Donner une seconde vie aux invendus alimentaires
-- 💰 **Accessibilité** : Offrir des produits de qualité à prix réduit
-- 🤝 **Impact social** : Connecter commerçants et consommateurs
-- 🌍 **Durabilité** : Promouvoir la consommation responsable
+- **Réduire le gaspillage** : Donner une seconde vie aux invendus alimentaires
+- **Accessibilité** : Offrir des produits de qualité à prix réduit
+- **Impact social** : Connecter commerçants et consommateurs
+- **Durabilité** : Promouvoir la consommation responsable
 
 ---
 
-## ✨ Fonctionnalités
+## Fonctionnalités
 
 ### Pour les Consommateurs
 
-- 🔍 Recherche de produits disponibles avec carte interactive
-- 📱 Réservation en ligne et paiement sécurisé (Q-Gabon)
-- 📊 Suivi des commandes en temps réel
-- ⭐ Système de favoris
-- 📈 Tableau de bord d'impact personnel
+- Recherche de produits disponibles avec carte interactive
+- Réservation en ligne et paiement sécurisé (Q-Gabon)
+- Suivi des commandes en temps réel
+- Système de favoris
+- Tableau de bord d'impact personnel
 
 ### Pour les Commerçants
 
-- 📦 Gestion des invendus et inventaire
-- 💳 Traitement des paiements Q-Gabon
-- 📊 Analytics et statistiques de ventes
-- 🔔 Notifications en temps réel
-- 🎯 Gestion du profil public
+- Gestion des invendus et inventaire
+- Traitement des paiements Q-Gabon
+- Analytics et statistiques de ventes
+- Notifications en temps réel
+- Gestion du profil public
 
 ### Pour les Administrateurs
 
-- 👥 Gestion des utilisateurs et commerçants
-- ✅ Validation des inscriptions marchands
-- 📊 Dashboard global avec métriques
-- 🗺️ Visualisation géographique
-- 📈 Rapports et analytics
+- Gestion des utilisateurs et commerçants
+- Validation des inscriptions marchands
+- Dashboard global avec métriques
+- Visualisation géographique
+- Rapports et analytics
 
 ---
 
@@ -80,11 +80,11 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 |Performance|🟢 **93%**|🟡 58%|> 90%|
 |Accessibility|🟡 87%|🟡 87%|> 95%|
 
-> 📊 [Voir les résultats détaillés](https://pagespeed.web.dev/analysis?url=https://ouyaboung-eight.vercel.app)
+> [Voir les résultats détaillés](https://pagespeed.web.dev/analysis?url=https://ouyaboung-eight.vercel.app)
 
 ### Optimisations Réalisées
 
-#### ✅ Phase 1-7: Core Optimizations (100%)
+#### Phase 1-7: Core Optimizations (100%)
 
 1. **SEO Foundation** (100%)
    - Meta tags OpenGraph & Twitter Cards
@@ -103,7 +103,7 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
    - Skip-to-content
 
 4. **Images** (100%)
-   - PWA icons WebP: **28KB** (was 148KB, **-81%** 🔥)
+   - PWA icons WebP: **28KB** (was 148KB, **-81%**)
    - Next.js Image avec WebP/AVIF
    - Lazy loading automatique
    - Priority prop pour LCP
@@ -114,7 +114,7 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
    - CLS < 0.1 avec dimensions fixes
 
 6. **Code Splitting** (100%)
-   - Admin bundle: **217KB** (was 317KB, **-31%** 🔥)
+   - Admin bundle: **217KB** (was 317KB, **-31%**)
    - Dynamic imports (Recharts, QRCodeModal, Maps)
    - Total savings: **-105KB**
 
@@ -143,7 +143,7 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 
 ---
 
-## 🛠️ Stack Technique
+## Stack Technique
 
 ### Frontend
 
@@ -184,10 +184,9 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 - **Service Worker**: [next-pwa](https://github.com/shadowwalker/next-pwa)
 - **Offline Support**: CacheFirst strategy
 - **Install Prompt**: Custom implementation
-
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Prérequis
 
@@ -221,7 +220,7 @@ L'application sera disponible sur [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 📜 Scripts Disponibles
+## Scripts Disponibles
 
 ```bash
 # Développement
@@ -244,7 +243,7 @@ node scripts/optimize-icons.mjs # Optimiser PWA icons
 
 ---
 
-## 📁 Structure du Projet
+## Structure du Projet
 
 ```text
 ouyaboung/
@@ -299,7 +298,7 @@ ouyaboung/
 
 ---
 
-## 📡 API Tracking & Analytics
+## API Tracking & Analytics
 
 Routes implémentées dans cette version :
 
@@ -322,7 +321,7 @@ Référence complète des contrats API : `docs/analytics-api.md`.
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 - **[Implementation Plan](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/implementation_plan.md)** - Plan technique détaillé
 - **[Task Checklist](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/task.md)** - 47/57 items (82%)
@@ -335,26 +334,26 @@ Référence complète des contrats API : `docs/analytics-api.md`.
 
 ---
 
-## 🎯 Lighthouse Scores
+## Lighthouse Scores
 
 ### Production (08/02/2026)
 
-**SEO: 100% sur toutes les pages** ✅
+**SEO: 100% sur toutes les pages**
 
 ```text
-Homepage    : Performance 93% | A11y 87% | SEO 100% ✅
-Search      : Performance 48% | A11y 89% | SEO 100% ✅
-About       : Performance 67% | A11y 85% | SEO 100% ✅
-Product     : Performance 48% | A11y 89% | SEO 100% ✅
-Merchant    : Performance 51% | A11y 89% | SEO 100% ✅
+Homepage    : Performance 93% | A11y 87% | SEO 100%
+Search      : Performance 48% | A11y 89% | SEO 100%
+About       : Performance 67% | A11y 85% | SEO 100%
+Product     : Performance 48% | A11y 89% | SEO 100%
+Merchant    : Performance 51% | A11y 89% | SEO 100%
 ```
 
 **Points forts** :
 
-- ✅ SEO parfait (meta tags, structured data, sitemap)
-- ✅ Homepage rapide (93%)
-- ✅ Bundle optimisé (-225KB)
-- ✅ PWA offline-ready
+- SEO parfait (meta tags, structured data, sitemap)
+- Homepage rapide (93%)
+- Bundle optimisé (-225KB)
+- PWA offline-ready
 
 **Améliorations futures** :
 
@@ -366,9 +365,9 @@ Merchant    : Performance 51% | A11y 89% | SEO 100% ✅
 
 <a id="roadmap"></a>
 
-## 🗺️ Roadmap
+## Roadmap
 
-### ✅ Complété (82%)
+### Complété (82%)
 
 - [x] SEO Foundation & Structured Data
 - [x] Accessibility (WCAG 2.1 AA)
@@ -379,7 +378,7 @@ Merchant    : Performance 51% | A11y 89% | SEO 100% ✅
 - [x] Real User Monitoring (RUM)
 - [x] Lighthouse CI automation
 
-### 🔜 À venir (18%)
+### À venir (18%)
 
 - [ ] **Phase 8**: Database Optimization
   - Supabase indexes (`slug`, `status`, `created_at`)
@@ -399,7 +398,7 @@ Merchant    : Performance 51% | A11y 89% | SEO 100% ✅
 
 ---
 
-## 🤝 Contribution
+## Contribution
 
 Les contributions sont les bienvenues ! Merci de :
 
@@ -411,7 +410,7 @@ Les contributions sont les bienvenues ! Merci de :
 
 ---
 
-## 👥 Équipe
+## Équipe
 
 - **Développeur Principal**: [@Kedesh11](https://github.com/Kedesh11)
 - **Design & UX**: Équipe Ouyaboung
@@ -419,13 +418,13 @@ Les contributions sont les bienvenues ! Merci de :
 
 ---
 
-## 📄 Licence
+## Licence
 
 Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
 
 ---
 
-## 🙏 Remerciements
+## Remerciements
 
 - [Next.js](https://nextjs.org/) pour le framework exceptional
 - [Supabase](https://supabase.com/) pour le BaaS
@@ -435,7 +434,7 @@ Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de 
 
 ---
 
-## 📞 Contact
+## Contact
 
 - **Website**: [ouyaboung-eight.vercel.app](https://ouyaboung-eight.vercel.app)
 - **Issues**: [GitHub Issues](https://github.com/Kedesh11/ouyaboung/issues)
