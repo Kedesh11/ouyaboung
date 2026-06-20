@@ -2,11 +2,12 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
-import Map, {
+import MapGL, {
+    Layer,
     Marker,
     Popup,
     NavigationControl,
-    GeolocateControl,
+    Source,
     MapRef
 } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
@@ -16,6 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Clock, Store, Loader2 } from "lucide-react";
 import type { FoodItem, GabonCity } from "@/types";
+import { formatLocationAccuracy, isValidCoordinate } from "@/services";
+import type { UserGeolocation } from "@/services";
 
 // Gabon center and city coordinates
 const GABON_CENTER = { longitude: 11.5, latitude: -0.8 };
@@ -36,37 +39,64 @@ const GABON_CITIES_COORDS: Record<GabonCity, { latitude: number; longitude: numb
 // Free OpenStreetMap tile style
 const MAP_STYLE = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-// Helper function to validate coordinates
-const isValidCoord = (lat: number | undefined | null, lng: number | undefined | null): boolean => {
-    if (lat === undefined || lat === null || lng === undefined || lng === null) return false;
-    if (typeof lat !== 'number' || typeof lng !== 'number') return false;
-    if (isNaN(lat) || isNaN(lng)) return false;
-    if (!isFinite(lat) || !isFinite(lng)) return false;
-    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+type StoreMapEntry = {
+    id: string;
+    merchant: NonNullable<FoodItem["merchant"]>;
+    items: FoodItem[];
+    coords: { latitude: number; longitude: number };
+    totalQuantity: number;
+    lowestPrice: number;
 };
 
-// Generate pseudo-random coordinates for items without merchant location
-const generateCityCoords = (cityName: string, itemId: string): { latitude: number; longitude: number } | null => {
-    const city = cityName as GabonCity;
-    const baseCoords = GABON_CITIES_COORDS[city];
+const createRadiusPolygon = (
+    center: { latitude: number; longitude: number },
+    radiusKm: number,
+    points: number = 96
+) => {
+    const earthRadiusKm = 6371;
+    const coordinates: [number, number][] = [];
+    const latRad = (center.latitude * Math.PI) / 180;
+    const lngRad = (center.longitude * Math.PI) / 180;
+    const angularDistance = radiusKm / earthRadiusKm;
 
-    if (!baseCoords) return null;
+    for (let i = 0; i <= points; i += 1) {
+        const bearing = (i / points) * 2 * Math.PI;
+        const pointLat = Math.asin(
+            Math.sin(latRad) * Math.cos(angularDistance) +
+            Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearing)
+        );
+        const pointLng =
+            lngRad +
+            Math.atan2(
+                Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latRad),
+                Math.cos(angularDistance) - Math.sin(latRad) * Math.sin(pointLat)
+            );
 
-    // Create deterministic offset based on item ID
-    const hash = itemId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const offsetLat = ((hash % 100) - 50) * 0.001;
-    const offsetLng = (((hash * 7) % 100) - 50) * 0.001;
+        coordinates.push([(pointLng * 180) / Math.PI, (pointLat * 180) / Math.PI]);
+    }
 
     return {
-        latitude: baseCoords.latitude + offsetLat,
-        longitude: baseCoords.longitude + offsetLng,
+        type: "FeatureCollection" as const,
+        features: [
+            {
+                type: "Feature" as const,
+                properties: {},
+                geometry: {
+                    type: "Polygon" as const,
+                    coordinates: [coordinates],
+                },
+            },
+        ],
     };
 };
 
 interface GabonMapGLProps {
     items: FoodItem[];
     selectedCity?: GabonCity | "";
-    userLocation?: { latitude: number; longitude: number } | null;
+    userLocation?: UserGeolocation | null;
+    radiusKm?: number;
+    radiusOptions?: number[];
+    onRadiusChange?: (radiusKm: number) => void;
     onItemSelect?: (item: FoodItem) => void;
     className?: string;
 }
@@ -75,28 +105,31 @@ const GabonMapGL = ({
     items,
     selectedCity,
     userLocation,
+    radiusKm = 10,
+    radiusOptions = [2, 5, 10],
+    onRadiusChange,
     onItemSelect,
     className = "",
 }: GabonMapGLProps) => {
     const mapRef = useRef<MapRef>(null);
-    const [popupInfo, setPopupInfo] = useState<FoodItem | null>(null);
+    const [popupInfo, setPopupInfo] = useState<StoreMapEntry | null>(null);
     const [isMapLoaded, setIsMapLoaded] = useState(false);
 
     // Calculate initial view based on selected city
     const initialViewState = useMemo(() => {
+        if (userLocation) {
+            return {
+                longitude: userLocation.longitude,
+                latitude: userLocation.latitude,
+                zoom: 11,
+            };
+        }
         if (selectedCity && selectedCity in GABON_CITIES_COORDS) {
             const coords = GABON_CITIES_COORDS[selectedCity as GabonCity];
             return {
                 longitude: coords.longitude,
                 latitude: coords.latitude,
                 zoom: 12,
-            };
-        }
-        if (userLocation) {
-            return {
-                longitude: userLocation.longitude,
-                latitude: userLocation.latitude,
-                zoom: 11,
             };
         }
         return {
@@ -109,6 +142,7 @@ const GabonMapGL = ({
     // Fly to city when selectedCity changes
     useEffect(() => {
         if (!mapRef.current || !isMapLoaded) return;
+        if (userLocation) return;
 
         if (selectedCity && selectedCity in GABON_CITIES_COORDS) {
             const coords = GABON_CITIES_COORDS[selectedCity as GabonCity];
@@ -118,11 +152,10 @@ const GabonMapGL = ({
                 duration: 1500,
             });
         }
-    }, [selectedCity, isMapLoaded]);
+    }, [selectedCity, isMapLoaded, userLocation]);
 
     useEffect(() => {
         if (!mapRef.current || !isMapLoaded) return;
-        if (selectedCity) return;
         if (!userLocation) return;
 
         mapRef.current.flyTo({
@@ -130,47 +163,58 @@ const GabonMapGL = ({
             zoom: 11,
             duration: 1200,
         });
-    }, [userLocation, selectedCity, isMapLoaded]);
+    }, [userLocation, isMapLoaded]);
 
-    // Generate coordinates for items
-    const itemsWithCoords = useMemo(() => {
-        return items
-            .map(item => {
-                // Try merchant coordinates first
-                const merchantLat = item.merchant?.latitude;
-                const merchantLng = item.merchant?.longitude;
+    const storesWithItems = useMemo(() => {
+        const stores = new Map<string, StoreMapEntry>();
 
-                if (isValidCoord(merchantLat, merchantLng)) {
-                    return {
-                        ...item,
-                        coords: { latitude: merchantLat!, longitude: merchantLng! },
-                    };
-                }
+        items.forEach((item) => {
+            const merchant = item.merchant;
+            if (!merchant?.id) return;
 
-                // Fall back to city-based coordinates
-                // If merchant city is missing and selectedCity is "all", default to Libreville
-                let cityName = item.merchant?.city;
-                if (!cityName) {
-                    cityName = !selectedCity ? "Libreville" : selectedCity;
-                }
+            const merchantLat = merchant.latitude;
+            const merchantLng = merchant.longitude;
+            if (!isValidCoordinate(merchantLat, merchantLng)) return;
 
-                if (cityName) {
-                    const cityCoords = generateCityCoords(cityName, item.id);
-                    if (cityCoords) {
-                        return { ...item, coords: cityCoords };
-                    }
-                }
+            const existing = stores.get(merchant.id);
+            if (existing) {
+                existing.items.push(item);
+                existing.totalQuantity += item.quantity_available || 0;
+                existing.lowestPrice = Math.min(existing.lowestPrice, item.discounted_price);
+                return;
+            }
 
-                return null;
-            })
-            .filter((item): item is FoodItem & { coords: { latitude: number; longitude: number } } =>
-                item !== null && isValidCoord(item.coords.latitude, item.coords.longitude)
-            );
-    }, [items, selectedCity]);
+            stores.set(merchant.id, {
+                id: merchant.id,
+                merchant,
+                items: [item],
+                coords: {
+                    latitude: merchantLat as number,
+                    longitude: merchantLng as number,
+                },
+                totalQuantity: item.quantity_available || 0,
+                lowestPrice: item.discounted_price,
+            });
+        });
 
-    const handleMarkerClick = useCallback((item: FoodItem) => {
-        setPopupInfo(item);
+        return Array.from(stores.values());
+    }, [items]);
+
+    const radiusPolygon = useMemo(() => {
+        if (!userLocation) return null;
+        return createRadiusPolygon(userLocation, radiusKm);
+    }, [radiusKm, userLocation]);
+
+    const handleMarkerHover = useCallback((store: StoreMapEntry) => {
+        setPopupInfo(store);
     }, []);
+
+    const handleMarkerClick = useCallback((store: StoreMapEntry) => {
+        const firstItem = store.items[0];
+        if (firstItem) {
+            onItemSelect?.(firstItem);
+        }
+    }, [onItemSelect]);
 
     const handleMapLoad = useCallback(() => {
         setIsMapLoaded(true);
@@ -180,13 +224,9 @@ const GabonMapGL = ({
         return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
     };
 
-    const getDiscount = (original: number, discounted: number) => {
-        return Math.round((1 - discounted / original) * 100);
-    };
-
     return (
         <Card className={`overflow-hidden relative ${className}`}>
-            <Map
+            <MapGL
                 ref={mapRef}
                 mapLib={maplibregl}
                 initialViewState={initialViewState}
@@ -195,35 +235,57 @@ const GabonMapGL = ({
                 onLoad={handleMapLoad}
                 attributionControl={false}
             >
-                {/* Navigation controls */}
                 <NavigationControl position="top-right" />
 
-                {/* Geolocation control */}
-                <GeolocateControl
-                    position="top-left"
-                    trackUserLocation
-                />
+                {radiusPolygon && (
+                    <Source id="user-radius" type="geojson" data={radiusPolygon}>
+                        <Layer
+                            id="user-radius-fill"
+                            type="fill"
+                            paint={{
+                                "fill-color": "#2563eb",
+                                "fill-opacity": 0.08,
+                            }}
+                        />
+                        <Layer
+                            id="user-radius-line"
+                            type="line"
+                            paint={{
+                                "line-color": "#2563eb",
+                                "line-opacity": 0.55,
+                                "line-width": 2,
+                            }}
+                        />
+                    </Source>
+                )}
 
-                {/* Markers for items */}
-                {itemsWithCoords.map((item) => (
+                {/* Markers for stores with available items */}
+                {storesWithItems.map((store) => (
                     <Marker
-                        key={item.id}
-                        longitude={item.coords.longitude}
-                        latitude={item.coords.latitude}
+                        key={store.id}
+                        longitude={store.coords.longitude}
+                        latitude={store.coords.latitude}
                         anchor="bottom"
                         onClick={(e) => {
                             e.originalEvent.stopPropagation();
-                            handleMarkerClick(item);
+                            handleMarkerClick(store);
                         }}
                     >
-                        <div className="cursor-pointer transform hover:scale-110 transition-transform">
+                        <div
+                            className="cursor-pointer transform hover:scale-110 transition-transform"
+                            onMouseEnter={() => handleMarkerHover(store)}
+                            onFocus={() => handleMarkerHover(store)}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Voir ${store.items.length} offre${store.items.length > 1 ? "s" : ""} chez ${store.merchant.business_name}`}
+                        >
                             <div className="relative">
                                 <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg border-2 border-white">
                                     <MapPin className="w-4 h-4 text-primary-foreground" />
                                 </div>
-                                {item.quantity_available && item.quantity_available <= 3 && (
+                                {store.totalQuantity > 0 && store.totalQuantity <= 3 && (
                                     <span className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full text-[10px] text-white flex items-center justify-center font-bold">
-                                        {item.quantity_available}
+                                        {store.totalQuantity}
                                     </span>
                                 )}
                             </div>
@@ -238,15 +300,18 @@ const GabonMapGL = ({
                         latitude={userLocation.latitude}
                         anchor="center"
                     >
-                        <div className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow" />
+                        <div
+                            className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow ring-4 ring-blue-500/20"
+                            title={formatLocationAccuracy(userLocation)}
+                        />
                     </Marker>
                 )}
 
                 {/* Popup */}
                 {popupInfo && (
                     <Popup
-                        longitude={itemsWithCoords.find(i => i.id === popupInfo.id)?.coords.longitude || 0}
-                        latitude={itemsWithCoords.find(i => i.id === popupInfo.id)?.coords.latitude || 0}
+                        longitude={popupInfo.coords.longitude}
+                        latitude={popupInfo.coords.latitude}
                         anchor="bottom"
                         onClose={() => setPopupInfo(null)}
                         closeButton={true}
@@ -257,10 +322,10 @@ const GabonMapGL = ({
                         <div className="p-2 min-w-[200px]">
                             <div className="flex items-start gap-2 mb-2">
                                 <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0 relative">
-                                    {popupInfo.image_url ? (
+                                    {popupInfo.items[0]?.image_url ? (
                                         <Image
-                                            src={popupInfo.image_url}
-                                            alt={popupInfo.name}
+                                            src={popupInfo.items[0].image_url}
+                                            alt={popupInfo.merchant.business_name}
                                             fill
                                             className="object-cover"
                                             sizes="48px"
@@ -272,9 +337,9 @@ const GabonMapGL = ({
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-semibold text-sm truncate">{popupInfo.name}</h3>
+                                    <h3 className="font-semibold text-sm truncate">{popupInfo.merchant.business_name}</h3>
                                     <p className="text-xs text-muted-foreground truncate">
-                                        {popupInfo.merchant?.business_name || "Commerce"}
+                                        {popupInfo.merchant.quartier || popupInfo.merchant.city || "Commerce"}
                                     </p>
                                 </div>
                             </div>
@@ -282,24 +347,23 @@ const GabonMapGL = ({
                             <div className="space-y-1 mb-2">
                                 <div className="flex items-center gap-2">
                                     <Badge variant="secondary" className="text-xs">
-                                        -{getDiscount(popupInfo.original_price, popupInfo.discounted_price)}%
+                                        {popupInfo.items.length} offre{popupInfo.items.length > 1 ? 's' : ''}
                                     </Badge>
                                     <span className="font-bold text-primary text-sm">
-                                        {formatPrice(popupInfo.discounted_price)}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground line-through">
-                                        {formatPrice(popupInfo.original_price)}
+                                        Dès {formatPrice(popupInfo.lowestPrice)}
                                     </span>
                                 </div>
 
-                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <Clock className="w-3 h-3" />
-                                    <span>{popupInfo.pickup_start} - {popupInfo.pickup_end}</span>
-                                </div>
+                                {popupInfo.items[0] && (
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Clock className="w-3 h-3" />
+                                        <span>{popupInfo.items[0].pickup_start} - {popupInfo.items[0].pickup_end}</span>
+                                    </div>
+                                )}
 
-                                {popupInfo.quantity_available && (
+                                {popupInfo.totalQuantity > 0 && (
                                     <p className="text-xs text-muted-foreground">
-                                        {popupInfo.quantity_available} disponible{popupInfo.quantity_available > 1 ? 's' : ''}
+                                        {popupInfo.totalQuantity} article{popupInfo.totalQuantity > 1 ? 's' : ''} disponible{popupInfo.totalQuantity > 1 ? 's' : ''}
                                     </p>
                                 )}
                             </div>
@@ -308,7 +372,7 @@ const GabonMapGL = ({
                                 size="sm"
                                 className="w-full"
                                 onClick={() => {
-                                    onItemSelect?.(popupInfo);
+                                    handleMarkerClick(popupInfo);
                                     setPopupInfo(null);
                                 }}
                             >
@@ -317,14 +381,14 @@ const GabonMapGL = ({
                         </div>
                     </Popup>
                 )}
-            </Map>
+            </MapGL>
 
             {/* Legend */}
             <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur rounded-lg p-3 shadow-lg border">
                 <div className="flex items-center gap-2 text-xs">
                     <div className="flex items-center gap-1">
                         <div className="w-3 h-3 bg-primary rounded-full" />
-                        <span>Offre disponible</span>
+                        <span>Magasin avec offres</span>
                     </div>
                     <div className="flex items-center gap-1">
                         <div className="w-3 h-3 bg-destructive rounded-full" />
@@ -333,9 +397,28 @@ const GabonMapGL = ({
                 </div>
             </div>
 
+            {userLocation && onRadiusChange && (
+                <div className="absolute top-4 left-4 bg-card/95 backdrop-blur rounded-md p-2 shadow-lg border">
+                    <div className="flex items-center gap-1">
+                        {radiusOptions.map((option) => (
+                            <Button
+                                key={option}
+                                type="button"
+                                variant={radiusKm === option ? "default" : "ghost"}
+                                size="sm"
+                                className="h-8 px-3 text-xs"
+                                onClick={() => onRadiusChange(option)}
+                            >
+                                {option} km
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Items count */}
             <Badge className="absolute top-4 right-14 bg-primary">
-                {itemsWithCoords.length} offres
+                {storesWithItems.length} magasin{storesWithItems.length > 1 ? 's' : ''}
             </Badge>
 
             {/* Loading overlay */}

@@ -24,8 +24,39 @@ const MERCHANT_LIST_COLUMNS =
   'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
 const FOOD_ITEM_LIST_COLUMNS =
   'id,merchant_id,name,description,category,original_price,discounted_price,discount_percentage,quantity_available,quantity_initial,image_url,images,pickup_start,pickup_end,expiry_date,is_available,contents,badges,slug,created_at,updated_at';
+const DEFAULT_SEARCH_LIMIT = 50;
+const DISTANCE_SEARCH_LIMIT = 1000;
+
 const toOne = <T>(value: T | T[] | null | undefined): T | null =>
   Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+
+const isValidCoord = (lat?: number | null, lng?: number | null): boolean =>
+  typeof lat === 'number' &&
+  typeof lng === 'number' &&
+  Number.isFinite(lat) &&
+  Number.isFinite(lng) &&
+  lat >= -90 &&
+  lat <= 90 &&
+  lng >= -180 &&
+  lng <= 180;
+
+const calculateDistanceKm = (
+  origin: { latitude: number; longitude: number },
+  target: { latitude: number; longitude: number }
+): number => {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(target.latitude - origin.latitude);
+  const dLng = toRad(target.longitude - origin.longitude);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(origin.latitude)) *
+      Math.cos(toRad(target.latitude)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
 
 /**
  * Get all available food items
@@ -468,6 +499,11 @@ export const searchFoodItems = async (
   }
 
   const client = requireSupabaseClient();
+  const hasDistanceFilter =
+    typeof filters.max_distance_km === 'number' &&
+    filters.max_distance_km > 0 &&
+    isValidCoord(filters.user_latitude, filters.user_longitude);
+
   let query = client
     .from(DB_TABLES.FOOD_ITEMS)
     .select(`${FOOD_ITEM_LIST_COLUMNS}, merchants!inner(${MERCHANT_LIST_COLUMNS})`)
@@ -494,6 +530,19 @@ export const searchFoodItems = async (
   if (filters.max_price !== undefined) {
     query = query.lte('discounted_price', filters.max_price);
   }
+  if (hasDistanceFilter) {
+    const latitude = filters.user_latitude as number;
+    const longitude = filters.user_longitude as number;
+    const radiusKm = filters.max_distance_km as number;
+    const latDelta = radiusKm / 111;
+    const lonDelta = radiusKm / (111 * Math.max(Math.cos(latitude * Math.PI / 180), 0.01));
+
+    query = query
+      .gte('merchants.latitude', latitude - latDelta)
+      .lte('merchants.latitude', latitude + latDelta)
+      .gte('merchants.longitude', longitude - lonDelta)
+      .lte('merchants.longitude', longitude + lonDelta);
+  }
 
   // Sort
   switch (filters.sort_by) {
@@ -510,7 +559,7 @@ export const searchFoodItems = async (
       query = query.order('created_at', { ascending: false });
   }
 
-  const { data, error } = await query.limit(50);
+  const { data, error } = await query.limit(hasDistanceFilter ? DISTANCE_SEARCH_LIMIT : DEFAULT_SEARCH_LIMIT);
 
   if (error) {
     if (cached) {
@@ -523,10 +572,39 @@ export const searchFoodItems = async (
     };
   }
 
-  const items = data?.map((item) => ({
+  let items = data?.map((item) => ({
     ...item,
     merchant: toOne(item.merchants),
   })) as FoodItem[];
+
+  if (hasDistanceFilter) {
+    const origin = {
+      latitude: filters.user_latitude as number,
+      longitude: filters.user_longitude as number,
+    };
+    const radiusKm = filters.max_distance_km as number;
+
+    items = items
+      .map((item) => {
+        const merchantLat = item.merchant?.latitude;
+        const merchantLng = item.merchant?.longitude;
+        const distanceKm = isValidCoord(merchantLat, merchantLng)
+          ? calculateDistanceKm(origin, {
+              latitude: merchantLat as number,
+              longitude: merchantLng as number,
+            })
+          : Number.POSITIVE_INFINITY;
+        return { item, distanceKm };
+      })
+      .filter(({ distanceKm }) => distanceKm <= radiusKm)
+      .sort((a, b) => {
+        if (filters.sort_by === 'distance') {
+          return a.distanceKm - b.distanceKm;
+        }
+        return 0;
+      })
+      .map(({ item }) => item);
+  }
 
   await setOfflineCacheAsync(cacheKey, items);
 

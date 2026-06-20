@@ -58,10 +58,10 @@ serve(async (req) => {
         console.log('[Airtel Function] Authenticated user:', user.id)
 
         // 2. Payload
-        const { phone: rawPhone, orderId, baseAmount } = await req.json()
-        const phone = rawPhone.replace(/\s+/g, '')
+        const { phone: rawPhone, orderId } = await req.json()
+        const phone = typeof rawPhone === 'string' ? rawPhone.replace(/\s+/g, '') : ''
 
-        if (!phone || !orderId || !baseAmount) {
+        if (!phone || !orderId) {
             return new Response(
                 JSON.stringify({ success: false, error: { message: 'Missing required fields' } }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -73,7 +73,7 @@ serve(async (req) => {
         // 3. Validate Order
         const { data: order, error: orderError } = await supabaseClient
             .from('orders')
-            .select('id, merchant_id, user_id')
+            .select('id, merchant_id, user_id, status, total_price')
             .eq('id', orderId)
             .single()
 
@@ -88,6 +88,24 @@ serve(async (req) => {
             return new Response(
                 JSON.stringify({ success: false, error: { message: 'Unauthorized access to order' } }),
                 { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        if (order.status !== 'pending') {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: { message: 'Order is not awaiting payment', code: 'INVALID_ORDER_STATUS' }
+                }),
+                { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const baseAmount = Number(order.total_price)
+        if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+            return new Response(
+                JSON.stringify({ success: false, error: { message: 'Invalid order amount', code: 'INVALID_AMOUNT' } }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 

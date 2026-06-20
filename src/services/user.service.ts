@@ -14,7 +14,7 @@ import {
   removeFromFavorites,
   getUserImpact,
 } from '@/api';
-import type { ApiResponse, UserProfile, UserPreferences, UserImpact } from '@/types';
+import type { ApiResponse, UserProfile, UserPreferences, UserImpact, UserLocationPreference } from '@/types';
 
 /**
  * Get user profile by ID
@@ -92,6 +92,33 @@ export const updateNotificationPreferences = async (
   };
 
   // Remove undefined values
+  Object.keys(updates).forEach(key => {
+    if (updates[key as keyof typeof updates] === undefined) {
+      delete updates[key as keyof typeof updates];
+    }
+  });
+
+  return updateUserPreferences(userId, updates);
+};
+
+/**
+ * Update location-related user preferences.
+ */
+export const updateUserLocationSettings = async (
+  userId: string,
+  preferences: {
+    locationEnabled?: boolean;
+    defaultRadiusKm?: number;
+    lastKnownLocation?: UserLocationPreference | null;
+  }
+): Promise<ApiResponse<UserPreferences>> => {
+  const updates: Partial<UserPreferences> = {
+    location_enabled: preferences.locationEnabled,
+    default_radius_km: preferences.defaultRadiusKm,
+    max_distance_km: preferences.defaultRadiusKm,
+    last_known_location: preferences.lastKnownLocation,
+  };
+
   Object.keys(updates).forEach(key => {
     if (updates[key as keyof typeof updates] === undefined) {
       delete updates[key as keyof typeof updates];

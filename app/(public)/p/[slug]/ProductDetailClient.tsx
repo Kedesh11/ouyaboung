@@ -245,7 +245,7 @@ export default function ProductDetailClient({ product: initialProduct, slug }: P
                 {product.quantity_available > 0 ? "Réserver maintenant" : "Épuisé"}
               </Button>
               <p className="text-center text-xs text-muted-foreground mt-3 flex items-center justify-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5" /> Paiement sécurisé lors du retrait chez le
+                <AlertCircle className="w-3.5 h-3.5" /> Paiement mobile sécurisé avant retrait chez le
                 commerçant
               </p>
             </div>

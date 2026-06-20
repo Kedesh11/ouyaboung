@@ -176,6 +176,8 @@ export const search = async (filters: {
   minPrice?: number;
   maxPrice?: number;
   maxDistanceKm?: number;
+  userLatitude?: number;
+  userLongitude?: number;
   pickupToday?: boolean;
   sortBy?: 'distance' | 'price' | 'discount' | 'rating';
 }): Promise<ApiResponse<FoodItem[]>> => {
@@ -187,6 +189,8 @@ export const search = async (filters: {
     min_price: filters.minPrice,
     max_price: filters.maxPrice,
     max_distance_km: filters.maxDistanceKm,
+    user_latitude: filters.userLatitude,
+    user_longitude: filters.userLongitude,
     pickup_today: filters.pickupToday,
     sort_by: filters.sortBy,
   };

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +21,12 @@ import {
     createReservation,
     resolveUserLocation,
     getCachedUserLocation,
+    formatLocationAccuracy,
+    isValidCoordinate,
 } from "@/services";
 import { useToast } from "@/hooks/use-toast";
 import type { FoodItem, FoodCategory, GabonCity, MerchantType } from "@/types";
+import type { UserGeolocation } from "@/services";
 
 // Dynamic load map component to avoid SSR issues - using MapLibre instead of Leaflet
 const GabonMapGL = dynamic(() => import("@/components/GabonMapGL"), {
@@ -68,15 +72,8 @@ const FOOD_CATEGORIES: FoodCategory[] = [
     'mixed_basket',
 ];
 
-const isValidCoord = (lat?: number | null, lng?: number | null): lat is number =>
-    typeof lat === "number" &&
-    typeof lng === "number" &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180;
+const DEFAULT_NEARBY_RADIUS_KM = 10;
+const NEARBY_RADIUS_OPTIONS = [2, 5, 10];
 
 const calculateDistanceKm = (
     origin: { latitude: number; longitude: number },
@@ -99,17 +96,19 @@ const calculateDistanceKm = (
 
 const SearchPage = () => {
     const { toast } = useToast();
+    const router = useRouter();
     const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
     const [showFilters, setShowFilters] = useState(false);
     const [priceRange, setPriceRange] = useState([0, 20000]); // XAF
     const [isLoading, setIsLoading] = useState(true);
     const [items, setItems] = useState<FoodItem[]>([]);
-    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+    const [userLocation, setUserLocation] = useState<UserGeolocation | null>(null);
     const [isLocating, setIsLocating] = useState(false);
     const [geoStatus, setGeoStatus] = useState<"idle" | "granted" | "approximate" | "denied" | "unavailable">("idle");
     const [userId, setUserId] = useState<string | null>(null);
     const [reservedCountMap, setReservedCountMap] = useState<Record<string, number>>({});
     const [reservingItemId, setReservingItemId] = useState<string | null>(null);
+    const [nearbyRadiusKm, setNearbyRadiusKm] = useState(DEFAULT_NEARBY_RADIUS_KM);
 
     // Filter states
     const [selectedCity, setSelectedCity] = useState<GabonCity | "all">("all");
@@ -118,68 +117,81 @@ const SearchPage = () => {
     const [sortBy, setSortBy] = useState<"distance" | "price" | "discount" | "rating">("distance");
     const [searchQuery, setSearchQuery] = useState("");
 
-    const requestUserLocation = useCallback(async (showErrorFeedback: boolean = false, forceRefresh: boolean = false) => {
+    const requestUserLocation = useCallback(async (
+        showFeedback: boolean = false,
+        forceRefresh: boolean = false,
+        requestBrowserPermission: boolean = showFeedback
+    ) => {
         setIsLocating(true);
-        const result = await resolveUserLocation({
-            forceRefresh,
-            timeoutMs: 12000,
-            maximumAgeMs: 300000,
-            enableHighAccuracy: true,
-            fallbackToIp: true,
-        });
-
-        if (result.success && result.data) {
-            setUserLocation({
-                latitude: result.data.latitude,
-                longitude: result.data.longitude,
+        try {
+            const result = await resolveUserLocation({
+                forceRefresh,
+                timeoutMs: requestBrowserPermission ? 15000 : 8000,
+                maximumAgeMs: 300000,
+                enableHighAccuracy: requestBrowserPermission,
+                fallbackToIp: true,
+                requestBrowserPermission,
+                retryLowAccuracy: true,
             });
-            setGeoStatus(result.data.isApproximate ? "approximate" : "granted");
 
-            if (showErrorFeedback && result.data.isApproximate) {
-                toast({
-                    title: "Position approximative activée",
-                    description: "Nous utilisons une geolocalisation IP temporaire. Autorisez le GPS pour plus de precision.",
-                });
-            }
-        } else {
-            if (result.error?.code === "GEO_PERMISSION_DENIED") {
-                setGeoStatus("denied");
-                if (showErrorFeedback) {
+            if (result.success && result.data) {
+                setUserLocation(result.data);
+                setGeoStatus(result.data.isApproximate ? "approximate" : "granted");
+
+                if (showFeedback && result.data.isApproximate) {
                     toast({
-                        title: "Localisation refusée",
-                        description: "Autorisez la localisation pour trier les boutiques autour de vous.",
-                        variant: "destructive",
+                        title: "Position approximative activée",
+                        description: "Nous utilisons une position IP temporaire. Autorisez le GPS pour plus de précision.",
                     });
                 }
             } else {
-                setGeoStatus("unavailable");
-                if (showErrorFeedback) {
-                    toast({
-                        title: "Position indisponible",
-                        description: "Impossible d'obtenir votre position actuelle.",
-                        variant: "destructive",
-                    });
+                if (result.error?.code === "GEO_PERMISSION_DENIED") {
+                    setGeoStatus("denied");
+                    if (showFeedback) {
+                        toast({
+                            title: "Localisation refusée",
+                            description: "Autorisez la localisation pour trier les boutiques autour de vous.",
+                            variant: "destructive",
+                        });
+                    }
+                } else {
+                    setGeoStatus("unavailable");
+                    if (showFeedback) {
+                        toast({
+                            title: "Position indisponible",
+                            description: "Impossible d'obtenir votre position actuelle.",
+                            variant: "destructive",
+                        });
+                    }
                 }
             }
+        } catch {
+            setGeoStatus("unavailable");
+            if (showFeedback) {
+                toast({
+                    title: "Position indisponible",
+                    description: "Impossible d'obtenir votre position actuelle.",
+                    variant: "destructive",
+                });
+            }
+        } finally {
+            setIsLocating(false);
         }
-
-        setIsLocating(false);
     }, [toast]);
 
     // Load items on mount and when filters change
     useEffect(() => {
         loadItems();
-    }, [selectedCity, selectedCategory, selectedMerchantType, priceRange, sortBy]);
+    }, [selectedCity, selectedCategory, selectedMerchantType, priceRange, sortBy, userLocation, nearbyRadiusKm]);
 
     useEffect(() => {
         const cached = getCachedUserLocation();
-        if (cached && isValidCoord(cached.latitude, cached.longitude)) {
-            setUserLocation({ latitude: cached.latitude, longitude: cached.longitude });
+        if (cached && isValidCoordinate(cached.latitude, cached.longitude)) {
+            setUserLocation(cached);
             setGeoStatus(cached.isApproximate ? "approximate" : "granted");
         }
 
-        // Active by default: trigger geolocation request as soon as page loads.
-        requestUserLocation(false, true);
+        requestUserLocation(false, false, false);
     }, [requestUserLocation]);
 
     useEffect(() => {
@@ -204,6 +216,8 @@ const SearchPage = () => {
 
     const loadItems = async () => {
         setIsLoading(true);
+        const hasNearbyOrigin =
+            userLocation && isValidCoordinate(userLocation.latitude, userLocation.longitude);
 
         const result = await searchInventory({
             city: selectedCity === "all" ? undefined : selectedCity,
@@ -211,6 +225,9 @@ const SearchPage = () => {
             merchantType: selectedMerchantType === "all" ? undefined : selectedMerchantType,
             minPrice: priceRange[0],
             maxPrice: priceRange[1],
+            maxDistanceKm: hasNearbyOrigin ? nearbyRadiusKm : undefined,
+            userLatitude: hasNearbyOrigin ? userLocation.latitude : undefined,
+            userLongitude: hasNearbyOrigin ? userLocation.longitude : undefined,
             sortBy,
         });
 
@@ -229,9 +246,17 @@ const SearchPage = () => {
         }
 
         setIsLoading(true);
+        const hasNearbyOrigin =
+            userLocation && isValidCoordinate(userLocation.latitude, userLocation.longitude);
         const result = await searchInventory({
             city: selectedCity === "all" ? undefined : selectedCity,
             category: selectedCategory === "all" ? undefined : selectedCategory,
+            merchantType: selectedMerchantType === "all" ? undefined : selectedMerchantType,
+            minPrice: priceRange[0],
+            maxPrice: priceRange[1],
+            maxDistanceKm: hasNearbyOrigin ? nearbyRadiusKm : undefined,
+            userLatitude: hasNearbyOrigin ? userLocation.latitude : undefined,
+            userLongitude: hasNearbyOrigin ? userLocation.longitude : undefined,
             sortBy,
         });
 
@@ -351,10 +376,12 @@ const SearchPage = () => {
         items.forEach((item) => {
             const merchantLat = item.merchant?.latitude;
             const merchantLng = item.merchant?.longitude;
-            if (isValidCoord(merchantLat, merchantLng)) {
+            if (isValidCoordinate(merchantLat, merchantLng)) {
+                const latitude = merchantLat as number;
+                const longitude = merchantLng as number;
                 distanceMap[item.id] = calculateDistanceKm(userLocation, {
-                    latitude: merchantLat,
-                    longitude: merchantLng as number,
+                    latitude,
+                    longitude,
                 });
             }
         });
@@ -362,17 +389,26 @@ const SearchPage = () => {
         return distanceMap;
     }, [items, userLocation]);
 
+    const itemsWithinRadius = useMemo(() => {
+        if (!userLocation) return items;
+
+        return items.filter((item) => {
+            const distance = distanceByItemId[item.id];
+            return typeof distance === "number" && distance <= nearbyRadiusKm;
+        });
+    }, [distanceByItemId, items, nearbyRadiusKm, userLocation]);
+
     const displayedItems = useMemo(() => {
         if (sortBy !== "distance" || !userLocation) {
-            return items;
+            return itemsWithinRadius;
         }
 
-        return [...items].sort((a, b) => {
+        return [...itemsWithinRadius].sort((a, b) => {
             const da = distanceByItemId[a.id] ?? Number.MAX_SAFE_INTEGER;
             const db = distanceByItemId[b.id] ?? Number.MAX_SAFE_INTEGER;
             return da - db;
         });
-    }, [items, sortBy, userLocation, distanceByItemId]);
+    }, [itemsWithinRadius, sortBy, userLocation, distanceByItemId]);
 
     // Convert FoodItem to FoodCardItem format
     const toFoodCardItem = (item: FoodItem): FoodCardItem => ({
@@ -456,18 +492,22 @@ const SearchPage = () => {
                             <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                                 <div className="flex items-center gap-2">
                                     <MapPin className="w-3.5 h-3.5" />
-                                    {geoStatus === "granted" && userLocation ? (
+                                    {isLocating ? (
+                                        <span>Recherche de votre position...</span>
+                                    ) : geoStatus === "granted" && userLocation ? (
                                         <span>
-                                            Localisation active: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+                                            {formatLocationAccuracy(userLocation)}: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
                                         </span>
                                     ) : geoStatus === "approximate" && userLocation ? (
                                         <span>
-                                            Position approximative (IP): {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+                                            {formatLocationAccuracy(userLocation)}: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
                                         </span>
                                     ) : geoStatus === "denied" ? (
                                         <span>Localisation refusée. Les résultats ne sont pas triés autour de vous.</span>
+                                    ) : geoStatus === "unavailable" ? (
+                                        <span>Position indisponible. Les résultats ne sont pas triés autour de vous.</span>
                                     ) : (
-                                        <span>Activation automatique de la localisation...</span>
+                                        <span>Position non définie.</span>
                                     )}
                                 </div>
                                 <Button
@@ -475,7 +515,7 @@ const SearchPage = () => {
                                     variant="ghost"
                                     size="sm"
                                     className="h-7 gap-1.5"
-                                    onClick={() => requestUserLocation(true, true)}
+                                    onClick={() => requestUserLocation(true, true, true)}
                                     disabled={isLocating}
                                 >
                                     {isLocating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LocateFixed className="w-3.5 h-3.5" />}
@@ -613,6 +653,7 @@ const SearchPage = () => {
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-muted-foreground">
                             <span className="font-semibold text-foreground">{displayedItems.length}</span> résultats trouvés
+                            {userLocation ? ` dans un rayon de ${nearbyRadiusKm} km` : ""}
                         </p>
                         <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                             <SelectTrigger className="w-40">
@@ -663,17 +704,16 @@ const SearchPage = () => {
                             {/* Map View - Conditionally rendered to prevent MapLibre reuse errors */}
                             {viewMode === "map" && (
                                 <GabonMapGL
-                                    items={displayedItems}
+                                    items={userLocation ? displayedItems : []}
                                     selectedCity={selectedCity === "all" ? "" : selectedCity}
                                     userLocation={userLocation}
+                                    radiusKm={nearbyRadiusKm}
+                                    radiusOptions={NEARBY_RADIUS_OPTIONS}
+                                    onRadiusChange={setNearbyRadiusKm}
                                     onItemSelect={(item) => {
-                                        setViewMode("grid");
-                                        setTimeout(() => {
-                                            const el = document.querySelector(`[data-food-id="${item.id}"]`);
-                                            if (el) {
-                                                el.scrollIntoView({ behavior: "smooth", block: "center" });
-                                            }
-                                        }, 0);
+                                        if (item.slug) {
+                                            router.push(`/p/${item.slug}`);
+                                        }
                                     }}
                                 />
                             )}

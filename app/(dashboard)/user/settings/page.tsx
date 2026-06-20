@@ -21,11 +21,22 @@ import {
     Shield,
     Loader2,
     Eye,
-    EyeOff
+    EyeOff,
+    LocateFixed
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { changePassword, updateProfile, getAuthUser, logout } from "@/services/auth.service";
 import { getUserNotifications } from "@/services/notification.service";
+import { getNotificationPreferences, updateUserLocationSettings } from "@/services/user.service";
+import {
+    clearCachedUserLocation,
+    formatLocationAccuracy,
+    getCachedUserLocation,
+    isValidCoordinate,
+    resolveUserLocation,
+} from "@/services";
+import type { UserGeolocation } from "@/services";
+import type { UserLocationPreference } from "@/types";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
@@ -40,6 +51,44 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useRouter } from "next/navigation";
+
+const toLocationPreference = (location: UserGeolocation): UserLocationPreference => ({
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracy: location.accuracy ?? null,
+    source: location.source,
+    is_approximate: location.isApproximate,
+    city: location.city ?? null,
+    country: location.country ?? null,
+    region: location.region ?? null,
+    updated_at: new Date().toISOString(),
+});
+
+const toGeolocation = (location: UserLocationPreference): UserGeolocation => ({
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracy: location.accuracy ?? null,
+    source: location.source === "browser" || location.source === "ip_lookup" || location.source === "default_city" || location.source === "cache"
+        ? location.source
+        : "cache",
+    isApproximate: location.is_approximate,
+    city: location.city ?? null,
+    country: location.country ?? null,
+    region: location.region ?? null,
+});
+
+const formatLocationDate = (value?: string): string => {
+    if (!value) return "Date inconnue";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Date inconnue";
+    return date.toLocaleString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+};
 
 export default function SettingsPage() {
     const { toast } = useToast();
@@ -67,6 +116,9 @@ export default function SettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isDownloads, setIsDownloading] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isLocating, setIsLocating] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [savedLocation, setSavedLocation] = useState<UserLocationPreference | null>(null);
 
     // Password visibility state
     const [showNewPassword, setShowNewPassword] = useState(false);
@@ -92,13 +144,42 @@ export default function SettingsPage() {
             setIsLoading(true);
             try {
                 const { data } = await getAuthUser();
-                const metadata = data?.user?.user_metadata || {};
+                const user = data?.user;
+                const metadata = user?.user_metadata || {};
+                setUserId(user?.id || null);
+
+                let locationEnabled = metadata.locationEnabled !== undefined ? metadata.locationEnabled : true;
+                let defaultRadius = metadata.defaultRadius || "5";
+                let locationFromPreferences: UserLocationPreference | null = null;
+
+                if (user?.id) {
+                    const preferencesRes = await getNotificationPreferences(user.id);
+                    const preferences = preferencesRes.data;
+                    if (preferences) {
+                        locationEnabled = preferences.location_enabled ?? locationEnabled;
+                        defaultRadius = String(
+                            preferences.default_radius_km ??
+                            preferences.max_distance_km ??
+                            defaultRadius
+                        );
+                        locationFromPreferences = preferences.last_known_location ?? null;
+                    }
+                }
+
+                const metadataLocation = metadata.lastKnownLocation as UserLocationPreference | undefined;
+                const cachedLocation = getCachedUserLocation();
+                const cachedPreference =
+                    cachedLocation && isValidCoordinate(cachedLocation.latitude, cachedLocation.longitude)
+                        ? toLocationPreference(cachedLocation)
+                        : null;
+
+                setSavedLocation(locationFromPreferences ?? metadataLocation ?? cachedPreference);
 
                 setSettings({
                     language: metadata.language || "fr",
                     darkMode: resolvedTheme === 'dark',
-                    locationEnabled: metadata.locationEnabled !== undefined ? metadata.locationEnabled : true,
-                    defaultRadius: metadata.defaultRadius || "5",
+                    locationEnabled,
+                    defaultRadius,
                     profilePublic: metadata.profilePublic || false,
                     shareStats: metadata.shareStats !== undefined ? metadata.shareStats : true,
                 });
@@ -117,17 +198,25 @@ export default function SettingsPage() {
             // 1. Save generic settings to user_metadata
             const profileRes = await updateProfile({
                 ...settings,
-                darkMode: resolvedTheme === 'dark' // Ensure we save actual theme state
+                darkMode: resolvedTheme === 'dark', // Ensure we save actual theme state
+                lastKnownLocation: savedLocation,
             });
 
             if (!profileRes.success) {
                 throw new Error("Erreur lors de la sauvegarde du profil");
             }
 
-            // 2. We don't need to manually save notification preferences here because the hook
-            // handles them dynamically (if we were binding them directly to hook state),
-            // BUT if we want a "global save" feel, we can just acknowledge success.
-            // However, the Switches for notifications below should call updateNotifPreferences directly.
+            if (userId) {
+                const preferencesRes = await updateUserLocationSettings(userId, {
+                    locationEnabled: settings.locationEnabled,
+                    defaultRadiusKm: Number(settings.defaultRadius),
+                    lastKnownLocation: savedLocation,
+                });
+
+                if (!preferencesRes.success) {
+                    throw new Error("Erreur lors de la sauvegarde des préférences de localisation");
+                }
+            }
 
             toast({
                 title: "Paramètres enregistrés",
@@ -141,6 +230,86 @@ export default function SettingsPage() {
             });
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleUseCurrentLocation = async () => {
+        setIsLocating(true);
+        try {
+            const result = await resolveUserLocation({
+                forceRefresh: true,
+                timeoutMs: 15000,
+                maximumAgeMs: 60000,
+                enableHighAccuracy: true,
+                fallbackToIp: true,
+                requestBrowserPermission: true,
+                retryLowAccuracy: true,
+            });
+
+            if (!result.success || !result.data) {
+                const denied = result.error?.code === "GEO_PERMISSION_DENIED";
+                toast({
+                    title: denied ? "Localisation refusée" : "Position indisponible",
+                    description: denied
+                        ? "Autorisez la localisation dans votre navigateur pour enregistrer votre position."
+                        : "Impossible d'obtenir une position fiable pour le moment.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            const nextLocation = toLocationPreference(result.data);
+            setSavedLocation(nextLocation);
+            setSettings((current) => ({ ...current, locationEnabled: true }));
+
+            if (userId) {
+                await updateUserLocationSettings(userId, {
+                    locationEnabled: true,
+                    defaultRadiusKm: Number(settings.defaultRadius),
+                    lastKnownLocation: nextLocation,
+                });
+            }
+
+            await updateProfile({
+                locationEnabled: true,
+                defaultRadius: settings.defaultRadius,
+                lastKnownLocation: nextLocation,
+            });
+
+            toast({
+                title: result.data.isApproximate ? "Position approximative enregistrée" : "Position GPS enregistrée",
+                description: formatLocationAccuracy(result.data),
+            });
+        } catch {
+            toast({
+                title: "Erreur",
+                description: "Impossible d'enregistrer votre position actuelle.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsLocating(false);
+        }
+    };
+
+    const handleForgetLocation = async () => {
+        clearCachedUserLocation();
+        setSavedLocation(null);
+
+        try {
+            if (userId) {
+                await updateUserLocationSettings(userId, { lastKnownLocation: null });
+            }
+            await updateProfile({ lastKnownLocation: null });
+            toast({
+                title: "Position oubliée",
+                description: "La position enregistrée a été supprimée de vos paramètres.",
+            });
+        } catch {
+            toast({
+                title: "Erreur",
+                description: "Impossible de supprimer la position enregistrée.",
+                variant: "destructive",
+            });
         }
     };
 
@@ -209,6 +378,7 @@ export default function SettingsPage() {
             const exportData = {
                 user: userData?.user,
                 settings: settings,
+                savedLocation,
                 notifications: notificationsRes.data || [],
                 exportedAt: new Date().toISOString(),
             };
@@ -358,6 +528,60 @@ export default function SettingsPage() {
                                 checked={settings.locationEnabled}
                                 onCheckedChange={(checked) => setSettings({ ...settings, locationEnabled: checked })}
                             />
+                        </div>
+
+                        <Separator />
+
+                        <div className="rounded-md border p-4 space-y-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="space-y-1">
+                                    <Label>Position enregistrée</Label>
+                                    {savedLocation ? (
+                                        <>
+                                            <p className="text-sm text-foreground">
+                                                {formatLocationAccuracy(toGeolocation(savedLocation))}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {savedLocation.latitude.toFixed(5)}, {savedLocation.longitude.toFixed(5)}
+                                                {" · "}
+                                                Mise à jour le {formatLocationDate(savedLocation.updated_at)}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">
+                                            Aucune position personnelle n'est enregistrée.
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2"
+                                        onClick={handleUseCurrentLocation}
+                                        disabled={isLocating || !settings.locationEnabled}
+                                    >
+                                        {isLocating ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <LocateFixed className="h-4 w-4" />
+                                        )}
+                                        {isLocating ? "Localisation..." : "Mettre à jour"}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="gap-2"
+                                        onClick={handleForgetLocation}
+                                        disabled={isLocating || !savedLocation}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Oublier
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
 
                         <Separator />

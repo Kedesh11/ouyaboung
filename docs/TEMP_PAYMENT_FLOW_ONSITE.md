@@ -1,4 +1,7 @@
-# Flux paiement temporaire (onsite)
+# Flux paiement temporaire (onsite) - obsolete
+
+> Statut: **obsolete depuis le durcissement du 20 juin 2026**.
+> Le paiement mobile Q-Gabon est le flux nominal. Le scan QR ne doit plus confirmer un paiement sur place implicite et refuse les commandes `pending`.
 
 ## Contexte
 - Date de mise en place: 27 fevrier 2026
@@ -53,7 +56,8 @@
 
 ## Verification rapide
 - Client > reservations:
-  - `Payer` ouvre le modal onsite avec infos marchand.
-  - `Voir le QR Code` est disponible pour commandes en cours (dont `pending`).
+  - `Payer` ouvre le modal de paiement mobile Q-Gabon.
+  - `Voir le QR Code` est disponible uniquement pour commandes `confirmed` ou `ready`.
 - Marchand > scan:
-  - Scan QR d'une commande `pending` => commande passee `completed`.
+  - Scan QR d'une commande `pending` => refus `INVALID_ORDER_STATUS`.
+  - Scan QR d'une commande `confirmed` ou `ready` => commande passee `completed`.

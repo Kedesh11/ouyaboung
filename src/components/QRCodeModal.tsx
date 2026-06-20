@@ -42,6 +42,13 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
 
     const usesFallbackReference = !normalizePickupCode(order.pickup_code || "");
     const displayPickupCode = pickupCode ? formatPickupCode(pickupCode) : "INDISPONIBLE";
+    const qrPayload = pickupCode
+        ? JSON.stringify({
+            type: "ouyaboung_pickup",
+            pickup_code: pickupCode,
+            order_id: order.id,
+        })
+        : "";
 
     useEffect(() => {
         if (copyState === "idle") return;
@@ -74,7 +81,7 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                                 <div className="mx-auto w-full max-w-[332px] rounded-xl bg-white p-3 shadow-[0_8px_18px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 sm:p-4">
                                     {pickupCode ? (
                                         <QRCodeSVG
-                                            value={pickupCode}
+                                            value={qrPayload}
                                             size={QR_VISUAL_SIZE}
                                             level="H"
                                             fgColor="#153D40"
@@ -150,9 +157,9 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                             </p>
                             <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
                                 <li>Rendez-vous chez le marchand</li>
-                                <li>Reglez votre commande sur place</li>
+                                <li>Verifiez que le paiement est confirme</li>
                                 <li>Presentez ce QR Code au marchand</li>
-                                <li>Le scan confirme le paiement et le retrait</li>
+                                <li>Le scan valide le retrait</li>
                                 <li>Recuperez votre commande</li>
                             </ol>
                         </div>
@@ -187,7 +194,7 @@ export default function QRCodeModal({ open, onClose, order }: QRCodeModalProps) 
                             <div className="flex items-start gap-3">
                                 <CreditCard className="w-4 h-4 text-muted-foreground mt-0.5" />
                                 <div className="flex-1">
-                                    <p className="text-xs text-muted-foreground">Montant a regler sur place</p>
+                                    <p className="text-xs text-muted-foreground">Montant paye</p>
                                     <p className="text-sm font-medium">{order.totalPrice} FCFA</p>
                                 </div>
                             </div>

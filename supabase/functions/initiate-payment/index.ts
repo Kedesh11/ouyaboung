@@ -87,10 +87,10 @@ serve(async (req) => {
         // 2. PARSE ET VALIDATION DU PAYLOAD
         // ===================================================================
 
-        const { phone: rawPhone, orderId, baseAmount, operator: forcedOperator } = await req.json()
-        const phone = rawPhone.replace(/\s+/g, '')
+        const { phone: rawPhone, orderId, operator: forcedOperator } = await req.json()
+        const phone = typeof rawPhone === 'string' ? rawPhone.replace(/\s+/g, '') : ''
 
-        if (!phone || !orderId || !baseAmount) {
+        if (!phone || !orderId) {
             return new Response(
                 JSON.stringify({
                     success: false,
@@ -108,7 +108,7 @@ serve(async (req) => {
 
         const { data: order, error: orderError } = await supabaseClient
             .from('orders')
-            .select('id, merchant_id, user_id, status')
+            .select('id, merchant_id, user_id, status, total_price')
             .eq('id', orderId)
             .single()
 
@@ -132,6 +132,27 @@ serve(async (req) => {
                     error: { message: 'Unauthorized access to order', code: 'ORDER_OWNERSHIP' }
                 }),
                 { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        if (order.status !== 'pending') {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: { message: 'Order is not awaiting payment', code: 'INVALID_ORDER_STATUS' }
+                }),
+                { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const baseAmount = Number(order.total_price)
+        if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: { message: 'Invalid order amount', code: 'INVALID_AMOUNT' }
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 

@@ -26,9 +26,17 @@ Ajoutez les variables suivantes dans **Settings > Environment Variables** sur Ve
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique anonyme | `eyJxh...` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé privée (si utilisée côté serveur) | `eyJ...` |
 | `NEXT_PUBLIC_APP_URL` | URL de production de votre app | `https://oyaboug.vercel.app` |
+| `ACCOUNT_CODE` | Code compte Q-Gabon Airtel | `...` |
+| `ACCOUNT_CODE_MOOV` | Code compte Q-Gabon Moov, si distinct | `...` |
+| `AGENT` | Identifiant agent Q-Gabon | `AG001` |
+| `BEAR_TOKEN` | Token API Q-Gabon | `...` |
+| `QGABON_WEBHOOK_SECRET` | Secret obligatoire pour authentifier les callbacks paiement | `...` |
 
 > [!IMPORTANT]
-> Ne jamas commiter vos clés secrètes (`service_role`) dans le code. Utilisez toujours les variables d'environnement.
+> Ne jamais commiter vos clés secrètes (`service_role`, `BEAR_TOKEN`, `QGABON_WEBHOOK_SECRET`) dans le code. Utilisez toujours les variables d'environnement.
+
+> [!WARNING]
+> `ALLOW_INSECURE_WEBHOOKS=true` est reserve au developpement local. En production, laissez cette variable absente ou a `false` et configurez toujours `QGABON_WEBHOOK_SECRET`.
 
 ## 4. CI/CD (GitHub Actions)
 

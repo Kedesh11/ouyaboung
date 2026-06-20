@@ -46,7 +46,7 @@ const getStatusBadge = (status: string) => {
         case "confirmed":
             return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">Confirmée</Badge>;
         case "pending":
-            return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">En attente</Badge>;
+            return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">En attente de paiement</Badge>;
         case "processing":
             return <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20">Paiement en cours</Badge>;
         case "ready":
@@ -257,7 +257,7 @@ export default function ReservationsPage() {
     // Realtime Subscription
     useEffect(() => {
         const channel = subscribeToOrders((payload) => {
-            const change = payload as { eventType?: string; new?: { id?: string; status?: string } };
+            const change = payload as { eventType?: string; new?: { id?: string; status?: string; pickup_code?: string } };
             console.log('[ReservationsPage] Realtime update received:', change);
 
             if (change.eventType === 'INSERT') {
@@ -279,7 +279,11 @@ export default function ReservationsPage() {
                             if (r.status !== 'confirmed' && updatedOrder.status === 'confirmed') {
                                 toast.success(`La commande pour ${r.productName} a été confirmée !`);
                             }
-                            return { ...r, status: updatedOrder.status || r.status };
+                            return {
+                                ...r,
+                                status: updatedOrder.status || r.status,
+                                pk: updatedOrder.pickup_code || r.pk,
+                            };
                         }
                         return r;
                     })
@@ -480,7 +484,7 @@ export default function ReservationsPage() {
                                                     <p className="text-2xl font-bold text-primary">{reservation.price.toLocaleString()} FCFA</p>
                                                     <p className="text-sm text-muted-foreground line-through">{reservation.originalPrice.toLocaleString()} FCFA</p>
 
-                                                    {["pending", "confirmed", "ready"].includes(reservation.status) && reservation.pk && (
+                                                    {["confirmed", "ready"].includes(reservation.status) && reservation.pk && (
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 

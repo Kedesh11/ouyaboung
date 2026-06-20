@@ -14,9 +14,6 @@ const corsHeaders = {
 }
 const PAYMENT_FLOW_ENABLED = true
 
-const generateScanFriendlyPickupCode = (): string =>
-    `PK${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`
-
 const getProvidedWebhookSecret = (req: Request): string => {
     const bearer = req.headers.get('authorization')
     const bearerToken = bearer?.toLowerCase().startsWith('bearer ')
@@ -35,7 +32,7 @@ const getProvidedWebhookSecret = (req: Request): string => {
 const isWebhookAuthorized = (req: Request): boolean => {
     const expectedSecret = Deno.env.get('QGABON_WEBHOOK_SECRET')
     if (!expectedSecret) {
-        return true
+        return Deno.env.get('ALLOW_INSECURE_WEBHOOKS') === 'true'
     }
 
     const providedSecret = getProvidedWebhookSecret(req)
@@ -223,22 +220,18 @@ serve(async (req) => {
         // ===================================================================
 
         if (finalStatus === 'SUCCESS') {
-            // Générer un code court et lisible pour un scan rapide.
-            const pickupCode = generateScanFriendlyPickupCode()
-            
             const { error: orderError } = await supabaseClient
                 .from('orders')
                 .update({
                     status: 'confirmed',
-                    confirmed_at: new Date().toISOString(),
-                    pickup_code: pickupCode
+                    confirmed_at: new Date().toISOString()
                 })
                 .eq('id', transaction.order_id)
 
             if (orderError) {
                 console.error('[Moov Callback] Order update error:', orderError)
             } else {
-                console.log('[Moov Callback] Order confirmed:', transaction.order_id, 'QR Code:', pickupCode)
+                console.log('[Moov Callback] Order confirmed:', transaction.order_id)
             }
         }
 

@@ -170,4 +170,8 @@ export {
 export {
   resolveUserLocation,
   getCachedUserLocation,
+  clearCachedUserLocation,
+  formatLocationAccuracy,
+  isValidCoordinate,
 } from './geolocation.service';
+export type { UserGeolocation } from './geolocation.service';

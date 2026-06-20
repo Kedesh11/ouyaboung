@@ -335,14 +335,16 @@ serve(async (req) => {
             )
         }
 
-        // Temporary onsite flow:
-        // pending is accepted so merchant scan can confirm payment + pickup on-site.
-        const allowedStatuses = ['pending', 'confirmed', 'ready']
+        // A QR pickup validates only a paid/confirmed order.
+        // On-site payment must remain a distinct auditable flow, not an implicit scan side effect.
+        const allowedStatuses = ['confirmed', 'ready']
         if (!allowedStatuses.includes(order.status)) {
             return new Response(
                 JSON.stringify({
                     success: false,
-                    error: 'Commande non eligible pour validation QR',
+                    error: order.status === 'pending'
+                        ? 'Commande en attente de paiement. Le QR Code sera valide apres confirmation du paiement.'
+                        : 'Commande non eligible pour validation QR',
                     code: 'INVALID_ORDER_STATUS',
                     currentStatus: order.status
                 }),
@@ -395,7 +397,7 @@ serve(async (req) => {
         return new Response(
             JSON.stringify({
                 success: true,
-                message: 'Paiement sur place et retrait valides avec succes',
+                message: 'Retrait valide avec succes',
                 order: {
                     id: order.id,
                     productName: order.food_item?.name || 'Produit',
