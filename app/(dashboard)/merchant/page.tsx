@@ -230,7 +230,7 @@ export default function MerchantDashboardPage() {
                                                                 ''
                                                         }`}
                                                 >
-                                                    {order.status === 'pending' ? 'En attente' :
+                                                    {order.status === 'pending' ? 'En attente de paiement' :
                                                         order.status === 'confirmed' ? 'Confirmée' :
                                                             order.status === 'picked_up' ? 'Récupérée' :
                                                                 order.status}
@@ -296,4 +296,3 @@ export default function MerchantDashboardPage() {
         </div>
     );
 }
-

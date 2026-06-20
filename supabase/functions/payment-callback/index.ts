@@ -39,7 +39,7 @@ const getProvidedWebhookSecret = (req: Request): string => {
 const isWebhookAuthorized = (req: Request): boolean => {
     const expectedSecret = Deno.env.get('QGABON_WEBHOOK_SECRET')
     if (!expectedSecret) {
-        return true
+        return Deno.env.get('ALLOW_INSECURE_WEBHOOKS') === 'true'
     }
 
     const providedSecret = getProvidedWebhookSecret(req)

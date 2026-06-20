@@ -34,6 +34,21 @@ export interface UserPreferences {
   sms_notifications: boolean;
   favorite_categories: string[];
   max_distance_km: number;
+  location_enabled?: boolean;
+  default_radius_km?: number;
+  last_known_location?: UserLocationPreference | null;
+}
+
+export interface UserLocationPreference {
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+  source?: string;
+  is_approximate: boolean;
+  city?: string | null;
+  country?: string | null;
+  region?: string | null;
+  updated_at: string;
 }
 
 // ============================================
@@ -282,6 +297,8 @@ export interface SearchFilters {
   min_price?: number;
   max_price?: number;
   max_distance_km?: number;
+  user_latitude?: number;
+  user_longitude?: number;
   pickup_today?: boolean;
   sort_by?: 'distance' | 'price' | 'discount' | 'rating';
 }

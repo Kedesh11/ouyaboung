@@ -19,7 +19,21 @@ const nextConfig = compat.config({
 });
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  {
+    ignores: [
+      "dist/**",
+      ".next/**",
+      "coverage/**",
+      "lighthouse-results/**",
+      "node_modules/**",
+      "next-env.d.ts",
+      "public/sw.js",
+      "public/workbox-*.js",
+      "public/worker-*.js",
+      "public/fallback-*.js",
+      "supabase/functions/**",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended, ...nextConfig],
     files: ["**/*.{ts,tsx}"],

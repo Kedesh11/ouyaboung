@@ -19,7 +19,7 @@ const MerchantHelpPage = () => {
         },
         {
             question: "Comment fonctionne le système de réservation ?",
-            answer: "Lorsqu'un client réserve un panier, vous recevez une notification. La commande apparaît dans l'onglet 'Réservations' avec le statut 'En attente'. Lorsque le client vient récupérer sa commande, demandez-lui son code de retrait et marquez la commande comme 'Récupérée'."
+            answer: "Lorsqu'un client réserve un panier, vous recevez une notification. La commande apparaît d'abord avec le statut 'En attente de paiement'. Le QR de retrait devient valide lorsque le paiement est confirmé. Au retrait, scannez le QR ou saisissez le code du client."
         },
         {
             question: "Quand suis-je payé ?",

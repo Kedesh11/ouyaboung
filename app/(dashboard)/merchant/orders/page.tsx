@@ -218,7 +218,6 @@ const MerchantOrdersPage = () => {
   const ActionButtons = ({ order }: { order: Order }) => {
     if (order.status === "pending") {
       const cancelLoading = isActionLoading(order.id, "cancel");
-      const confirmLoading = isActionLoading(order.id, "confirm");
       return (
         <>
           <Button
@@ -231,16 +230,6 @@ const MerchantOrdersPage = () => {
               loading={cancelLoading}
               icon={<XCircle className="w-4 h-4 mr-2" />}
               label="Annuler"
-            />
-          </Button>
-          <Button
-            onClick={() => handleConfirm(order)}
-            disabled={isActionDisabled(order.id)}
-          >
-            <ActionButtonLabel
-              loading={confirmLoading}
-              icon={<CheckCircle className="w-4 h-4 mr-2" />}
-              label="Confirmer"
             />
           </Button>
         </>
@@ -406,7 +395,7 @@ const MerchantOrdersPage = () => {
           <TabsTrigger value="all" className="text-xs sm:text-sm h-8 sm:h-10">Toutes ({statusCounts.all})</TabsTrigger>
           <TabsTrigger value="pending" className="gap-1 text-xs sm:text-sm h-8 sm:h-10">
             <Clock className="w-3 h-3" />
-            En attente ({statusCounts.pending})
+            En attente de paiement ({statusCounts.pending})
           </TabsTrigger>
           <TabsTrigger value="confirmed" className="gap-1 text-xs sm:text-sm h-8 sm:h-10">
             <CheckCircle className="w-3 h-3" />

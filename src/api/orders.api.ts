@@ -61,95 +61,41 @@ export const createOrder = async (
 
   const client = requireSupabaseClient();
 
-  // Get food item details to calculate prices
-  const { data: foodItem, error: itemError } = await client
-    .from(DB_TABLES.FOOD_ITEMS)
-    .select(`${FOOD_ITEM_LIST_COLUMNS}, merchants(${MERCHANT_LIST_COLUMNS})`)
-    .eq('id', orderData.food_item_id)
-    .single();
-  const foodItemMerchant = toOne(foodItem?.merchants);
+  const { data: rpcData, error: rpcError } = await client.rpc('create_order_atomic', {
+    p_food_item_id: orderData.food_item_id,
+    p_quantity: orderData.quantity,
+  });
 
-  if (itemError || !foodItem) {
-    return {
-      data: null,
-      error: { code: 'NOT_FOUND', message: 'Food item not found' },
-      success: false,
-    };
-  }
-
-  if (
-    !foodItem.is_available ||
-    !foodItemMerchant?.is_verified ||
-    !foodItemMerchant?.is_active ||
-    foodItemMerchant?.is_refused
-  ) {
+  if (rpcError) {
     return {
       data: null,
       error: {
-        code: 'MERCHANT_NOT_APPROVED',
-        message: 'Ce commerce n’est pas encore approuvé ou n’est plus actif.',
+        code: rpcError.code || 'CREATE_ORDER_ATOMIC_RPC_ERROR',
+        message: rpcError.message || 'Atomic reservation failed',
       },
       success: false,
     };
   }
 
-  // Check availability
-  if (foodItem.quantity_available < orderData.quantity) {
+  const payload = rpcData as {
+    success?: boolean;
+    order_id?: string;
+    code?: string;
+    message?: string;
+  } | null;
+
+  if (!payload?.success || !payload.order_id) {
     return {
       data: null,
-      error: { code: 'INSUFFICIENT_QUANTITY', message: 'Not enough items available' },
+      error: {
+        code: payload?.code || 'CREATE_ORDER_ATOMIC_FAILED',
+        message: payload?.message || 'Atomic reservation failed',
+      },
       success: false,
     };
   }
 
-  const totalPrice = foodItem.discounted_price * orderData.quantity;
-  const originalTotal = foodItem.original_price * orderData.quantity;
-  const savings = originalTotal - totalPrice;
-
-  const { data, error } = await client
-    .from(DB_TABLES.ORDERS)
-    .insert({
-      user_id: userId,
-      merchant_id: foodItem.merchant_id,
-      food_item_id: orderData.food_item_id,
-      quantity: orderData.quantity,
-      total_price: totalPrice,
-      original_total: originalTotal,
-      savings: savings,
-      status: 'pending',
-      pickup_code: generatePickupCode(),
-    })
-    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
-    .single();
-
-  if (error) {
-    return {
-      data: null,
-      error: { code: error.code, message: error.message },
-      success: false,
-    };
-  }
-
-  // Update food item quantity
-  await client
-    .from(DB_TABLES.FOOD_ITEMS)
-    .update({
-      quantity_available: foodItem.quantity_available - orderData.quantity,
-      is_available: foodItem.quantity_available - orderData.quantity > 0,
-    })
-    .eq('id', orderData.food_item_id);
-
-  const order: Order = {
-    ...data,
-    food_item: toOne(data.food_items) ?? undefined,
-    merchant: toOne(data.merchants) ?? undefined,
-  };
-
-  return {
-    data: order,
-    error: null,
-    success: true,
-  };
+  return getOrderById(payload.order_id);
 };
 
 /**

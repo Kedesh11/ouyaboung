@@ -195,7 +195,7 @@ export const getActive = async (options?: {
  */
 export const getStatusText = (status: OrderStatus): string => {
   const texts: Record<OrderStatus, string> = {
-    pending: 'En attente',
+    pending: 'En attente de paiement',
     confirmed: 'Confirmée',
     ready: 'Prête',
     picked_up: 'Récupérée',

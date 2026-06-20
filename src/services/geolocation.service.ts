@@ -1,5 +1,22 @@
 const GEOLOCATION_STORAGE_KEY = 'ouyaboung_user_location_v2';
 const DEFAULT_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6h
+const DEFAULT_BROWSER_TIMEOUT_MS = 15000;
+const DEFAULT_BROWSER_MAX_AGE_MS = 300000;
+const LOW_ACCURACY_RETRY_TIMEOUT_MS = 7000;
+
+export const GABON_DEFAULT_LOCATION = {
+  latitude: 0.4162,
+  longitude: 9.4673,
+  city: 'Libreville',
+  country: 'GA',
+} as const;
+
+export const GABON_LOCATION_BOUNDS = {
+  minLatitude: -4.2,
+  maxLatitude: 2.6,
+  minLongitude: 8.4,
+  maxLongitude: 14.8,
+} as const;
 
 export type GeolocationSource = 'browser' | 'ip_lookup' | 'default_city' | 'cache';
 
@@ -9,6 +26,9 @@ export interface UserGeolocation {
   accuracy?: number | null;
   source: GeolocationSource;
   isApproximate: boolean;
+  city?: string | null;
+  country?: string | null;
+  region?: string | null;
 }
 
 interface StoredGeolocation {
@@ -17,6 +37,9 @@ interface StoredGeolocation {
   accuracy?: number | null;
   source: Exclude<GeolocationSource, 'cache'>;
   isApproximate: boolean;
+  city?: string | null;
+  country?: string | null;
+  region?: string | null;
   cachedAt: number;
 }
 
@@ -38,12 +61,14 @@ export interface ResolveLocationOptions {
   enableHighAccuracy?: boolean;
   fallbackToIp?: boolean;
   cacheMaxAgeMs?: number;
+  requestBrowserPermission?: boolean;
+  retryLowAccuracy?: boolean;
 }
 
 const hasStorage = (): boolean =>
   typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
-const isValidCoord = (lat?: number | null, lng?: number | null): lat is number =>
+export const isValidCoordinate = (lat?: number | null, lng?: number | null): boolean =>
   typeof lat === 'number' &&
   typeof lng === 'number' &&
   Number.isFinite(lat) &&
@@ -53,11 +78,45 @@ const isValidCoord = (lat?: number | null, lng?: number | null): lat is number =
   lng >= -180 &&
   lng <= 180;
 
+export const isWithinGabonBounds = (lat?: number | null, lng?: number | null): boolean => {
+  if (!isValidCoordinate(lat, lng)) return false;
+  const latitude = lat as number;
+  const longitude = lng as number;
+  return (
+    latitude >= GABON_LOCATION_BOUNDS.minLatitude &&
+    latitude <= GABON_LOCATION_BOUNDS.maxLatitude &&
+    longitude >= GABON_LOCATION_BOUNDS.minLongitude &&
+    longitude <= GABON_LOCATION_BOUNDS.maxLongitude
+  );
+};
+
+export const formatLocationAccuracy = (
+  location?: Pick<UserGeolocation, 'accuracy' | 'isApproximate' | 'source'> | null
+): string => {
+  if (!location) return 'Position non définie';
+  if (location.source === 'default_city') return 'Ville par défaut';
+  if (location.isApproximate) return 'Position approximative';
+  if (typeof location.accuracy === 'number' && Number.isFinite(location.accuracy)) {
+    if (location.accuracy < 1000) return `GPS ±${Math.round(location.accuracy)} m`;
+    return `GPS ±${(location.accuracy / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`;
+  }
+  return 'GPS actif';
+};
+
 const saveLocation = (location: Omit<StoredGeolocation, 'cachedAt'>): void => {
   if (!hasStorage()) return;
   try {
     const payload: StoredGeolocation = { ...location, cachedAt: Date.now() };
     localStorage.setItem(GEOLOCATION_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage write errors.
+  }
+};
+
+export const clearCachedUserLocation = (): void => {
+  if (!hasStorage()) return;
+  try {
+    localStorage.removeItem(GEOLOCATION_STORAGE_KEY);
   } catch {
     // Ignore storage write errors.
   }
@@ -73,7 +132,7 @@ export const getCachedUserLocation = (
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as StoredGeolocation;
-    if (!parsed || !isValidCoord(parsed.latitude, parsed.longitude)) {
+    if (!parsed || !isValidCoordinate(parsed.latitude, parsed.longitude)) {
       localStorage.removeItem(GEOLOCATION_STORAGE_KEY);
       return null;
     }
@@ -89,10 +148,28 @@ export const getCachedUserLocation = (
       accuracy: parsed.accuracy ?? null,
       source: 'cache',
       isApproximate: parsed.isApproximate,
+      city: parsed.city ?? null,
+      country: parsed.country ?? null,
+      region: parsed.region ?? null,
     };
   } catch {
     localStorage.removeItem(GEOLOCATION_STORAGE_KEY);
     return null;
+  }
+};
+
+const getBrowserPermissionState = async (): Promise<PermissionState | 'unsupported' | 'unknown'> => {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
+    return 'unsupported';
+  }
+
+  try {
+    const permission = await navigator.permissions.query({
+      name: 'geolocation' as PermissionName,
+    });
+    return permission.state;
+  } catch {
+    return 'unknown';
   }
 };
 
@@ -110,29 +187,47 @@ const getBrowserLocation = async (
     };
   }
 
-  if (navigator.permissions?.query) {
-    try {
-      const permission = await navigator.permissions.query({
-        name: 'geolocation' as PermissionName,
-      });
-      if (permission.state === 'denied') {
-        return {
-          success: false,
-          data: null,
-          error: {
-            code: 'GEO_PERMISSION_DENIED',
-            message: 'Permission de geolocalisation refusee dans le navigateur.',
-          },
-        };
-      }
-    } catch {
-      // Ignore permission API failures and continue with direct geolocation call.
-    }
+  const permissionState = await getBrowserPermissionState();
+  if (permissionState === 'denied') {
+    return {
+      success: false,
+      data: null,
+      error: {
+        code: 'GEO_PERMISSION_DENIED',
+        message: 'Permission de geolocalisation refusee dans le navigateur.',
+      },
+    };
+  }
+
+  if (
+    options.requestBrowserPermission === false &&
+    (permissionState === 'prompt' || permissionState === 'unsupported' || permissionState === 'unknown')
+  ) {
+    return {
+      success: false,
+      data: null,
+      error: {
+        code: 'GEO_PERMISSION_PROMPT_SKIPPED',
+        message: 'Demande de permission GPS ignoree pour ce chargement passif.',
+      },
+    };
   }
 
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (!isValidCoordinate(position.coords.latitude, position.coords.longitude)) {
+          resolve({
+            success: false,
+            data: null,
+            error: {
+              code: 'GEO_INVALID_COORDS',
+              message: 'Le navigateur a retourne des coordonnees invalides.',
+            },
+          });
+          return;
+        }
+
         const location: UserGeolocation = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -172,8 +267,8 @@ const getBrowserLocation = async (
       },
       {
         enableHighAccuracy: options.enableHighAccuracy ?? true,
-        timeout: options.timeoutMs ?? 15000,
-        maximumAge: options.maximumAgeMs ?? 300000,
+        timeout: options.timeoutMs ?? DEFAULT_BROWSER_TIMEOUT_MS,
+        maximumAge: options.maximumAgeMs ?? DEFAULT_BROWSER_MAX_AGE_MS,
       }
     );
   });
@@ -204,7 +299,7 @@ const getIpFallbackLocation = async (): Promise<ResolveLocationResult> => {
     const lat = body?.data?.latitude;
     const lng = body?.data?.longitude;
 
-    if (!isValidCoord(lat, lng)) {
+    if (!isValidCoordinate(lat, lng)) {
       return {
         success: false,
         data: null,
@@ -223,6 +318,9 @@ const getIpFallbackLocation = async (): Promise<ResolveLocationResult> => {
       accuracy: null,
       source,
       isApproximate: true,
+      city: body?.data?.city ?? null,
+      country: body?.data?.country ?? null,
+      region: body?.data?.region ?? null,
     });
 
     return {
@@ -233,6 +331,9 @@ const getIpFallbackLocation = async (): Promise<ResolveLocationResult> => {
         accuracy: null,
         source,
         isApproximate: true,
+        city: body?.data?.city ?? null,
+        country: body?.data?.country ?? null,
+        region: body?.data?.region ?? null,
       },
       error: null,
     };
@@ -263,6 +364,24 @@ export const resolveUserLocation = async (
   const browserAttempt = await getBrowserLocation(options);
   if (browserAttempt.success) return browserAttempt;
 
+  const shouldRetryLowAccuracy =
+    options.retryLowAccuracy !== false &&
+    options.enableHighAccuracy !== false &&
+    options.requestBrowserPermission !== false &&
+    (browserAttempt.error?.code === 'GEO_TIMEOUT' ||
+      browserAttempt.error?.code === 'GEO_POSITION_UNAVAILABLE');
+
+  if (shouldRetryLowAccuracy) {
+    const retryAttempt = await getBrowserLocation({
+      ...options,
+      enableHighAccuracy: false,
+      timeoutMs: Math.min(options.timeoutMs ?? DEFAULT_BROWSER_TIMEOUT_MS, LOW_ACCURACY_RETRY_TIMEOUT_MS),
+      maximumAgeMs: Math.max(options.maximumAgeMs ?? DEFAULT_BROWSER_MAX_AGE_MS, DEFAULT_BROWSER_MAX_AGE_MS),
+      retryLowAccuracy: false,
+    });
+    if (retryAttempt.success) return retryAttempt;
+  }
+
   if (options.fallbackToIp === false) {
     return browserAttempt;
   }
@@ -272,4 +391,3 @@ export const resolveUserLocation = async (
 
   return browserAttempt;
 };
-

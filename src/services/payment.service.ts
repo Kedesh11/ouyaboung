@@ -33,8 +33,8 @@ const getFunctionUrl = (name: string): string | null => {
     return `${SUPABASE_FUNCTIONS_BASE_URL}/${name}`;
 };
 
-// Flow de paiement temporairement desactive.
-// Garder a false pour reactiver sans supprimer l'implementation existante.
+// Flow de paiement mobile Q-Gabon actif.
+// Passer temporairement a false uniquement si une procedure d'incident le demande.
 export const PAYMENT_FLOW_ENABLED = true;
 
 const paymentDisabledResponse = (): ApiResponse<PaymentInitiationResponse> => ({

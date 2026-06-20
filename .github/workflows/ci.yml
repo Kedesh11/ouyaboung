@@ -31,6 +31,9 @@ jobs:
       - name: Linting
         run: npm run lint
 
+      - name: Unit Tests
+        run: npm run test:unit
+
       # Supabase types generation check could be added here if you commit types
       # - name: Check Database Types
       #   run: npx supabase gen types typescript --project-id ... > src/types/supabase.ts && git diff --exit-code

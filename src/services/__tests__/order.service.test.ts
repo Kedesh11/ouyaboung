@@ -189,7 +189,7 @@ describe("order.service", () => {
   });
 
   it("maps status labels and styles", () => {
-    expect(getStatusText("pending")).toBe("En attente");
+    expect(getStatusText("pending")).toBe("En attente de paiement");
     expect(getStatusText("completed")).toBe("Terminée");
     expect(getStatusColor("ready")).toContain("text-success");
     expect(getStatusColor("cancelled")).toContain("text-destructive");
