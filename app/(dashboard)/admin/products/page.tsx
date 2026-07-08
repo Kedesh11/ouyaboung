@@ -33,7 +33,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValueWithIcon,
 } from "@/components/ui/select";
 import { Search, Package, ShoppingBasket, Eye, Store, Loader2, Filter } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -188,10 +188,7 @@ const AdminProductsPage = () => {
         <div className="w-full sm:w-[200px]">
           <Select value={statusFilter} onValueChange={handleStatusChange}>
             <SelectTrigger>
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                <SelectValue placeholder="Statut" />
-              </div>
+              <SelectValueWithIcon icon={Filter} placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les statuts</SelectItem>
