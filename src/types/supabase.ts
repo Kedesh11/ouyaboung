@@ -2916,12 +2916,67 @@ export type Database = {
       current_user_is_admin: { Args: never; Returns: boolean }
       generate_pickup_code: { Args: never; Returns: string }
       generate_slug: { Args: { t: string }; Returns: string }
+      get_admin_clients: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          city: string
+          created_at: string
+          email: string
+          full_name: string
+          orders_count: number
+          phone: string
+          profile_id: string
+          quartier: string
+          role: string
+          total_spent: number
+          user_id: string
+        }[]
+      }
       get_admin_contacts: {
         Args: never
         Returns: {
           email: string
           full_name: string
           user_id: string
+        }[]
+      }
+      get_admin_dashboard_kpis: {
+        Args: never
+        Returns: {
+          active_merchants: number
+          active_products: number
+          pending_merchants: number
+          refused_merchants: number
+          total_clients: number
+          total_merchants: number
+          total_revenue: number
+          total_sales: number
+        }[]
+      }
+      get_admin_geo_distribution: {
+        Args: never
+        Returns: {
+          city: string
+          merchant_count: number
+        }[]
+      }
+      get_admin_sales_stats: {
+        Args: { p_days?: number }
+        Returns: {
+          day_date: string
+          orders_count: number
+          revenue: number
+        }[]
+      }
+      get_admin_top_merchants: {
+        Args: { p_limit?: number }
+        Returns: {
+          business_name: string
+          id: string
+          orders_count: number
+          products_count: number
+          rating: number
+          revenue: number
         }[]
       }
       get_admin_traffic_daily: {
