@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import FoodCard, { FoodItem as FoodCardItem } from "../../_components/FoodCard";
+import FoodCard, { FoodItem as FoodCardItem } from "@/components/FoodCard";
 import { Search as SearchIcon, MapPin, Grid, Map, SlidersHorizontal, Store, Loader2, LocateFixed } from "lucide-react";
 import {
     searchInventory,

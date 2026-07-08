@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { Leaf, Instagram, Twitter, Facebook, Mail, MapPin, Phone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const Footer = () => {
   return (
     <footer className="bg-card border-t border-border mt-20">
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
@@ -71,6 +73,18 @@ const Footer = () => {
                 Libreville, Gabon
               </li>
             </ul>
+          </div>
+
+          {/* Newsletter */}
+          <div>
+            <h4 className="font-semibold text-foreground mb-4">Restez informés</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Recevez nos meilleures offres et astuces anti-gaspillage.
+            </p>
+            <div className="flex gap-2">
+              <Input placeholder="Votre email" type="email" className="bg-background" />
+              <Button size="sm">S&apos;inscrire</Button>
+            </div>
           </div>
         </div>
 

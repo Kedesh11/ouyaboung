@@ -6,7 +6,7 @@ import UserSidebar from "../../_components/UserSidebar";
 import NotificationBell from "../../_components/NotificationBell";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { UserMenu } from "../../_components/UserMenu";
+import { UserMenu } from "@/components/auth/UserMenu";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAuthUser } from "@/services/auth.service";

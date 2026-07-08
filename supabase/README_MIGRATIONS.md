@@ -6,12 +6,19 @@ Ce guide explique comment utiliser les migrations et le seed pour configurer la 
 
 ```
 supabase/
-├── migrations/
-│   ├── 20260105_initial_schema.sql          # Schéma initial (tables de base)
-│   └── 20260115_complete_schema_with_rls.sql  # Schéma complet avec RLS et fonctions
+├── migrations/     # ~49 fichiers horodatés, a appliquer TOUS, dans l'ordre
+│                   # chronologique du nom de fichier (schema initial -> auth
+│                   # v2 -> workflow marchand -> paiements -> intelligence ->
+│                   # paiements SingPay multi-tenant). Ne pas se limiter aux
+│                   # deux premiers fichiers.
 ├── seed.sql                                 # Données de test
 └── README_MIGRATIONS.md                     # Ce fichier
 ```
+
+Avant de considérer un environnement à jour, vérifiez avec
+`docs/sql/verify_pending_migrations.sql` que les objets créés par les
+migrations les plus récentes (paiement SingPay multi-tenant, RPC de
+réservation atomique, RPC géo) existent bien.
 
 ## 🗄️ Tables de la base de données
 
@@ -57,8 +64,10 @@ supabase db seed
 1. **Appliquer les migrations**:
    - Allez dans votre projet Supabase
    - Naviguez vers "SQL Editor"
-   - Exécutez d'abord `20260105_initial_schema.sql`
-   - Puis exécutez `20260115_complete_schema_with_rls.sql`
+   - Exécutez **chaque fichier de `supabase/migrations/` dans l'ordre
+     chronologique de son nom** (le premier chiffre du nom de fichier est un
+     horodatage) - sauter un fichier casse les migrations suivantes qui en
+     dépendent
 
 2. **Exécuter le seed**:
    - Dans le SQL Editor, ouvrez `seed.sql`

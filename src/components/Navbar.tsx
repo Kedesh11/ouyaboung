@@ -70,6 +70,9 @@ const Navbar = () => {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="md:hidden p-2 rounded-lg hover:bg-accent transition-colors"
+          aria-label={isOpen ? "Fermer le menu" : "Ouvrir le menu"}
+          aria-expanded={isOpen}
+          aria-controls="mobile-nav"
         >
           {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -79,6 +82,7 @@ const Navbar = () => {
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            id="mobile-nav"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}

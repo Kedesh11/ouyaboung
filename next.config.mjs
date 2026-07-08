@@ -1,5 +1,6 @@
 // @ts-check
 import withPWA from 'next-pwa';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const sanitizeEnv = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -142,4 +143,14 @@ const config =
         ? nextConfig
         : withPWA(pwaConfig)(nextConfig);
 
-export default config;
+// withSentryConfig only instruments the build (source maps, tunnel route) and
+// is a no-op at runtime when SENTRY_DSN/NEXT_PUBLIC_SENTRY_DSN aren't set -
+// safe to keep wired even before a Sentry project/DSN exists.
+export default withSentryConfig(config, {
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    authToken: process.env.SENTRY_AUTH_TOKEN,
+    silent: true,
+    widenClientFileUpload: true,
+    telemetry: false,
+});

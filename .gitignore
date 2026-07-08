@@ -36,6 +36,14 @@ dist-ssr
 # PWA
 /public/sw.js
 /public/workbox-*.js
+/public/workbox-*.js.map
 /public/sw.js.map
 /public/worker-*.js
 /public/fallback-*.js
+
+# Generated/local-only artifacts (regenerate with `npm run test:coverage`,
+# `./scripts/lighthouse-audit.sh`, or `supabase start`)
+/coverage
+/lighthouse-results
+/supabase/.temp
+/supabase/.branches

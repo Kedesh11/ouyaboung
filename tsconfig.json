@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
@@ -12,7 +11,7 @@
     "allowJs": true,
     "noUnusedLocals": false,
     "strictNullChecks": true,
-    "target": "es5",
+    "target": "ES2017",
     "lib": [
       "dom",
       "dom.iterable",

@@ -51,7 +51,7 @@ const AdminProductsPage = () => {
 
   const { data: allItems, isLoading, error } = useQuery({
     queryKey: ['admin-products'],
-    queryFn: adminService.getProducts,
+    queryFn: () => adminService.getProducts(),
   });
 
   if (error) {

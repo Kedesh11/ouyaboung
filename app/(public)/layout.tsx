@@ -1,4 +1,4 @@
-import Navbar from "../_components/Navbar";
+import Navbar from "@/components/Navbar";
 import { ouyaboungOrganizationSchema, ouyaboungWebSiteSchema } from "@/lib/seo/schemas";
 
 export default function PublicLayout({

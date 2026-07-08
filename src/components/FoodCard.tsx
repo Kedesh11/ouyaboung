@@ -1,7 +1,7 @@
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Clock, Store } from "lucide-react";
+import { MapPin, Clock, Store, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
@@ -29,9 +29,10 @@ interface FoodCardProps {
   item: FoodItem;
   onReserve?: () => void;
   reservedCount?: number;
+  isReserving?: boolean;
 }
 
-const FoodCard = ({ item, onReserve, reservedCount = 0 }: FoodCardProps) => {
+const FoodCard = ({ item, onReserve, reservedCount = 0, isReserving = false }: FoodCardProps) => {
   const discount = Math.round((1 - item.discountedPrice / item.originalPrice) * 100);
 
   return (
@@ -101,8 +102,15 @@ const FoodCard = ({ item, onReserve, reservedCount = 0 }: FoodCardProps) => {
 
         {item.quantity > 0 && onReserve && (
           <CardFooter className="p-4 pt-0">
-            <Button onClick={onReserve} className="w-full" size="sm">
-              Réserver ({item.quantity} restant{item.quantity > 1 ? "s" : ""})
+            <Button onClick={onReserve} className="w-full" size="sm" disabled={isReserving}>
+              {isReserving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Réservation...
+                </>
+              ) : (
+                `Réserver (${item.quantity} restant${item.quantity > 1 ? "s" : ""})`
+              )}
             </Button>
           </CardFooter>
         )}

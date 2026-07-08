@@ -30,42 +30,31 @@ import {
 } from "@/components/ui/pagination";
 import { Search, Store, Eye, CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
 import MerchantValidationModal from "@/components/admin/MerchantValidationModal";
-import { adminService } from "@/services/admin.service";
 import { MerchantRegistration } from "@/types/admin.types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useAdminMerchants, useInvalidateAdminMerchants } from "@/hooks/useAdminData";
 
 const ITEMS_PER_PAGE = 3;
 
 const AdminMerchantsPage = () => {
-  const [merchants, setMerchants] = useState<MerchantRegistration[]>([]);
+  const { data: merchants = [], isLoading, error } = useAdminMerchants();
+  const invalidateMerchants = useInvalidateAdminMerchants();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [activeTab, setActiveTab] = useState("all");
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantRegistration | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
-    loadMerchants();
-  }, []);
-
-  const loadMerchants = async () => {
-    try {
-      setIsLoading(true);
-      const data = await adminService.getMerchants();
-      setMerchants(data);
-    } catch (error) {
+    if (error) {
       console.error("Error loading merchants:", error);
       toast.error("Erreur lors du chargement des commerces");
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [error]);
 
   const handleValidationSuccess = (updatedMerchant: MerchantRegistration) => {
-    setMerchants(prev => prev.map(m => m.id === updatedMerchant.id ? updatedMerchant : m));
+    invalidateMerchants();
     toast.success(`Statut du commerce mis à jour: ${updatedMerchant.status === 'validated' ? 'Validé' : 'Refusé'}`);
     setSelectedMerchant(null);
   };
