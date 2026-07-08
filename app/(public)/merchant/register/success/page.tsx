@@ -10,14 +10,10 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, Clock, Mail, ArrowRight, Home } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
 const MerchantRegisterSuccessPage = () => {
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-
       <main className="pt-24 pb-12">
         <div className="container mx-auto px-4 max-w-2xl">
           <motion.div
@@ -97,8 +93,6 @@ const MerchantRegisterSuccessPage = () => {
           </motion.div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 };

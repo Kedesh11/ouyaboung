@@ -7,8 +7,6 @@ import { MapPin, Phone, Mail, Clock, Star, Store, ArrowLeft } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import FoodCard from "@/components/FoodCard";
 import * as merchantService from "@/services/merchant.service";
 import type { Merchant, FoodItem } from "@/types";
@@ -37,8 +35,6 @@ export default function MerchantPublicClient({ merchant, items }: MerchantPublic
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(businessSchema) }}
@@ -204,8 +200,6 @@ export default function MerchantPublicClient({ merchant, items }: MerchantPublic
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { evaluateWebhookAuthorization, isLocalSupabaseUrl, type WebhookAuthResult } from './webhook-auth.ts'
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -451,11 +452,13 @@ const getProvidedWebhookSecret = (req: Request): string => {
   )
 }
 
-const isWebhookAuthorized = (req: Request): boolean => {
-  const expectedSecret = getEnv('SINGPAY_CALLBACK_SECRET') || getEnv('QGABON_WEBHOOK_SECRET')
-  if (!expectedSecret) return getEnv('ALLOW_INSECURE_WEBHOOKS') === 'true'
-  return getProvidedWebhookSecret(req) === expectedSecret
-}
+const isWebhookAuthorized = (req: Request): WebhookAuthResult =>
+  evaluateWebhookAuthorization({
+    expectedSecret: getEnv('SINGPAY_CALLBACK_SECRET') || getEnv('QGABON_WEBHOOK_SECRET'),
+    providedSecret: getProvidedWebhookSecret(req),
+    allowInsecureOverride: getEnv('ALLOW_INSECURE_WEBHOOKS') === 'true',
+    isLocalEnvironment: isLocalSupabaseUrl(getEnv('SUPABASE_URL')),
+  })
 
 const createSettlementIfNeeded = async (client: any, paymentTransaction: any) => {
   const { data: existing } = await client
@@ -548,7 +551,9 @@ const executeTransferIfEnabled = async (client: any, settlement: any, paymentTra
 export const handleSingPayCallback = async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  if (!isWebhookAuthorized(req)) {
+  const auth = isWebhookAuthorized(req)
+  if (!auth.authorized) {
+    console.warn('[SingPay] Rejected callback', { reason: auth.reason })
     return json({ error: 'Unauthorized webhook' }, 401)
   }
 
