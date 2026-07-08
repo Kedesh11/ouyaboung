@@ -16,7 +16,7 @@ import {
     SelectContent,
     SelectItem,
     SelectTrigger,
-    SelectValue,
+    SelectValueWithIcon,
 } from "@/components/ui/select";
 import {
     Dialog,
@@ -278,10 +278,7 @@ export default function MerchantTransactionsPage() {
                 <div className="w-full sm:w-[220px]">
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger>
-                            <div className="flex items-center gap-2">
-                                <Filter className="w-4 h-4" />
-                                <SelectValue placeholder="Statut" />
-                            </div>
+                            <SelectValueWithIcon icon={Filter} placeholder="Statut" />
                         </SelectTrigger>
                         <SelectContent>
                             {STATUS_FILTERS.map((filter) => (

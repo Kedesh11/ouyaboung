@@ -32,7 +32,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValueWithIcon,
 } from "@/components/ui/select";
 import { Search, Users, Eye, Mail, Filter } from "lucide-react";
 import { format } from "date-fns";
@@ -176,10 +176,7 @@ const AdminClientsPage = () => {
         <div className="w-full sm:w-[150px]">
           <Select value={roleFilter} onValueChange={handleRoleChange}>
             <SelectTrigger>
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                <SelectValue placeholder="Rôle" />
-              </div>
+              <SelectValueWithIcon icon={Filter} placeholder="Rôle" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les rôles</SelectItem>
@@ -191,10 +188,7 @@ const AdminClientsPage = () => {
         <div className="w-full sm:w-[150px]">
           <Select value={statusFilter} onValueChange={handleStatusChange}>
             <SelectTrigger>
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                <SelectValue placeholder="Statut" />
-              </div>
+              <SelectValueWithIcon icon={Filter} placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les statuts</SelectItem>
