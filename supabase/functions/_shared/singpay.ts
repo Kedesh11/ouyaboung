@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { evaluateWebhookAuthorization, isLocalSupabaseUrl, type WebhookAuthResult } from './webhook-auth.ts'
+import { isFinalInternalStatus, mapLegacyStatus, mapProviderStatus } from './singpay-status.ts'
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -121,23 +122,6 @@ const parseSingPayTransaction = (payload: any) => {
     wallet: transaction?.portefeuille || payload?.portefeuille || payload?.data?.portefeuille || null,
     message: payload?.status?.message || payload?.message || payload?.data?.message || null,
   }
-}
-
-const mapProviderStatus = (status?: string | null, result?: string | null) => {
-  if (result === 'Success') return 'confirmed'
-  if (result === 'TimeOutError') return 'expired'
-  if (['PasswordError', 'BalanceError', 'Error'].includes(result || '')) return 'failed'
-  if (status === 'Terminate' && !result) return 'pending'
-  if (status === 'Start' || status === 'Partenaire') return 'pending'
-  return 'pending'
-}
-
-const mapLegacyStatus = (internalStatus: string) => {
-  if (internalStatus === 'confirmed') return 'SUCCESS'
-  if (internalStatus === 'expired') return 'TIMEOUT'
-  if (internalStatus === 'failed') return 'FAILED'
-  if (internalStatus === 'cancelled') return 'CANCELLED'
-  return 'PENDING'
 }
 
 const generateReference = (orderId: string) => {
@@ -582,7 +566,7 @@ export const handleSingPayCallback = async (req: Request) => {
 
   const newStatus = mapProviderStatus(parsed.status, parsed.result)
   const legacyStatus = mapLegacyStatus(newStatus)
-  const isFinal = ['confirmed', 'failed', 'expired', 'cancelled'].includes(newStatus)
+  const isFinal = isFinalInternalStatus(newStatus)
 
   await client
     .from('payment_transactions')
@@ -716,7 +700,7 @@ export const syncSingPayTransactionStatus = async (req: Request) => {
   const parsed = parseSingPayTransaction(providerData)
   const newStatus = mapProviderStatus(parsed.status, parsed.result)
   const legacyStatus = mapLegacyStatus(newStatus)
-  const isFinal = ['confirmed', 'failed', 'expired', 'cancelled'].includes(newStatus)
+  const isFinal = isFinalInternalStatus(newStatus)
 
   const { data: updatedPaymentTransaction } = await serviceClient
     .from('payment_transactions')
