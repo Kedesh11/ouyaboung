@@ -20,8 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import * as inventoryService from "@/services/inventory.service";
 import { useAuth } from "@/hooks/useAuth";
 import type { FoodItem } from "@/types";
@@ -88,8 +86,6 @@ export default function ProductDetailClient({ product: initialProduct, slug }: P
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <Navbar />
-
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
@@ -252,8 +248,6 @@ export default function ProductDetailClient({ product: initialProduct, slug }: P
           </motion.div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

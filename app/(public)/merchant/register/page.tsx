@@ -49,8 +49,6 @@ import {
   Lock,
   LocateFixed,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import {
   register,
   registerMerchant,
@@ -871,8 +869,6 @@ const MerchantRegisterPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
-
       <main className="pt-24 pb-12">
         <div className="container mx-auto px-4 max-w-2xl">
           <motion.div
@@ -945,8 +941,6 @@ const MerchantRegisterPage = () => {
           </p>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 };

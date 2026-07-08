@@ -34,9 +34,25 @@ jobs:
       - name: Unit Tests
         run: npm run test:unit
 
-      # Supabase types generation check could be added here if you commit types
-      # - name: Check Database Types
-      #   run: npx supabase gen types typescript --project-id ... > src/types/supabase.ts && git diff --exit-code
+      - name: Coverage Thresholds
+        run: npm run test:coverage
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Runs entirely against the local migrations (Docker Postgres via the
+      # Supabase CLI) - no project secrets needed. Applying all migrations
+      # from scratch on every PR also catches broken/non-idempotent SQL
+      # before it reaches a real environment.
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Check Database Types
+        run: |
+          supabase gen types typescript --local > src/types/supabase.ts
+          git diff --exit-code -- src/types/supabase.ts
 
       - name: Type Checking
         run: npx tsc --noEmit

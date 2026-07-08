@@ -2,6 +2,8 @@
 // Structured Logger - Centralized Logging
 // ==========================================
 
+import * as Sentry from '@sentry/nextjs';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogContext {
@@ -53,10 +55,14 @@ class StructuredLogger {
 
             console.log(`${emoji} [${entry.level.toUpperCase()}] ${entry.message}`, entry.context || '');
         } else {
-            // In production, you would send to a service like Sentry, LogRocket, etc.
-            // For now, we just log minimally
+            // Sentry.init() is a no-op when SENTRY_DSN/NEXT_PUBLIC_SENTRY_DSN
+            // isn't configured, so these calls are safe before a DSN exists.
+            // The `error` level's real Error object is reported from error()
+            // below, where it's still available, so it keeps its stack trace.
             if (entry.level === 'error') {
                 console.error(entry.message, entry.context);
+            } else if (entry.level === 'warn') {
+                Sentry.captureMessage(entry.message, { level: 'warning', extra: entry.context });
             }
         }
     }
@@ -98,6 +104,12 @@ class StructuredLogger {
             errorContext.error_stack = error.stack;
         } else if (error) {
             errorContext.error = error;
+        }
+
+        if (!this.isDevelopment) {
+            Sentry.captureException(error instanceof Error ? error : new Error(message), {
+                extra: errorContext,
+            });
         }
 
         this.log(this.formatEntry('error', message, errorContext));

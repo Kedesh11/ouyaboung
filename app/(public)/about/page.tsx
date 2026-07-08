@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import Footer from "../../_components/Footer";
+import Footer from "@/components/Footer";
 import ImpactStats from "@/components/ImpactStats";
 import HowItWorks from "@/components/HowItWorks";
 import Testimonials from "@/components/Testimonials";

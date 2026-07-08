@@ -47,7 +47,7 @@ export const UserMenu: React.FC = () => {
 
       // Force navigation to home page
       router.replace('/');
-      // router.refresh(); // Not needed in React Router
+      router.refresh();
     } catch (error) {
       console.error('Logout error in UserMenu:', error);
       // Fallback: Clear local storage and force redirect to /auth
@@ -147,37 +147,23 @@ export const UserMenu: React.FC = () => {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          {userRole === 'user' ? (
-            <a href={getDashboardPath()} className="cursor-pointer flex w-full items-center">
-              <User className="mr-2 h-4 w-4" />
-              <span>Tableau de bord</span>
-            </a>
-          ) : (
-            <Link href={getDashboardPath()} className="cursor-pointer flex w-full items-center">
-              <User className="mr-2 h-4 w-4" />
-              <span>Tableau de bord</span>
-            </Link>
-          )}
+          <Link href={getDashboardPath()} className="cursor-pointer flex w-full items-center">
+            <User className="mr-2 h-4 w-4" />
+            <span>Tableau de bord</span>
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          {userRole === 'user' ? (
-            <a href={getProfilePath()} className="cursor-pointer flex w-full items-center">
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Profil</span>
-            </a>
-          ) : (
-            <Link href={getProfilePath()} className="cursor-pointer flex w-full items-center">
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Profil</span>
-            </Link>
-          )}
+          <Link href={getProfilePath()} className="cursor-pointer flex w-full items-center">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Profil</span>
+          </Link>
         </DropdownMenuItem>
         {userRole === 'user' && (
           <DropdownMenuItem asChild>
-            <a href="/user/favorites" className="cursor-pointer flex w-full items-center">
+            <Link href="/user/favorites" className="cursor-pointer flex w-full items-center">
               <Heart className="mr-2 h-4 w-4" />
               <span>Favoris</span>
-            </a>
+            </Link>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
