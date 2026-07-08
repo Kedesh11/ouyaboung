@@ -146,3 +146,50 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 - Le code d'integration est en place et ne casse pas le build sans DSN. **Fait, verifie via `npm run build`.**
 - Une erreur de niveau `error` est envoyee a Sentry avec sa stack trace des qu'un DSN est configure. **Fait cote code, restant a valider avec un DSN reel.**
 - Activation en production. **A faire: creer le projet Sentry et renseigner `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN`.**
+
+## R11 - Dashboard admin: chiffre d'affaires et statistiques silencieusement a zero
+
+**Statut:** corrige  
+**Risque:** `admin.service.ts` interroge Supabase via le client navigateur (cle anon), donc soumis aux RLS de l'admin connecte. Or `orders` n'avait aucune policy RLS pour les admins (seulement proprietaire/marchand). Consequence: `getKPIs` (chiffre d'affaires, nombre de ventes, panier moyen), `getClients` (commandes/depenses par client), `getSalesStats` (graphique des ventes) et une partie de `getTopMerchants` (ventes/revenu) retournaient silencieusement des valeurs a zero pour tout admin en production - aucune erreur visible, juste des chiffres faux.  
+**Impact:** tableau de bord admin non fiable pour le pilotage (chiffre d'affaires, top marchands, valeur client).
+
+**Decision d'ingenierie:** remplacer ces cinq fonctions par des appels a des fonctions SQL `SECURITY DEFINER STABLE` (`get_admin_dashboard_kpis`, `get_admin_geo_distribution`, `get_admin_sales_stats`, `get_admin_top_merchants`, `get_admin_clients`) qui verifient elles-memes `is_admin(auth.uid())` et court-circuitent les RLS de `orders` legitimement pour un usage admin agrege - au lieu de compter sur une policy manquante. Beneficie secondaire: l'agregation (`count`/`sum`/`group by`) se fait en SQL plutot qu'en JS apres avoir transfere des tables entieres.
+
+**Criteres d'acceptation:**
+- Les 5 fonctions existent, sont `STABLE`/`SECURITY DEFINER`, et refusent l'acces a un non-admin (`RAISE EXCEPTION` code `42501`). **Fait, teste bout en bout en local (admin recoit des donnees non nulles, non-admin recoit une erreur `forbidden`).**
+- `admin.service.ts` appelle ces fonctions via `.rpc()` au lieu de fetch+reduce JS. **Fait.**
+- Pagination ajoutee sur `getClients`/`getMerchants`/`getProducts`, absents auparavant. **Fait.**
+
+## R12 - Performance RLS: auth.uid() non wrappe et fonctions admin dupliquees
+
+**Statut:** corrige  
+**Risque:** la quasi-totalite des 80 policies RLS actives appelaient `auth.uid()` nu au lieu de `(select auth.uid())` (lint `auth_rls_initplan` de Supabase) - sans le `select`, Postgres peut reevaluer l'appel a chaque ligne plutot qu'une fois par requete. Trois fonctions quasi identiques coexistaient pour verifier le role admin (`is_admin(uuid)`, `is_admin()`, `current_user_is_admin()`), aucune marquee `STABLE`, et 6 tables dupliquaient en ligne le meme `exists(select 1 from profiles where role='admin')` au lieu de reutiliser une fonction.  
+**Impact:** cout CPU/latence croissant avec le volume de lignes sur les tables les plus consultees (orders, transactions, payment_transactions).
+
+**Decision d'ingenierie:** migration `20260708130000_rls_performance_hardening.sql` generee et verifiee automatiquement contre `pg_policies` (comparaison avant/apres normalisee: les 80 policies restent strictement equivalentes semantiquement, seul le wrapping/la factorisation changent). Les trois fonctions admin delegue desormais vers `is_admin(uuid)` comme unique source de verite, toutes `STABLE`.
+
+**Criteres d'acceptation:**
+- Toutes les policies referencant `auth.uid()` le font via `(select auth.uid())`. **Fait, 54 policies reecrites.**
+- `is_admin`/`is_merchant`/`current_user_is_admin` sont `STABLE`. **Fait, verifie via `pg_proc.provolatile`.**
+- Aucune condition logique de policy n'a change de sens. **Verifie par comparaison programmatique avant/apres.**
+
+## R13 - Vues materialisees d'intelligence jamais rafraichies
+
+**Statut:** corrige, activation `pg_cron` a confirmer sur l'environnement reel  
+**Risque:** `refresh_intelligence_materialized_views()` ne rafraichissait que 2 des 3 MV (`mv_user_behavior_summary` oubliee), et aucun `pg_cron`/appel applicatif ne l'invoquait jamais - les 3 MV etaient figees depuis leur creation (mars 2026).  
+**Impact:** scores/segments d'intelligence utilisateur silencieusement perimes, sans erreur visible.
+
+**Decision d'ingenierie:** migration `20260708150000_fix_intelligence_mv_refresh.sql` - ajoute la MV manquante, passe les 3 refresh en `CONCURRENTLY` (non bloquant, les 3 MV ont deja un index unique), active `pg_cron` et programme un refresh toutes les 15 minutes.
+
+**Criteres d'acceptation:**
+- Les 3 MV sont rafraichies par la fonction. **Fait.**
+- Le refresh ne bloque pas les lecteurs concurrents. **Fait via `CONCURRENTLY`.**
+- Un job `pg_cron` actif existe. **Fait en local (`cron.job` verifie).** Sur Supabase Cloud, `pg_cron` peut necessiter une activation manuelle depuis le tableau de bord selon le plan tarifaire avant que cette migration ne prenne effet - **a verifier apres deploiement.**
+
+## R14 - Table `user_events` non partitionnee (surveillance, pas de correctif)
+
+**Statut:** documente, pas d'action requise pour l'instant  
+**Risque:** `user_events` (evenements de tracking front) n'est pas partitionnee malgre un volume d'ecriture potentiellement eleve; la migration d'origine anticipe deja ce risque en commentaire ("migrer vers le partitioning declaratif au-dela de ~10M lignes/mois") sans l'implementer.  
+**Impact:** degradation progressive (bloat, index a maintenir) si le volume grossit fortement, mais aucune preuve actuelle que ce soit deja le cas.
+
+**Decision d'ingenierie:** ne pas partitionner sans donnees de volume reel - ce serait une optimisation prematuree et risquee (migration lourde, verrous). Surveiller `pg_stat_user_tables.n_live_tup` sur `user_events` via `docs/sql/performance_diagnostics.sql` et ne partitionner que lorsque le volume le justifie.

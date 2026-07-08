@@ -96,89 +96,47 @@ export const adminService = {
     }
   },
 
-  // Get all clients (profiles with role = 'user') with aggregated orders
-  getClients: async (): Promise<AdminClient[]> => {
+  // Get all clients (profiles with role = 'user'/'merchant') with aggregated
+  // orders. Aggregation happens in `get_admin_clients` (SQL, GROUP BY) rather
+  // than fetching every order row over the wire and reducing in JS.
+  getClients: async (page: number = 1, perPage: number = 500): Promise<AdminClient[]> => {
     if (!isSupabaseConfigured()) {
       console.warn('Supabase not configured');
       return [];
     }
 
     const client = requireSupabaseClient();
-
-    // Fetch user profiles
-    const { data: profiles, error: profilesError } = await client
-      .from(DB_TABLES.PROFILES)
-      .select('id, user_id, email, phone, full_name, city, quartier, role, created_at')
-      .in('role', ['user', 'merchant']);
-
-    if (profilesError) {
-      console.error('Error fetching client profiles:', profilesError);
-      throw profilesError;
-    }
-
-    const userIds = (profiles || []).map((p) => p.user_id).filter(Boolean);
-
-    if (userIds.length === 0) {
-      return [];
-    }
-
-    // Fetch orders for these users and aggregate in memory
-    const { data: orders, error: ordersError } = await client
-      .from(DB_TABLES.ORDERS)
-      .select('user_id, total_price');
-      
-    // Restrict aggregation to known users only.
-    const scopedOrders = orders?.filter((order) => order.user_id && userIds.includes(order.user_id)) || [];
-
-    if (ordersError) {
-      console.error('Error fetching client orders:', ordersError);
-      throw ordersError;
-    }
-
-    const ordersByUser: Record<
-      string,
-      { ordersCount: number; totalSpent: number }
-    > = {};
-
-    scopedOrders.forEach((order: any) => {
-      const userId = order.user_id as string | null;
-      if (!userId) return;
-
-      if (!ordersByUser[userId]) {
-        ordersByUser[userId] = { ordersCount: 0, totalSpent: 0 };
-      }
-
-      ordersByUser[userId].ordersCount += 1;
-      ordersByUser[userId].totalSpent += order.total_price || 0;
+    const { data, error } = await client.rpc('get_admin_clients', {
+      p_limit: perPage,
+      p_offset: (page - 1) * perPage,
     });
 
-    // Map profiles to AdminClient objects
-    return (profiles || []).map((p: any) => {
-      const agg = ordersByUser[p.user_id] || {
-        ordersCount: 0,
-        totalSpent: 0,
-      };
+    if (error) {
+      console.error('Error fetching client profiles:', error);
+      throw error;
+    }
 
+    return (data || []).map((row: any) => {
       const fullName =
-        p.full_name ||
-        (p.email ? (p.email as string).split('@')[0] : 'Client');
+        row.full_name ||
+        (row.email ? (row.email as string).split('@')[0] : 'Client');
 
       const status: AdminClient['status'] =
-        agg.ordersCount > 0 ? 'active' : 'inactive';
+        (row.orders_count || 0) > 0 ? 'active' : 'inactive';
 
       return {
-        id: p.user_id,
-        profileId: p.id,
+        id: row.user_id,
+        profileId: row.profile_id,
         fullName,
-        email: p.email,
-        phone: p.phone || undefined,
-        city: p.city || undefined,
-        quartier: p.quartier || undefined,
-        createdAt: p.created_at ? new Date(p.created_at) : new Date(),
-        ordersCount: agg.ordersCount,
-        totalSpent: agg.totalSpent,
+        email: row.email,
+        phone: row.phone || undefined,
+        city: row.city || undefined,
+        quartier: row.quartier || undefined,
+        createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+        ordersCount: row.orders_count || 0,
+        totalSpent: row.total_spent || 0,
         status,
-        role: p.role,
+        role: row.role,
       };
     });
   },
@@ -212,7 +170,11 @@ export const adminService = {
   },
 
   // Get all merchants with optional status filter
-  getMerchants: async (status?: MerchantStatus): Promise<MerchantRegistration[]> => {
+  getMerchants: async (
+    status?: MerchantStatus,
+    page: number = 1,
+    perPage: number = 200
+  ): Promise<MerchantRegistration[]> => {
     if (!isSupabaseConfigured()) {
       console.warn('Supabase not configured');
       return [];
@@ -229,7 +191,9 @@ export const adminService = {
       query = query.eq('is_verified', false).eq('is_refused', false);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range((page - 1) * perPage, page * perPage - 1);
 
     if (error) {
       console.error('Error fetching merchants:', error);
@@ -337,55 +301,56 @@ export const adminService = {
     return transformMerchant(data);
   },
 
-  // Get Admin KPIs
+  // Get Admin KPIs. All counts/sums are computed in
+  // `get_admin_dashboard_kpis` (SQL) rather than fetching every order row
+  // over the wire and reducing in JS - see docs/RISKS_TRACKING.md.
   getKPIs: async (): Promise<AdminKPIs> => {
+    const empty: AdminKPIs = {
+      totalMerchants: 0,
+      activeMerchants: 0,
+      pendingMerchants: 0,
+      refusedMerchants: 0,
+      totalClients: 0,
+      activeProducts: 0,
+      activeBaskets: 0,
+      totalSales: 0,
+      totalRevenue: 0,
+      conversionRate: 0,
+      averageOrderValue: 0,
+    };
+
     if (!isSupabaseConfigured()) {
-      return {
-        totalMerchants: 0,
-        activeMerchants: 0,
-        pendingMerchants: 0,
-        refusedMerchants: 0,
-        totalClients: 0,
-        activeProducts: 0,
-        activeBaskets: 0,
-        totalSales: 0,
-        totalRevenue: 0,
-        conversionRate: 0,
-        averageOrderValue: 0,
-      };
+      return empty;
     }
 
     const client = requireSupabaseClient();
+    const { data: rpcData, error } = await client.rpc('get_admin_dashboard_kpis').single();
+    const data = rpcData as {
+      total_merchants?: number;
+      active_merchants?: number;
+      pending_merchants?: number;
+      refused_merchants?: number;
+      total_clients?: number;
+      active_products?: number;
+      total_sales?: number;
+      total_revenue?: number;
+    } | null;
 
-    // Fetch counts in parallel
-    const [
-      merchantsResult,
-      activeMerchantsResult,
-      pendingMerchantsResult,
-      refusedMerchantsResult,
-      clientsResult,
-      productsResult,
-      ordersResult,
-    ] = await Promise.all([
-      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }),
-      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }).eq('is_verified', true).eq('is_active', true),
-      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }).eq('is_verified', false).eq('is_refused', false),
-      client.from(DB_TABLES.MERCHANTS).select('id', { count: 'exact', head: true }).eq('is_refused', true),
-      client.from(DB_TABLES.PROFILES).select('id', { count: 'exact', head: true }),
-      client.from(DB_TABLES.FOOD_ITEMS).select('id', { count: 'exact', head: true }).eq('is_available', true),
-      client.from(DB_TABLES.ORDERS).select('total_price'),
-    ]);
+    if (error || !data) {
+      console.error('Error fetching admin KPIs:', error);
+      return empty;
+    }
 
-    const totalRevenue = ordersResult.data?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0;
-    const totalSales = ordersResult.data?.length || 0;
+    const totalSales = data.total_sales || 0;
+    const totalRevenue = data.total_revenue || 0;
 
     return {
-      totalMerchants: merchantsResult.count || 0,
-      activeMerchants: activeMerchantsResult.count || 0,
-      pendingMerchants: pendingMerchantsResult.count || 0,
-      refusedMerchants: refusedMerchantsResult.count || 0,
-      totalClients: clientsResult.count || 0,
-      activeProducts: productsResult.count || 0,
+      totalMerchants: data.total_merchants || 0,
+      activeMerchants: data.active_merchants || 0,
+      pendingMerchants: data.pending_merchants || 0,
+      refusedMerchants: data.refused_merchants || 0,
+      totalClients: data.total_clients || 0,
+      activeProducts: data.active_products || 0,
       activeBaskets: 0,
       totalSales,
       totalRevenue,
@@ -394,32 +359,23 @@ export const adminService = {
     };
   },
 
-  // Get Geographic Distribution
+  // Get Geographic Distribution (GROUP BY city in `get_admin_geo_distribution`).
   getGeoDistribution: async (): Promise<GeoDistribution[]> => {
     if (!isSupabaseConfigured()) {
       return [];
     }
 
     const client = requireSupabaseClient();
-    const { data: merchants, error } = await client
-      .from(DB_TABLES.MERCHANTS)
-      .select('city')
-      .eq('is_active', true);
+    const { data, error } = await client.rpc('get_admin_geo_distribution');
 
     if (error) {
       console.error('Error fetching geo distribution:', error);
       return [];
     }
 
-    // Group by city
-    const cityGroups: Record<string, number> = {};
-    merchants?.forEach(m => {
-      cityGroups[m.city] = (cityGroups[m.city] || 0) + 1;
-    });
-
-    return Object.entries(cityGroups).map(([city, count]) => ({
-      city,
-      merchantCount: count,
+    return (data || []).map((row: any) => ({
+      city: row.city,
+      merchantCount: row.merchant_count || 0,
       salesCount: 0, // Would need to join with orders
     }));
   },
@@ -467,27 +423,21 @@ export const adminService = {
     }));
   },
 
-  // Get Sales Statistics
+  // Get Sales Statistics (last 7 days, GROUP BY day in `get_admin_sales_stats`;
+  // only the French day-label bucketing of the ~7 resulting rows stays in JS).
   getSalesStats: async (): Promise<SalesStats[]> => {
     if (!isSupabaseConfigured()) {
       return [];
     }
 
     const client = requireSupabaseClient();
-    const startOfWeek = new Date();
-    startOfWeek.setDate(startOfWeek.getDate() - 7);
-
-    const { data: orders, error } = await client
-      .from(DB_TABLES.ORDERS)
-      .select('created_at, total_price')
-      .gte('created_at', startOfWeek.toISOString());
+    const { data, error } = await client.rpc('get_admin_sales_stats', { p_days: 7 });
 
     if (error) {
       console.error('Error fetching sales stats:', error);
       return [];
     }
 
-    // Group by day
     const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
     const stats: Record<string, SalesStats> = {};
 
@@ -495,75 +445,44 @@ export const adminService = {
       stats[day] = { period: day, sales: 0, revenue: 0, orders: 0 };
     });
 
-    orders?.forEach(order => {
-      const date = new Date(order.created_at);
-      const day = days[date.getDay()];
-      stats[day].sales += 1;
-      stats[day].orders += 1;
-      stats[day].revenue += order.total_price || 0;
+    (data || []).forEach((row: any) => {
+      // day_date comes back as a plain "YYYY-MM-DD" string; anchor it at
+      // UTC noon so day-of-week bucketing can't roll to an adjacent day
+      // depending on the reader's local timezone.
+      const date = new Date(`${row.day_date}T12:00:00Z`);
+      const day = days[date.getUTCDay()];
+      const ordersCount = row.orders_count || 0;
+      stats[day].sales += ordersCount;
+      stats[day].orders += ordersCount;
+      stats[day].revenue += row.revenue || 0;
     });
 
     // Return in week order (Mon-Sun)
     return ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => stats[day]);
   },
 
-  // Get Top Merchants
+  // Get Top Merchants: `get_admin_top_merchants` selects the top N first,
+  // then aggregates orders/products only for those N (LEFT JOIN LATERAL)
+  // instead of fetching all orders/products for every verified merchant.
   getTopMerchants: async (limit: number = 5): Promise<TopMerchant[]> => {
     if (!isSupabaseConfigured()) {
       return [];
     }
 
     const client = requireSupabaseClient();
-    const { data: merchants, error } = await client
-      .from(DB_TABLES.MERCHANTS)
-      .select(`
-        id,
-        business_name,
-        rating
-      `)
-      .eq('is_verified', true)
-      .eq('is_active', true)
-      .order('rating', { ascending: false })
-      .limit(limit);
+    const { data, error } = await client.rpc('get_admin_top_merchants', { p_limit: limit });
 
     if (error) {
       console.error('Error fetching top merchants:', error);
       return [];
     }
 
-    // Get order counts and revenue per merchant
-    const merchantIds = merchants?.map(m => m.id) || [];
-    const { data: orders } = await client
-      .from(DB_TABLES.ORDERS)
-      .select('merchant_id, total_price')
-      .in('merchant_id', merchantIds);
-
-    const ordersByMerchant: Record<string, { count: number; revenue: number }> = {};
-    orders?.forEach(o => {
-      if (!ordersByMerchant[o.merchant_id]) {
-        ordersByMerchant[o.merchant_id] = { count: 0, revenue: 0 };
-      }
-      ordersByMerchant[o.merchant_id].count += 1;
-      ordersByMerchant[o.merchant_id].revenue += o.total_price || 0;
-    });
-
-    // Get product counts
-    const { data: products } = await client
-      .from(DB_TABLES.FOOD_ITEMS)
-      .select('merchant_id')
-      .in('merchant_id', merchantIds);
-
-    const productsByMerchant: Record<string, number> = {};
-    products?.forEach(p => {
-      productsByMerchant[p.merchant_id] = (productsByMerchant[p.merchant_id] || 0) + 1;
-    });
-
-    return (merchants || []).map(m => ({
-      id: m.id,
-      name: m.business_name,
-      sales: ordersByMerchant[m.id]?.count || 0,
-      revenue: ordersByMerchant[m.id]?.revenue || 0,
-      productsCount: productsByMerchant[m.id] || 0,
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      name: row.business_name,
+      sales: row.orders_count || 0,
+      revenue: row.revenue || 0,
+      productsCount: row.products_count || 0,
     }));
   },
 
@@ -582,7 +501,7 @@ export const adminService = {
   },
 
   // Get all products/baskets for admin view
-  getProducts: async (): Promise<AdminProduct[]> => {
+  getProducts: async (page: number = 1, perPage: number = 200): Promise<AdminProduct[]> => {
     if (!isSupabaseConfigured()) {
       return [];
     }
@@ -591,7 +510,8 @@ export const adminService = {
     const { data, error } = await client
       .from(DB_TABLES.FOOD_ITEMS)
       .select('id,merchant_id,name,category,original_price,discounted_price,quantity_available,is_available,description,created_at,merchant:merchants(id,business_name)')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range((page - 1) * perPage, page * perPage - 1);
 
     if (error) {
       console.error('Error fetching admin products:', error);

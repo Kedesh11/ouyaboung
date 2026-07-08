@@ -148,6 +148,146 @@ describe("admin.service", () => {
     });
   });
 
+  describe("RPC-backed dashboard aggregation", () => {
+    // These used to fetch whole tables and reduce in JS; now they call a
+    // SECURITY DEFINER SQL function that aggregates server-side. Verify the
+    // right RPC/args are used and the row shape is mapped correctly.
+
+    it("getKPIs maps the aggregated row and computes average order value", async () => {
+      const singleMock = vi.fn(async () => ({
+        data: {
+          total_merchants: 5,
+          active_merchants: 3,
+          pending_merchants: 2,
+          refused_merchants: 0,
+          total_clients: 10,
+          active_products: 13,
+          total_sales: 4,
+          total_revenue: 8000,
+        },
+        error: null,
+      }));
+      const rpcMock = vi.fn(() => ({ single: singleMock }));
+      mocks.requireSupabaseClient.mockReturnValue({ rpc: rpcMock });
+
+      const result = await adminService.getKPIs();
+
+      expect(rpcMock).toHaveBeenCalledWith("get_admin_dashboard_kpis");
+      expect(result).toMatchObject({
+        totalMerchants: 5,
+        activeMerchants: 3,
+        totalSales: 4,
+        totalRevenue: 8000,
+        averageOrderValue: 2000,
+      });
+    });
+
+    it("getKPIs returns safe zeroed defaults when the RPC errors", async () => {
+      const singleMock = vi.fn(async () => ({ data: null, error: new Error("forbidden") }));
+      mocks.requireSupabaseClient.mockReturnValue({ rpc: vi.fn(() => ({ single: singleMock })) });
+
+      const result = await adminService.getKPIs();
+
+      expect(result.totalRevenue).toBe(0);
+      expect(result.averageOrderValue).toBe(0);
+    });
+
+    it("getGeoDistribution maps city/merchant_count rows", async () => {
+      const rpcMock = vi.fn(async () => ({
+        data: [
+          { city: "Libreville", merchant_count: 4 },
+          { city: "Port-Gentil", merchant_count: 1 },
+        ],
+        error: null,
+      }));
+      mocks.requireSupabaseClient.mockReturnValue({ rpc: rpcMock });
+
+      const result = await adminService.getGeoDistribution();
+
+      expect(rpcMock).toHaveBeenCalledWith("get_admin_geo_distribution");
+      expect(result).toEqual([
+        { city: "Libreville", merchantCount: 4, salesCount: 0 },
+        { city: "Port-Gentil", merchantCount: 1, salesCount: 0 },
+      ]);
+    });
+
+    it("getSalesStats buckets rows by French day label in Mon-Sun order", async () => {
+      // 2026-07-08 is a Wednesday.
+      const rpcMock = vi.fn(async () => ({
+        data: [{ day_date: "2026-07-08", orders_count: 3, revenue: 4500 }],
+        error: null,
+      }));
+      mocks.requireSupabaseClient.mockReturnValue({ rpc: rpcMock });
+
+      const result = await adminService.getSalesStats();
+
+      expect(rpcMock).toHaveBeenCalledWith("get_admin_sales_stats", { p_days: 7 });
+      expect(result.map((s) => s.period)).toEqual(["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]);
+      const wednesday = result.find((s) => s.period === "Mer");
+      expect(wednesday).toMatchObject({ sales: 3, orders: 3, revenue: 4500 });
+    });
+
+    it("getTopMerchants maps aggregated rows in the RPC's order", async () => {
+      const rpcMock = vi.fn(async () => ({
+        data: [
+          { id: "m1", business_name: "Chez Marie", rating: 4.5, orders_count: 2, revenue: 5000, products_count: 3 },
+        ],
+        error: null,
+      }));
+      mocks.requireSupabaseClient.mockReturnValue({ rpc: rpcMock });
+
+      const result = await adminService.getTopMerchants(5);
+
+      expect(rpcMock).toHaveBeenCalledWith("get_admin_top_merchants", { p_limit: 5 });
+      expect(result).toEqual([
+        { id: "m1", name: "Chez Marie", sales: 2, revenue: 5000, productsCount: 3 },
+      ]);
+    });
+
+    it("getClients maps rows and derives active/inactive status from orders_count", async () => {
+      const rpcMock = vi.fn(async () => ({
+        data: [
+          {
+            profile_id: "p1",
+            user_id: "u1",
+            email: "client@example.com",
+            phone: null,
+            full_name: null,
+            city: null,
+            quartier: null,
+            role: "user",
+            created_at: "2026-01-01T00:00:00.000Z",
+            orders_count: 2,
+            total_spent: 3500,
+          },
+        ],
+        error: null,
+      }));
+      mocks.requireSupabaseClient.mockReturnValue({ rpc: rpcMock });
+
+      const result = await adminService.getClients();
+
+      expect(rpcMock).toHaveBeenCalledWith("get_admin_clients", { p_limit: 500, p_offset: 0 });
+      expect(result[0]).toMatchObject({
+        id: "u1",
+        profileId: "p1",
+        fullName: "client", // derived from email local-part when full_name is null
+        ordersCount: 2,
+        totalSpent: 3500,
+        status: "active",
+      });
+    });
+
+    it("getClients paginates via p_limit/p_offset", async () => {
+      const rpcMock = vi.fn(async () => ({ data: [], error: null }));
+      mocks.requireSupabaseClient.mockReturnValue({ rpc: rpcMock });
+
+      await adminService.getClients(3, 50);
+
+      expect(rpcMock).toHaveBeenCalledWith("get_admin_clients", { p_limit: 50, p_offset: 100 });
+    });
+  });
+
   describe("updateUserRole", () => {
     const originalFetch = global.fetch;
 
