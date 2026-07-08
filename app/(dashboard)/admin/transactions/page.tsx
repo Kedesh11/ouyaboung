@@ -45,7 +45,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValueWithIcon,
 } from "@/components/ui/select";
 import { Search, ShoppingBag, DollarSign, TrendingUp, Eye, Calendar, Receipt, Filter, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
@@ -350,10 +350,7 @@ const AdminTransactionsPage = () => {
         <div className="w-full sm:w-[200px]">
           <Select value={statusFilter} onValueChange={handleStatusChange}>
             <SelectTrigger>
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                <SelectValue placeholder="Statut" />
-              </div>
+              <SelectValueWithIcon icon={Filter} placeholder="Statut" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les statuts</SelectItem>

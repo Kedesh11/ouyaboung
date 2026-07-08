@@ -10,6 +10,29 @@ const SelectGroup = SelectPrimitive.Group;
 
 const SelectValue = SelectPrimitive.Value;
 
+// Radix's SelectValue silently drops any `className` passed to it (it's
+// destructured out and never applied to the underlying span), so relying on
+// `[&>span]:line-clamp-1` from SelectTrigger only works when SelectValue is
+// its *direct* child. Every filter dropdown that also shows a leading icon
+// (Filter, Search, ...) has to wrap SelectValue in its own element, which
+// breaks that direct-child selector and lets the text wrap - use this
+// instead of hand-rolling the same `<div><Icon/><SelectValue/></div>` in
+// every page.
+const SelectValueWithIcon = ({
+  icon: Icon,
+  placeholder,
+}: {
+  icon?: React.ComponentType<{ className?: string }>;
+  placeholder?: string;
+}) => (
+  <div className="flex items-center gap-2 min-w-0">
+    {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
+    <span className="truncate">
+      <SelectValue placeholder={placeholder} />
+    </span>
+  </div>
+);
+
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
@@ -133,6 +156,7 @@ export {
   Select,
   SelectGroup,
   SelectValue,
+  SelectValueWithIcon,
   SelectTrigger,
   SelectContent,
   SelectLabel,
