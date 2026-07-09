@@ -17,7 +17,8 @@ import type {
   MerchantStatus,
   AdminClient,
   AdminProduct,
-  PlatformSettings
+  PlatformSettings,
+  BulkActionResponse
 } from '@/types/admin.types';
 
 const MERCHANT_LIST_COLUMNS =
@@ -612,6 +613,38 @@ export const adminService = {
       console.error('Error in updateUserRole:', error);
       throw error;
     }
+  },
+
+  bulkUpdateUserRole: async (userIds: string[], role: 'user' | 'merchant' | 'admin'): Promise<BulkActionResponse> => {
+    const response = await fetch('/api/admin/users/bulk-role', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userIds, role }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Erreur lors du changement de rôle en masse');
+    }
+
+    return data;
+  },
+
+  bulkDeleteUsers: async (userIds: string[]): Promise<BulkActionResponse> => {
+    const response = await fetch('/api/admin/users/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userIds }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Erreur lors de la suppression en masse');
+    }
+
+    return data;
   },
 };
 
