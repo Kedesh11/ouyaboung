@@ -65,8 +65,8 @@ export interface Merchant {
   address: string;
   city: string;
   quartier: string;
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   phone: string;
   email: string;
   opening_hours?: OpeningHours;

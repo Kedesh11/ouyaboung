@@ -174,8 +174,8 @@ export const updateMerchantProfile = async (
     logoUrl?: string;
     coverImageUrl?: string;
     openingHours?: OpeningHours;
-    latitude?: number;
-    longitude?: number;
+    latitude?: number | null;
+    longitude?: number | null;
     isActive?: boolean;
   }
 ): Promise<ApiResponse<Merchant>> => {
