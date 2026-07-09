@@ -220,19 +220,16 @@ otp_expiry = 3600
 # Real SMTP relay for Supabase Auth emails (confirmation, recovery, etc.),
 # instead of the shared/default mailer which is throttled and meant for
 # testing only. Reuses the same SMTP_* variable names as the merchant
-# approval/rejection emails in src/services/email.server.ts - BUT those are
-# currently unset (empty) in .env, so this block stays disabled until real
-# credentials (host, user, pass, sender email) are provided. Enabling this
-# with unresolved env() values breaks local signup outright (GoTrue tries
-# to connect to the literal string "env(SMTP_HOST)" as a hostname).
-# [auth.email.smtp]
-# enabled = true
-# host = "env(SMTP_HOST)"
-# port = "env(SMTP_PORT)"
-# user = "env(SMTP_USER)"
-# pass = "env(SMTP_PASS)"
-# admin_email = "env(SMTP_SENDER_EMAIL)"
-# sender_name = "env(SMTP_SENDER_NAME)"
+# approval/rejection emails in src/services/email.server.ts (now filled in
+# with real Gmail credentials in .env).
+[auth.email.smtp]
+enabled = true
+host = "env(SMTP_HOST)"
+port = "env(SMTP_PORT)"
+user = "env(SMTP_USER)"
+pass = "env(SMTP_PASS)"
+admin_email = "env(SMTP_SENDER_EMAIL)"
+sender_name = "env(SMTP_SENDER_NAME)"
 
 [auth.email.template.confirmation]
 subject = "Confirmez votre inscription à Ouyaboung"
