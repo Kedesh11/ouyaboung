@@ -23,6 +23,7 @@ import {
     getCachedUserLocation,
     formatLocationAccuracy,
     isValidCoordinate,
+    isWithinGabonBounds,
 } from "@/services";
 import { useToast } from "@/hooks/use-toast";
 import type { FoodItem, FoodCategory, GabonCity, MerchantType } from "@/types";
@@ -376,7 +377,13 @@ const SearchPage = () => {
         items.forEach((item) => {
             const merchantLat = item.merchant?.latitude;
             const merchantLng = item.merchant?.longitude;
-            if (isValidCoordinate(merchantLat, merchantLng)) {
+            // Some merchants have placeholder/missing coordinates (e.g. (0,0) or
+            // null) instead of a real position. isValidCoordinate alone accepts
+            // (0,0) as "valid" (it's a real lat/lng pair, just nowhere near
+            // Gabon), which would compute a bogus multi-thousand-km distance and
+            // get the item wrongly excluded by the nearby-radius filter below.
+            // Only trust coordinates that actually fall within Gabon.
+            if (isWithinGabonBounds(merchantLat, merchantLng)) {
                 const latitude = merchantLat as number;
                 const longitude = merchantLng as number;
                 distanceMap[item.id] = calculateDistanceKm(userLocation, {
@@ -394,7 +401,10 @@ const SearchPage = () => {
 
         return items.filter((item) => {
             const distance = distanceByItemId[item.id];
-            return typeof distance === "number" && distance <= nearbyRadiusKm;
+            // Items whose merchant has no trustworthy coordinates get an
+            // unknown distance - show them rather than silently hiding them,
+            // instead of only filtering out items we can actually place too far.
+            return typeof distance !== "number" || distance <= nearbyRadiusKm;
         });
     }, [distanceByItemId, items, nearbyRadiusKm, userLocation]);
 

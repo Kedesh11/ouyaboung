@@ -183,5 +183,7 @@ export {
   clearCachedUserLocation,
   formatLocationAccuracy,
   isValidCoordinate,
+  isWithinGabonBounds,
+  GABON_LOCATION_BOUNDS,
 } from './geolocation.service';
 export type { UserGeolocation } from './geolocation.service';

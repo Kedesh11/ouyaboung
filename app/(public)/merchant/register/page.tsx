@@ -57,6 +57,8 @@ import {
   updateMerchantLogoByUserId,
   resolveUserLocation,
   formatLocationAccuracy,
+  isWithinGabonBounds,
+  GABON_LOCATION_BOUNDS,
 } from "@/services";
 import { uploadMerchantDocument } from "@/services/storage.service";
 
@@ -75,13 +77,13 @@ const merchantFormSchema = z.object({
   city: z.string().min(1, "Ville requise"),
   quartier: z.string().min(2, "Quartier requis"),
   latitude: z.number()
-    .min(-90, "Latitude invalide")
-    .max(90, "Latitude invalide")
+    .min(GABON_LOCATION_BOUNDS.minLatitude, "Position hors du Gabon")
+    .max(GABON_LOCATION_BOUNDS.maxLatitude, "Position hors du Gabon")
     .optional()
     .refine((value) => typeof value === "number", "Position GPS obligatoire"),
   longitude: z.number()
-    .min(-180, "Longitude invalide")
-    .max(180, "Longitude invalide")
+    .min(GABON_LOCATION_BOUNDS.minLongitude, "Position hors du Gabon")
+    .max(GABON_LOCATION_BOUNDS.maxLongitude, "Position hors du Gabon")
     .optional()
     .refine((value) => typeof value === "number", "Position GPS obligatoire"),
 
@@ -217,6 +219,15 @@ const MerchantRegisterPage = () => {
 
       if (!result.success || !result.data) {
         toast.error(result.error?.message || "Impossible d'obtenir une position GPS fiable.");
+        return;
+      }
+
+      // A GPS/IP fix outside Gabon (misconfigured device, VPN, coarse IP
+      // lookup) is never a real shop location - reject it here instead of
+      // letting a bogus pair reach the form/DB, which is how merchants ended
+      // up saved at (0,0) in the past.
+      if (!isWithinGabonBounds(result.data.latitude, result.data.longitude)) {
+        toast.error("La position obtenue est hors du Gabon. Réessayez depuis l'emplacement de votre boutique.");
         return;
       }
 

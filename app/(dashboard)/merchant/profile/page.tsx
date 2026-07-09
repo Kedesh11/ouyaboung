@@ -32,7 +32,7 @@ import { toast } from "sonner";
 import type { MerchantType, GabonCity, DayHours, OpeningHours } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { getMyMerchantProfile, updateMerchantProfile } from "@/services/merchant.service";
-import { resolveUserLocation } from "@/services";
+import { resolveUserLocation, isWithinGabonBounds } from "@/services";
 import { createDefaultMerchantProfile } from "@/services/merchant.service";
 import { uploadMerchantAsset } from "@/services/storage.service";
 
@@ -79,8 +79,8 @@ const MerchantProfilePage = () => {
     email: "",
     is_active: true,
     logo_url: "",
-    latitude: 0,
-    longitude: 0,
+    latitude: null as number | null,
+    longitude: null as number | null,
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -123,8 +123,8 @@ const MerchantProfilePage = () => {
           email: m.email || "",
           is_active: m.is_active,
           logo_url: m.logo_url || "",
-          latitude: m.latitude || 0,
-          longitude: m.longitude || 0,
+          latitude: m.latitude ?? null,
+          longitude: m.longitude ?? null,
         });
 
         if (m.opening_hours) {
@@ -173,8 +173,8 @@ const MerchantProfilePage = () => {
         quartier: profile.quartier || "À compléter",
         phone: profile.phone || user.user_metadata?.phone || "À compléter",
         email: profile.email || user.email || "",
-        latitude: profile.latitude || null,
-        longitude: profile.longitude || null,
+        latitude: profile.latitude,
+        longitude: profile.longitude,
         logoUrl: profile.logo_url || null,
       });
 
@@ -216,14 +216,11 @@ const MerchantProfilePage = () => {
     if (!profile.email.trim()) {
       return "L'email est obligatoire";
     }
-    if (profile.latitude === 0 || profile.longitude === 0) {
+    if (profile.latitude === null || profile.longitude === null) {
       return "La position GPS de la boutique est obligatoire";
     }
-    if (profile.latitude !== 0 && (profile.latitude < -90 || profile.latitude > 90)) {
-      return "Latitude invalide";
-    }
-    if (profile.longitude !== 0 && (profile.longitude < -180 || profile.longitude > 180)) {
-      return "Longitude invalide";
+    if (!isWithinGabonBounds(profile.latitude, profile.longitude)) {
+      return "La position GPS de la boutique doit se trouver au Gabon";
     }
     return null;
   };
@@ -307,6 +304,14 @@ const MerchantProfilePage = () => {
       if (result.success && result.data) {
         const nextLatitude = result.data.latitude;
         const nextLongitude = result.data.longitude;
+
+        // Reject a fix outside Gabon (misconfigured device, VPN, coarse IP
+        // lookup) instead of silently saving a bogus location - this is how
+        // merchants ended up stored at (0,0) in the past.
+        if (!isWithinGabonBounds(nextLatitude, nextLongitude)) {
+          toast.error("La position obtenue est hors du Gabon. Réessayez depuis l'emplacement de votre boutique.");
+          return;
+        }
 
         setProfile((prev) => ({
           ...prev,
@@ -521,7 +526,7 @@ const MerchantProfilePage = () => {
                 <Label>Position GPS (Satellitaire)</Label>
                 <div className="flex items-center gap-4 mb-2">
                   <div className="flex-1 p-2 bg-muted/50 rounded-md text-xs font-mono border border-input flex items-center justify-center">
-                    {profile.latitude !== 0 ? (
+                    {profile.latitude !== null && profile.longitude !== null ? (
                       <span className="text-primary font-medium">
                         {profile.latitude.toFixed(6)}, {profile.longitude.toFixed(6)}
                       </span>
