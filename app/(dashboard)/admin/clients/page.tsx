@@ -9,8 +9,19 @@ import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -34,17 +45,33 @@ import {
   SelectTrigger,
   SelectValueWithIcon,
 } from "@/components/ui/select";
-import { Search, Users, Eye, Mail, Filter } from "lucide-react";
+import { Search, Users, Eye, Mail, Filter, UserCog, Trash2, X } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { adminService } from "@/services/admin.service";
-import type { AdminClient } from "@/types/admin.types";
+import type { AdminClient, BulkActionResponse } from "@/types/admin.types";
 import { toast } from "sonner";
 import { ClientDetailsModal } from "@/components/admin/ClientDetailsModal";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ITEMS_PER_PAGE = 5;
 
+const ROLE_LABELS: Record<AdminClient["role"], string> = {
+  user: "Client",
+  merchant: "Marchand",
+  admin: "Administrateur",
+};
+
+const BULK_REASON_LABELS: Record<string, string> = {
+  HAS_TRANSACTIONS: "historique de transactions",
+  LAST_ADMIN_GUARD: "dernier administrateur requis",
+  USER_NOT_FOUND: "utilisateur introuvable",
+  AUTH_DELETE_FAILED: "échec de suppression",
+  DB_UPDATE_FAILED: "échec de mise à jour",
+};
+
 const AdminClientsPage = () => {
+  const { user } = useAuth();
   const [clients, setClients] = useState<AdminClient[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -52,17 +79,22 @@ const AdminClientsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedClient, setSelectedClient] = useState<AdminClient | null>(null);
 
-  useEffect(() => {
-    const loadClients = async () => {
-      try {
-        const data = await adminService.getClients();
-        setClients(data);
-      } catch (error) {
-        console.error("Error loading clients:", error);
-        toast.error("Erreur lors du chargement des clients");
-      }
-    };
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRole, setBulkRole] = useState<AdminClient["role"]>("user");
+  const [confirmAction, setConfirmAction] = useState<null | "role" | "delete">(null);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
+  const loadClients = async () => {
+    try {
+      const data = await adminService.getClients();
+      setClients(data);
+    } catch (error) {
+      console.error("Error loading clients:", error);
+      toast.error("Erreur lors du chargement des clients");
+    }
+  };
+
+  useEffect(() => {
     loadClients();
   }, []);
 
@@ -78,11 +110,7 @@ const AdminClientsPage = () => {
       (client.phone || "").includes(query)
     );
 
-    const matchesRole = roleFilter === 'all'
-      ? true
-      : roleFilter === 'merchant'
-        ? client.role === 'merchant'
-        : client.role === 'user';
+    const matchesRole = roleFilter === 'all' ? true : client.role === roleFilter;
 
     const matchesStatus = statusFilter === 'all'
       ? true
@@ -111,6 +139,79 @@ const AdminClientsPage = () => {
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
     setCurrentPage(1);
+  };
+
+  // Selection persists across pagination/filter changes - only cleared
+  // explicitly or after a successful bulk action.
+  const pageIds = paginatedClients.map((c) => c.id);
+  const pageSelectedCount = pageIds.filter((id) => selectedIds.has(id)).length;
+  const headerCheckedState: boolean | "indeterminate" =
+    pageIds.length === 0 || pageSelectedCount === 0
+      ? false
+      : pageSelectedCount === pageIds.length
+        ? true
+        : "indeterminate";
+
+  const toggleSelectPage = (checked: boolean | "indeterminate") => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      pageIds.forEach((id) => (checked ? next.add(id) : next.delete(id)));
+      return next;
+    });
+  };
+
+  const toggleSelectOne = (id: string, checked: boolean | "indeterminate") => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const reportBulkOutcome = (res: BulkActionResponse) => {
+    const { succeeded, failed } = res.summary;
+    if (failed === 0) {
+      toast.success(`${succeeded} utilisateur(s) mis à jour avec succès`);
+      return;
+    }
+    const firstIssue = res.results.find((r) => !r.ok);
+    const reasonLabel = firstIssue?.detail || (firstIssue?.reason ? BULK_REASON_LABELS[firstIssue.reason] : undefined);
+    toast.warning(
+      `${succeeded} réussi(s), ${failed} échec(s)${reasonLabel ? ` (${reasonLabel})` : ""}`,
+      { description: failed > 1 ? "Voir la console pour le détail complet." : undefined }
+    );
+    console.warn("Bulk action partial failures:", res.results.filter((r) => !r.ok));
+  };
+
+  const handleConfirmBulkRole = async () => {
+    setIsBulkProcessing(true);
+    try {
+      const res = await adminService.bulkUpdateUserRole(Array.from(selectedIds), bulkRole);
+      reportBulkOutcome(res);
+      await loadClients();
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erreur lors du changement de rôle");
+    } finally {
+      setIsBulkProcessing(false);
+      setConfirmAction(null);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    setIsBulkProcessing(true);
+    try {
+      const res = await adminService.bulkDeleteUsers(Array.from(selectedIds));
+      reportBulkOutcome(res);
+      await loadClients();
+      setSelectedIds(new Set());
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erreur lors de la suppression");
+    } finally {
+      setIsBulkProcessing(false);
+      setConfirmAction(null);
+    }
   };
 
   return (
@@ -182,6 +283,7 @@ const AdminClientsPage = () => {
               <SelectItem value="all">Tous les rôles</SelectItem>
               <SelectItem value="user">Clients</SelectItem>
               <SelectItem value="merchant">Marchands</SelectItem>
+              <SelectItem value="admin">Administrateurs</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -198,6 +300,38 @@ const AdminClientsPage = () => {
           </Select>
         </div>
       </div>
+
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border bg-muted/50 p-3 mb-4">
+          <p className="text-sm font-medium">
+            {selectedIds.size} utilisateur{selectedIds.size > 1 ? "s" : ""} sélectionné{selectedIds.size > 1 ? "s" : ""}
+          </p>
+          <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
+            <Select value={bulkRole} onValueChange={(v) => setBulkRole(v as AdminClient["role"])} disabled={isBulkProcessing}>
+              <SelectTrigger className="w-[170px]">
+                <SelectValueWithIcon icon={UserCog} placeholder="Nouveau rôle" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">Client</SelectItem>
+                <SelectItem value="merchant">Marchand</SelectItem>
+                <SelectItem value="admin">Administrateur</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" disabled={isBulkProcessing} onClick={() => setConfirmAction("role")}>
+              Changer le rôle
+            </Button>
+            <Button variant="destructive" size="sm" disabled={isBulkProcessing} onClick={() => setConfirmAction("delete")}>
+              <Trash2 className="w-4 h-4 mr-1" />
+              Supprimer
+            </Button>
+            <Button variant="ghost" size="sm" disabled={isBulkProcessing} onClick={() => setSelectedIds(new Set())}>
+              <X className="w-4 h-4 mr-1" />
+              Annuler la sélection
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Clients Table */}
       <Card>
@@ -219,6 +353,14 @@ const AdminClientsPage = () => {
               <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={headerCheckedState}
+                        onCheckedChange={toggleSelectPage}
+                        disabled={isBulkProcessing}
+                        aria-label="Sélectionner tous les utilisateurs de cette page"
+                      />
+                    </TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Inscription</TableHead>
@@ -232,6 +374,14 @@ const AdminClientsPage = () => {
                 <TableBody>
                   {paginatedClients.map((client) => (
                     <TableRow key={client.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(client.id)}
+                          onCheckedChange={(checked) => toggleSelectOne(client.id, checked)}
+                          disabled={isBulkProcessing || client.id === user?.id}
+                          aria-label={`Sélectionner ${client.fullName}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -268,8 +418,8 @@ const AdminClientsPage = () => {
                         {formatCurrency(client.totalSpent)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={client.role === 'merchant' ? 'default' : 'secondary'}>
-                          {client.role === 'merchant' ? 'Marchand' : 'Client'}
+                        <Badge variant={client.role === 'admin' ? 'destructive' : client.role === 'merchant' ? 'default' : 'secondary'}>
+                          {ROLE_LABELS[client.role]}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -337,6 +487,47 @@ const AdminClientsPage = () => {
         isOpen={!!selectedClient}
         onClose={() => setSelectedClient(null)}
       />
+
+      <AlertDialog open={confirmAction === "role"} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer le changement de rôle</AlertDialogTitle>
+            <AlertDialogDescription>
+              Le rôle de {selectedIds.size} utilisateur{selectedIds.size > 1 ? "s" : ""} sera changé en «{" "}
+              {ROLE_LABELS[bulkRole]} ». Cette action prend effet immédiatement.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkProcessing}>Annuler</AlertDialogCancel>
+            <AlertDialogAction disabled={isBulkProcessing} onClick={handleConfirmBulkRole}>
+              Confirmer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmAction === "delete"} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer définitivement ces utilisateurs ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vous êtes sur le point de supprimer définitivement {selectedIds.size} compte{selectedIds.size > 1 ? "s" : ""}.
+              Cette action est irréversible : profil, commandes, favoris et historique associés seront supprimés.
+              Les comptes ayant un historique de transaction seront automatiquement ignorés.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkProcessing}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isBulkProcessing}
+              className={buttonVariants({ variant: "destructive" })}
+              onClick={handleConfirmBulkDelete}
+            >
+              Supprimer définitivement
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

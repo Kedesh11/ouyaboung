@@ -149,6 +149,26 @@ export interface AdminClient {
 }
 
 // ============================================
+// Bulk user actions (role change / deletion)
+// ============================================
+
+export interface BulkActionResult {
+  userId: string;
+  email: string;
+  ok: boolean;
+  reason?: string;
+  detail?: string;
+}
+
+export interface BulkActionResponse {
+  success: boolean;
+  request_id: string;
+  results: BulkActionResult[];
+  summary: { total: number; succeeded: number; failed: number };
+  error?: { code: string; message: string };
+}
+
+// ============================================
 // Admin Product
 // ============================================
 
