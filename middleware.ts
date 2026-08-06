@@ -6,6 +6,7 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
     const isUserRoute = pathname.startsWith('/user');
     const isMerchantRoute = pathname.startsWith('/merchant') && !pathname.startsWith('/merchant/register');
+    const isFarmerRoute = pathname.startsWith('/farmer') && !pathname.startsWith('/farmer/register');
     const isAdminRoute = pathname.startsWith('/admin');
     const isAuthPage = pathname === '/auth' || pathname === '/forgot-password' || pathname.startsWith('/auth/reset');
 
@@ -61,11 +62,12 @@ export async function middleware(request: NextRequest) {
             : (typeof user.app_metadata?.role === 'string' ? user.app_metadata.role : null)
         userRole = metadataRole
 
-        let shouldLookupProfileRole = !userRole && (isUserRoute || isMerchantRoute || isAdminRoute || isAuthPage)
+        let shouldLookupProfileRole = !userRole && (isUserRoute || isMerchantRoute || isFarmerRoute || isAdminRoute || isAuthPage)
 
         if (!shouldLookupProfileRole) {
             if (isAdminRoute && userRole !== 'admin') shouldLookupProfileRole = true;
             if (isMerchantRoute && userRole !== 'merchant') shouldLookupProfileRole = true;
+            if (isFarmerRoute && userRole !== 'farmer') shouldLookupProfileRole = true;
         }
 
         if (shouldLookupProfileRole) {
@@ -88,6 +90,7 @@ export async function middleware(request: NextRequest) {
         const redirectMap: Record<string, string> = {
             'admin': '/admin',
             'merchant': '/merchant',
+            'farmer': '/farmer',
             'user': '/user',
         };
         const redirectPath = redirectMap[userRole || 'user'] || '/';
@@ -122,6 +125,20 @@ export async function middleware(request: NextRequest) {
         }
     }
 
+    // Protect farmer routes
+    if (isFarmerRoute) {
+        if (!user) {
+            const url = new URL('/auth', request.url);
+            url.searchParams.set('role', 'farmer');
+            url.searchParams.set('redirect', pathname);
+            return NextResponse.redirect(url);
+        }
+        if (userRole !== 'farmer') {
+            const url = new URL('/', request.url);
+            return NextResponse.redirect(url);
+        }
+    }
+
     // Protect admin routes
     if (isAdminRoute) {
         if (!user) {
@@ -142,6 +159,7 @@ export const config = {
     matcher: [
         '/admin/:path*',
         '/merchant/:path*',
+        '/farmer/:path*',
         '/user/:path*',
         '/auth',
         '/auth/:path*',

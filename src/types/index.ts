@@ -19,7 +19,7 @@ export interface User {
   updated_at: string;
 }
 
-export type UserRole = 'user' | 'merchant' | 'admin';
+export type UserRole = 'user' | 'merchant' | 'admin' | 'farmer';
 
 export interface UserProfile extends User {
   address?: string;
@@ -106,6 +106,85 @@ export interface DayHours {
   open: string;
   close: string;
   is_closed: boolean;
+}
+
+// ============================================
+// Farmer Types (répertoire des agriculteurs)
+// ============================================
+export interface Farmer {
+  id: string;
+  user_id: string;
+  farm_name: string;
+  farmer_type: FarmerType;
+  description?: string;
+  logo_url?: string;
+  cover_image_url?: string;
+  address: string;
+  city: string;
+  quartier: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  phone: string;
+  email: string;
+  rating: number;
+  total_reviews: number;
+  is_verified: boolean;
+  is_active: boolean;
+  is_refused?: boolean;
+  validated_at?: string;
+  refused_at?: string;
+  refusal_reason?: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FarmerType = 'agriculture' | 'elevage' | 'peche' | 'mixte' | 'other';
+
+// ============================================
+// Farm Products Types (catalogue agricole)
+// ============================================
+export interface FarmProduct {
+  id: string;
+  farmer_id: string;
+  farmer?: Farmer;
+  name: string;
+  description?: string;
+  category: FarmProductCategory;
+  unit: string; // ex: 'kg', 'sac', 'caisse', 'unite'
+  price_per_unit: number; // in XAF
+  quantity_available: number;
+  available_from?: string;
+  available_until?: string;
+  image_url?: string;
+  images?: string[];
+  is_available: boolean;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FarmProductCategory =
+  | 'tubercules'
+  | 'legumes_feuilles'
+  | 'fruits'
+  | 'cereales'
+  | 'elevage_volaille'
+  | 'elevage_betail'
+  | 'peche'
+  | 'autre';
+
+export interface CreateFarmProductInput {
+  name: string;
+  description?: string;
+  category: FarmProductCategory;
+  unit: string;
+  price_per_unit: number;
+  quantity_available: number;
+  available_from?: string;
+  available_until?: string;
+  image_url?: string;
+  images?: string[];
 }
 
 // ============================================
@@ -211,6 +290,50 @@ export type OrderStatus =
 export interface CreateOrderInput {
   food_item_id: string;
   quantity: number;
+}
+
+// ============================================
+// Farm Orders Types (marché B2B commerçant <-> agriculteur)
+// ============================================
+export interface FarmOrder {
+  id: string;
+  merchant_id: string;
+  farmer_id: string;
+  farm_product_id: string;
+  farm_product?: FarmProduct;
+  farmer?: Farmer;
+  merchant?: Merchant;
+  quantity: number;
+  unit: string;
+  price_per_unit: number; // in XAF
+  total_price: number; // in XAF
+  special_request?: string;
+  requested_date?: string;
+  status: FarmOrderStatus;
+  confirmed_at?: string;
+  refused_at?: string;
+  refusal_reason?: string;
+  ready_at?: string;
+  delivered_at?: string;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FarmOrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'refused'
+  | 'ready'
+  | 'delivered'
+  | 'cancelled';
+
+export interface CreateFarmOrderInput {
+  farm_product_id: string;
+  quantity: number;
+  special_request?: string;
+  requested_date?: string;
 }
 
 // ============================================
@@ -323,6 +446,17 @@ export type NotificationType =
   | 'order_cancelled'
   | 'new_food_nearby'
   | 'merchant_verified'
+  | 'merchant_pending'
+  | 'merchant_refused'
+  | 'farmer_pending'
+  | 'farmer_verified'
+  | 'farmer_refused'
+  | 'farm_order_pending'
+  | 'farm_order_confirmed'
+  | 'farm_order_refused'
+  | 'farm_order_ready'
+  | 'farm_order_delivered'
+  | 'farm_order_cancelled'
   | 'promotion'
   | 'system';
 
@@ -339,6 +473,7 @@ export interface SignUpData extends AuthCredentials {
   phone?: string;
   role: UserRole;
   business_name?: string; // for merchants
+  farm_name?: string; // for farmers
   metadata?: Record<string, any>; // For additional profile data
 }
 

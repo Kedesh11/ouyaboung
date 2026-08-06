@@ -67,3 +67,13 @@ export const uploadMerchantDocument = async (
   const filePath = `${folder}/${fileName}`;
   return uploadToBucket('merchant-documents', filePath, file);
 };
+
+export const uploadFarmerAsset = async (
+  folder: string,
+  file: Blob | File
+): Promise<ApiResponse<UploadResult>> => {
+  const fileExt = file instanceof File ? file.name.split('.').pop() : 'bin';
+  const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+  const filePath = `${folder}/${fileName}`;
+  return uploadToBucket('avatars', filePath, file);
+};

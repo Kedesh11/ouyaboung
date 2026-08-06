@@ -29,6 +29,38 @@ export interface MerchantRegistration {
   longitude?: number;
 }
 
+// Farmer Status Enum
+export type FarmerStatus = 'pending' | 'validated' | 'refused';
+
+// Farmer Registration
+export interface FarmerRegistration {
+  id: string;
+  farmName: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  farmerType: string;
+  description: string;
+  status: FarmerStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  validatedAt?: Date;
+  refusedAt?: Date;
+  refusalReason?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+// Farmer Validation Action
+export interface FarmerValidationAction {
+  farmerId: string;
+  action: 'validate' | 'refuse';
+  reason?: string;
+  adminId: string;
+}
+
 // Admin KPIs
 export interface AdminKPIs {
   totalMerchants: number;

@@ -1,0 +1,434 @@
+"use client";
+
+// ============================================
+// Farmer Products Page - Manage catalogue
+// ouyaboung Platform - Répertoire des agriculteurs
+// ============================================
+
+import { useState, useEffect, Suspense } from "react";
+import { motion } from "framer-motion";
+import Image from "next/image";
+import { useSearchParams } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import AddFarmProductModal from "@/components/farmer/AddFarmProductModal";
+import {
+  Plus,
+  Search,
+  MoreVertical,
+  Edit,
+  Eye,
+  EyeOff,
+  Package,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  getFarmerItems,
+  formatPricePerUnit,
+  getFarmProductCategoryName,
+  getMyFarmerProfile,
+  updateFarmProductListing,
+} from "@/services";
+import type { FarmProduct } from "@/types";
+import { toast } from "sonner";
+import { createDefaultFarmerProfile } from "@/services/farmer.service";
+
+const FarmerProductsContent = () => {
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const action = searchParams.get("action");
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<FarmProduct[]>([]);
+  const [farmerId, setFarmerId] = useState<string | null>(null);
+  const [farmerStatus, setFarmerStatus] = useState<"pending" | "approved" | "rejected">("pending");
+  const [refusalReason, setRefusalReason] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("active");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<FarmProduct | null>(null);
+  const canManageProducts = farmerStatus === "approved";
+
+  useEffect(() => {
+    if (action === "add") {
+      if (canManageProducts) {
+        setEditingProduct(null);
+        setIsAddModalOpen(true);
+      } else {
+        toast.error("Votre exploitation doit être approuvée avant l'ajout de produits.");
+      }
+    }
+  }, [action, canManageProducts]);
+
+  useEffect(() => {
+    if (user) {
+      loadFarmerProfile();
+    } else {
+      setIsProfileLoading(false);
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (farmerId) {
+      loadProducts();
+    }
+  }, [farmerId]);
+
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+
+  const handleCreateProfile = async () => {
+    if (!user) return;
+    setIsCreatingProfile(true);
+    try {
+      const farmName = user.user_metadata?.full_name || "Mon Exploitation";
+      const result = await createDefaultFarmerProfile({
+        userId: user.id,
+        farmName,
+        farmerType: "other",
+        phone: user.user_metadata?.phone || "À compléter",
+        email: user.email || "",
+      });
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error?.message || "Erreur lors de la création du profil");
+      }
+
+      const data = result.data;
+      if (data) {
+        toast.success("Profil agriculteur créé. En attente de validation admin.");
+        setFarmerId(data.id);
+        setFarmerStatus("pending");
+        setRefusalReason(null);
+
+        await fetch("/api/farmer/onboarding-notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ farmerId: data.id }),
+        }).catch((notifyError) => {
+          console.warn("[FarmerProducts] Failed to notify admins for new farmer", notifyError);
+        });
+      }
+    } catch (error: any) {
+      console.error("Error creating profile:", error);
+      toast.error("Erreur lors de la création du profil: " + error.message);
+    } finally {
+      setIsCreatingProfile(false);
+    }
+  };
+
+  const loadFarmerProfile = async () => {
+    if (!user) return;
+    try {
+      const result = await getMyFarmerProfile(user.id);
+      if (result.success && result.data) {
+        setFarmerId(result.data.id);
+        setFarmerStatus(
+          result.data.is_verified
+            ? "approved"
+            : result.data.is_refused
+              ? "rejected"
+              : "pending"
+        );
+        setRefusalReason(result.data.refusal_reason || null);
+      } else {
+        setFarmerId(null);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du chargement du profil");
+    } finally {
+      setIsProfileLoading(false);
+    }
+  };
+
+  const loadProducts = async () => {
+    if (!farmerId) return;
+    setIsLoading(true);
+    const result = await getFarmerItems(farmerId, true);
+    if (result.success && result.data) {
+      setProducts(result.data);
+    } else if (!result.success) {
+      console.warn("[FarmerProducts] Failed to load products", result.error);
+    }
+    setIsLoading(false);
+  };
+
+  const openAddModal = () => {
+    if (!canManageProducts) {
+      toast.error("Ajout bloqué: votre exploitation est en attente de validation admin.");
+      return;
+    }
+    setEditingProduct(null);
+    setIsAddModalOpen(true);
+  };
+
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTab =
+      activeTab === "all" ||
+      (activeTab === "active" && product.is_available) ||
+      (activeTab === "inactive" && !product.is_available);
+    return matchesSearch && matchesTab;
+  });
+
+  const handleToggleVisibility = async (product: FarmProduct) => {
+    try {
+      const result = await updateFarmProductListing(product.id, {
+        isAvailable: !product.is_available,
+      });
+
+      if (result.success) {
+        toast.success(product.is_available ? "Produit masqué" : "Produit affiché");
+        loadProducts();
+      } else {
+        toast.error("Erreur lors de la mise à jour");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Une erreur est survenue");
+    }
+  };
+
+  const ProductCard = ({ product }: { product: FarmProduct }) => (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="overflow-hidden">
+        <div className="relative h-40">
+          <Image
+            src={
+              product.image_url ||
+              "https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=400&h=200&fit=crop"
+            }
+            alt={product.name}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
+          <div className="absolute top-2 right-12 flex gap-1 items-center">
+            {!product.is_available && (
+              <Badge variant="outline" className="bg-background/80 text-xs">
+                <EyeOff className="w-3 h-3 mr-1" />
+                Masqué
+              </Badge>
+            )}
+          </div>
+
+          {canManageProducts && (
+            <div className="absolute top-2 right-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 bg-black/20 hover:bg-black/40 text-white rounded-full"
+                    aria-label={`Actions produit ${product.name}`}
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setEditingProduct(product);
+                      setIsAddModalOpen(true);
+                    }}
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Modifier
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleToggleVisibility(product)}>
+                    {product.is_available ? (
+                      <>
+                        <EyeOff className="w-4 h-4 mr-2" />
+                        Masquer
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4 mr-2" />
+                        Afficher
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        </div>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <h3 className="font-semibold text-foreground line-clamp-1">{product.name}</h3>
+              <p className="text-xs text-muted-foreground">{getFarmProductCategoryName(product.category)}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-lg font-bold text-primary">
+              {formatPricePerUnit(product.price_per_unit, product.unit)}
+            </span>
+            <Badge variant="outline">{product.quantity_available} {product.unit} dispo</Badge>
+          </div>
+
+          {(product.available_from || product.available_until) && (
+            <div className="flex items-center text-xs text-muted-foreground">
+              Disponible: {product.available_from || "?"} → {product.available_until || "?"}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+
+  return (
+    <>
+      {isProfileLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : !farmerId ? (
+        <div className="flex flex-col items-center justify-center h-64 text-center max-w-md mx-auto">
+          <AlertTriangle className="w-12 h-12 text-warning mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Profil agriculteur non trouvé</h3>
+          <p className="text-muted-foreground mb-6">
+            Il semble que vous ayez le rôle "Agriculteur" mais votre profil d'exploitation n'a pas encore été créé.
+          </p>
+          <Button onClick={handleCreateProfile} disabled={isCreatingProfile}>
+            {isCreatingProfile ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Création du profil...
+              </>
+            ) : (
+              "Créer mon profil agriculteur maintenant"
+            )}
+          </Button>
+        </div>
+      ) : (
+        <>
+          {!canManageProducts && (
+            <Card className="mb-6 border-amber-300/60 bg-amber-50/40">
+              <CardContent className="p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 mt-0.5 text-amber-600" />
+                <div className="text-sm">
+                  <p className="font-medium text-foreground">
+                    {farmerStatus === "rejected" ? "Exploitation refusée" : "Exploitation en attente de validation"}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {farmerStatus === "rejected"
+                      ? "Vous ne pouvez pas publier de produits tant que l'exploitation n'est pas réactivée."
+                      : "Vous pourrez ajouter des produits dès qu'un administrateur aura approuvé votre exploitation."}
+                  </p>
+                  {farmerStatus === "rejected" && refusalReason && (
+                    <p className="mt-2 text-destructive">Motif: {refusalReason}</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher un produit..."
+                className="pl-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button className="gap-2" onClick={openAddModal} disabled={!canManageProducts}>
+              <Plus className="w-4 h-4" />
+              Nouveau produit
+            </Button>
+          </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+            <TabsList>
+              <TabsTrigger value="all">Tous ({products.length})</TabsTrigger>
+              <TabsTrigger value="active">
+                Actifs ({products.filter((p) => p.is_available).length})
+              </TabsTrigger>
+              <TabsTrigger value="inactive">
+                Masqués ({products.filter((p) => !p.is_available).length})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : filteredProducts.length > 0 ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          ) : (
+            <Card className="p-12">
+              <div className="text-center text-muted-foreground">
+                <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <h3 className="font-medium text-foreground mb-2">Aucun produit trouvé</h3>
+                <p className="text-sm mb-4">
+                  {searchQuery ? "Essayez une autre recherche" : "Commencez par ajouter votre premier produit"}
+                </p>
+                <Button className="gap-2" onClick={openAddModal} disabled={!canManageProducts}>
+                  <Plus className="w-4 h-4" />
+                  Ajouter un produit
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {farmerId && (
+            <AddFarmProductModal
+              open={isAddModalOpen}
+              onOpenChange={(open) => {
+                setIsAddModalOpen(open);
+                if (!open) setEditingProduct(null);
+              }}
+              onProductCreated={loadProducts}
+              farmerId={farmerId}
+              productToEdit={editingProduct}
+            />
+          )}
+        </>
+      )}
+    </>
+  );
+};
+
+const FarmerProductsPage = () => {
+  return (
+    <div className="space-y-4 md:space-y-6 lg:p-6">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Mes produits</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
+          Gérez votre catalogue agricole
+        </p>
+      </div>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        }
+      >
+        <FarmerProductsContent />
+      </Suspense>
+    </div>
+  );
+};
+
+export default FarmerProductsPage;

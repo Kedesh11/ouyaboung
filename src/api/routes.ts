@@ -168,6 +168,9 @@ export const DB_TABLES = {
   USER_ROLES: 'user_roles',
   ADMIN_ACTIVITIES: 'admin_activities',
   CONTACT_MESSAGES: 'contact_messages',
+  FARMERS: 'farmers',
+  FARM_PRODUCTS: 'farm_products',
+  FARM_ORDERS: 'farm_orders',
 } as const;
 
 export type TableName = (typeof DB_TABLES)[keyof typeof DB_TABLES];

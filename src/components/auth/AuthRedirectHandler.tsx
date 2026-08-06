@@ -39,6 +39,9 @@ const AuthRedirectHandlerContent = () => {
             router.replace('/merchant/register/success');
           }
           break;
+        case 'farmer':
+          router.replace('/farmer');
+          break;
         case 'user':
         default:
           router.replace('/user');

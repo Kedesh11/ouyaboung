@@ -29,6 +29,8 @@ import {
   Leaf,
   Plus,
   Store,
+  Sprout,
+  Truck,
   Bell,
   LogOut,
   HelpCircle,
@@ -54,6 +56,16 @@ const mainMenuItems = [
     url: "/merchant/orders",
     icon: ShoppingBag,
     badge: 3,
+  },
+  {
+    title: "Marché agriculteurs",
+    url: "/merchant/farmers",
+    icon: Sprout,
+  },
+  {
+    title: "Mes commandes agricoles",
+    url: "/merchant/farm-orders",
+    icon: Truck,
   },
   {
     title: "Statistiques",
