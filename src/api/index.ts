@@ -70,6 +70,27 @@ export {
   getFoodItemBySlug,
 } from './inventory.api';
 
+// Farmers API
+export {
+  getFarmers,
+  getFarmerById,
+  getFarmerByUserId,
+  getFarmerBySlug,
+  createFarmer,
+  updateFarmer,
+  searchFarmers,
+} from './farmers.api';
+
+// Farm Products API
+export {
+  getFarmProductById,
+  getFarmProductBySlug,
+  getFarmProductsByFarmer,
+  createFarmProduct,
+  updateFarmProduct,
+  deleteFarmProduct,
+} from './farm-products.api';
+
 // Orders API
 export {
   createOrder,

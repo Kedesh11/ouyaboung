@@ -41,7 +41,9 @@ const Footer = () => {
               <li><Link href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">Accueil</Link></li>
               <li><Link href="/search" className="text-sm text-muted-foreground hover:text-primary transition-colors">Trouver des invendus</Link></li>
               <li><Link href="/concept" className="text-sm text-muted-foreground hover:text-primary transition-colors">Comment ça marche</Link></li>
+              <li><Link href="/agriculteurs" className="text-sm text-muted-foreground hover:text-primary transition-colors">Répertoire des agriculteurs</Link></li>
               <li><Link href="/auth?role=merchant" className="text-sm text-muted-foreground hover:text-primary transition-colors">Devenir partenaire</Link></li>
+              <li><Link href="/farmer/register" className="text-sm text-muted-foreground hover:text-primary transition-colors">Devenir agriculteur partenaire</Link></li>
             </ul>
           </div>
 

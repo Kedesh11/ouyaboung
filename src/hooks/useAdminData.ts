@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminService } from '@/services/admin.service';
-import type { MerchantRegistration } from '@/types/admin.types';
+import type { MerchantRegistration, FarmerRegistration } from '@/types/admin.types';
 
 /**
  * Hook to fetch the full merchant directory for the admin dashboard.
@@ -20,4 +20,21 @@ export function useAdminMerchants() {
 export function useInvalidateAdminMerchants() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: ['admin', 'merchants'] });
+}
+
+/**
+ * Hook to fetch the full farmer directory for the admin dashboard.
+ * Mirrors useAdminMerchants() above.
+ */
+export function useAdminFarmers() {
+  return useQuery<FarmerRegistration[]>({
+    queryKey: ['admin', 'farmers'],
+    queryFn: () => adminService.getFarmers(),
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useInvalidateAdminFarmers() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['admin', 'farmers'] });
 }

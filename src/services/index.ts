@@ -72,6 +72,33 @@ export {
   isPickupPassed,
 } from './inventory.service';
 
+// Farmer Service
+export {
+  listFarmers,
+  getFarmer,
+  getMyFarmerProfile,
+  getFarmerBySlugName,
+  registerFarmer,
+  updateFarmerProfile,
+  search as searchFarmers,
+  createDefaultFarmerProfile,
+  updateFarmerLogoByUserId,
+  getFarmerTypeName,
+} from './farmer.service';
+
+// Farm Product Service
+export {
+  getItem as getFarmProductItem,
+  getItemBySlug as getFarmProductItemBySlug,
+  getFarmerItems,
+  createListing as createFarmProductListing,
+  updateListing as updateFarmProductListing,
+  deleteListing as deleteFarmProductListing,
+  getCategoryName as getFarmProductCategoryName,
+  formatPricePerUnit,
+  isAvailabilityExpired,
+} from './farm-product.service';
+
 // Contact Service
 export * from './contact.service';
 
@@ -103,6 +130,7 @@ export {
   uploadAvatar,
   uploadMerchantAsset,
   uploadMerchantDocument,
+  uploadFarmerAsset,
 } from './storage.service';
 
 // Realtime Service

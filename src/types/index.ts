@@ -19,7 +19,7 @@ export interface User {
   updated_at: string;
 }
 
-export type UserRole = 'user' | 'merchant' | 'admin';
+export type UserRole = 'user' | 'merchant' | 'admin' | 'farmer';
 
 export interface UserProfile extends User {
   address?: string;
@@ -106,6 +106,85 @@ export interface DayHours {
   open: string;
   close: string;
   is_closed: boolean;
+}
+
+// ============================================
+// Farmer Types (répertoire des agriculteurs)
+// ============================================
+export interface Farmer {
+  id: string;
+  user_id: string;
+  farm_name: string;
+  farmer_type: FarmerType;
+  description?: string;
+  logo_url?: string;
+  cover_image_url?: string;
+  address: string;
+  city: string;
+  quartier: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  phone: string;
+  email: string;
+  rating: number;
+  total_reviews: number;
+  is_verified: boolean;
+  is_active: boolean;
+  is_refused?: boolean;
+  validated_at?: string;
+  refused_at?: string;
+  refusal_reason?: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FarmerType = 'agriculture' | 'elevage' | 'peche' | 'mixte' | 'other';
+
+// ============================================
+// Farm Products Types (catalogue agricole)
+// ============================================
+export interface FarmProduct {
+  id: string;
+  farmer_id: string;
+  farmer?: Farmer;
+  name: string;
+  description?: string;
+  category: FarmProductCategory;
+  unit: string; // ex: 'kg', 'sac', 'caisse', 'unite'
+  price_per_unit: number; // in XAF
+  quantity_available: number;
+  available_from?: string;
+  available_until?: string;
+  image_url?: string;
+  images?: string[];
+  is_available: boolean;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FarmProductCategory =
+  | 'tubercules'
+  | 'legumes_feuilles'
+  | 'fruits'
+  | 'cereales'
+  | 'elevage_volaille'
+  | 'elevage_betail'
+  | 'peche'
+  | 'autre';
+
+export interface CreateFarmProductInput {
+  name: string;
+  description?: string;
+  category: FarmProductCategory;
+  unit: string;
+  price_per_unit: number;
+  quantity_available: number;
+  available_from?: string;
+  available_until?: string;
+  image_url?: string;
+  images?: string[];
 }
 
 // ============================================
@@ -323,6 +402,11 @@ export type NotificationType =
   | 'order_cancelled'
   | 'new_food_nearby'
   | 'merchant_verified'
+  | 'merchant_pending'
+  | 'merchant_refused'
+  | 'farmer_pending'
+  | 'farmer_verified'
+  | 'farmer_refused'
   | 'promotion'
   | 'system';
 
@@ -339,6 +423,7 @@ export interface SignUpData extends AuthCredentials {
   phone?: string;
   role: UserRole;
   business_name?: string; // for merchants
+  farm_name?: string; // for farmers
   metadata?: Record<string, any>; // For additional profile data
 }
 

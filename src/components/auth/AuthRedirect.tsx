@@ -31,6 +31,7 @@ export function AuthRedirect() {
             const redirectMap: Record<string, string> = {
                 'admin': '/admin',
                 'merchant': '/merchant',
+                'farmer': '/farmer',
                 'user': '/user',
             };
             const redirectPath = redirectMap[userRole];
@@ -45,10 +46,15 @@ export function AuthRedirect() {
         // Redirect unauthenticated users from protected pages
         const isProtectedRoute = pathname?.startsWith('/user') ||
             pathname?.startsWith('/merchant') ||
+            pathname?.startsWith('/farmer') ||
             pathname?.startsWith('/admin');
 
         if (!isAuthenticated && isProtectedRoute) {
-            const role = pathname?.startsWith('/merchant') ? 'merchant' : undefined;
+            const role = pathname?.startsWith('/merchant')
+                ? 'merchant'
+                : pathname?.startsWith('/farmer')
+                    ? 'farmer'
+                    : undefined;
             const authUrl = role ? `/auth?role=${role}` : '/auth';
             if (isDev) {
                 console.log('🔒 [AuthRedirect] Redirecting to auth:', authUrl);

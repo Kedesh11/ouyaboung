@@ -12,6 +12,9 @@ import {
   buildAdminValidationUrl,
   newMerchantAdminHtml,
   rejectionHtml,
+  farmerApprovalHtml,
+  farmerRejectionHtml,
+  newFarmerAdminHtml,
 } from './email.shared';
 
 type SmtpResult = { success: boolean; error?: string };
@@ -325,6 +328,45 @@ export const sendAdminNewMerchantEmail = async (params: {
     merchantName: params.merchantName,
     merchantEmail: params.merchantEmail,
     businessType: params.businessType,
+    city: params.city,
+    createdAt: params.createdAt,
+    adminUrl: buildAdminValidationUrl(),
+  });
+  return sendWithSmtp(params.adminEmail, subject, html);
+};
+
+export const sendFarmerApprovalEmail = async (
+  email: string,
+  farmName: string
+): Promise<SmtpResult> => {
+  const subject = `${farmName} - Votre exploitation a ete approuvee!`;
+  return sendWithSmtp(email, subject, farmerApprovalHtml(email, farmName));
+};
+
+export const sendFarmerRejectionEmail = async (
+  email: string,
+  farmName: string,
+  reason?: string
+): Promise<SmtpResult> => {
+  const subject = `${farmName} - Mise a jour de votre demande`;
+  return sendWithSmtp(email, subject, farmerRejectionHtml(farmName, reason));
+};
+
+export const sendAdminNewFarmerEmail = async (params: {
+  adminEmail: string;
+  adminName?: string;
+  farmName: string;
+  farmerEmail: string;
+  farmerType: string;
+  city: string;
+  createdAt: string;
+}): Promise<SmtpResult> => {
+  const subject = `Nouvel agriculteur a valider - ${params.farmName}`;
+  const html = newFarmerAdminHtml({
+    adminName: params.adminName,
+    farmName: params.farmName,
+    farmerEmail: params.farmerEmail,
+    farmerType: params.farmerType,
     city: params.city,
     createdAt: params.createdAt,
     adminUrl: buildAdminValidationUrl(),

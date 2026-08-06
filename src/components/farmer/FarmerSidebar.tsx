@@ -1,11 +1,10 @@
 // ============================================
-// Admin Sidebar - Navigation Component
-// ouyaboung Platform - Anti-gaspillage alimentaire
+// Farmer Sidebar - Navigation Component
+// ouyaboung Platform - Répertoire des agriculteurs
 // ============================================
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Sidebar,
   SidebarContent,
@@ -19,127 +18,70 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
-  Store,
-  Sprout,
-  Users,
   Package,
-  ShoppingBag,
-  BarChart3,
-  Settings,
-  Shield,
-  Bell,
+  Sprout,
   LogOut,
-  MapPin,
-  ClipboardCheck,
 } from "lucide-react";
 import { logout } from "@/services";
 import { useToast } from "@/hooks/use-toast";
+import { useFarmerItems } from "@/hooks/useFarmerData";
 
-
-
-const analyticsMenuItems = [
+const mainMenuItems = [
   {
-    title: "Statistiques",
-    url: "/admin/analytics",
-    icon: BarChart3,
+    title: "Tableau de bord",
+    url: "/farmer",
+    icon: LayoutDashboard,
+    badge: 0,
   },
   {
-    title: "Répartition géo",
-    url: "/admin/geo",
-    icon: MapPin,
+    title: "Mes produits",
+    url: "/farmer/products",
+    icon: Package,
+    badge: 0,
   },
 ];
 
 const settingsMenuItems = [
   {
-    title: "Notifications",
-    url: "/admin/notifications",
-    icon: Bell,
-  },
-  {
-    title: "Paramètres",
-    url: "/admin/settings",
-    icon: Settings,
+    title: "Mon exploitation",
+    url: "/farmer/profile",
+    icon: Sprout,
   },
 ];
 
-const AdminSidebar = () => {
+interface FarmerSidebarProps {
+  farmName?: string;
+  farmerType?: string;
+  farmerId?: string;
+}
+
+const FarmerSidebar = ({
+  farmName = "Mon Exploitation",
+  farmerType = "Agriculture",
+  farmerId,
+}: FarmerSidebarProps) => {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const [stats, setStats] = useState({ merchants: 0, validations: 0, farmers: 0, pendingFarmers: 0 });
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const { adminService } = await import("@/services/admin.service");
-        const [kpis, farmers, pendingFarmers] = await Promise.all([
-          adminService.getKPIs(),
-          adminService.getFarmers(),
-          adminService.getFarmers('pending'),
-        ]);
-        setStats({
-          merchants: kpis.totalMerchants,
-          validations: kpis.pendingMerchants + pendingFarmers.length,
-          farmers: farmers.length,
-          pendingFarmers: pendingFarmers.length,
-        });
-      } catch (error) {
-        console.error("Error fetching sidebar stats:", error);
-      }
-    };
-    fetchStats();
-  }, []);
+  const { data: products } = useFarmerItems(farmerId);
 
-  const getMainMenuItems = () => [
-    {
-      title: "Tableau de bord",
-      url: "/admin",
-      icon: LayoutDashboard,
-    },
-    {
-      title: "Commerces",
-      url: "/admin/merchants",
-      icon: Store,
-      badge: stats.merchants,
-    },
-    {
-      title: "Agriculteurs",
-      url: "/admin/farmers",
-      icon: Sprout,
-      badge: stats.farmers,
-    },
-    {
-      title: "Validations",
-      url: "/admin/validations",
-      icon: ClipboardCheck,
-      badge: stats.validations,
-    },
-    {
-      title: "Clients",
-      url: "/admin/clients",
-      icon: Users,
-    },
-    {
-      title: "Produits & Paniers",
-      url: "/admin/products",
-      icon: Package,
-    },
-    {
-      title: "Transactions",
-      url: "/admin/transactions",
-      icon: ShoppingBag,
-    },
-  ];
+  const menuItemsWithBadges = mainMenuItems.map(item => {
+    if (item.url === "/farmer/products") {
+      return { ...item, badge: products?.length || 0 };
+    }
+    return item;
+  });
 
   const isActive = (path: string) => {
-    if (path === "/admin") {
-      return pathname === "/admin";
+    if (path === "/farmer") {
+      return pathname === "/farmer";
     }
     return pathname.startsWith(path);
   };
@@ -165,16 +107,16 @@ const AdminSidebar = () => {
     <Sidebar collapsible="icon" className="border-r border-border">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center flex-shrink-0">
-            <Shield className="w-5 h-5 text-destructive" />
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Sprout className="w-5 h-5 text-primary" />
           </div>
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
               <h2 className="font-semibold text-foreground truncate">
-                Super Admin
+                {farmName}
               </h2>
               <p className="text-xs text-muted-foreground truncate">
-                ouyaboung Platform
+                {farmerType}
               </p>
             </div>
           )}
@@ -182,12 +124,11 @@ const AdminSidebar = () => {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Main Navigation */}
         <SidebarGroup>
-          <SidebarGroupLabel>Gestion</SidebarGroupLabel>
+          <SidebarGroupLabel>Menu principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {getMainMenuItems().map((item) => (
+              {menuItemsWithBadges.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -202,10 +143,9 @@ const AdminSidebar = () => {
                         <item.icon className="w-4 h-4" />
                         <span>{item.title}</span>
                       </div>
-                      {/* Only show badge if > 0 */}
-                      {(item.badge !== undefined && item.badge > 0 && !isCollapsed) && (
+                      {!!item.badge && !isCollapsed && (
                         <Badge
-                          variant={item.title === "Validations" ? "destructive" : "secondary"}
+                          variant="secondary"
                           className="ml-auto h-5 px-1.5 text-xs"
                         >
                           {item.badge}
@@ -219,30 +159,6 @@ const AdminSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Analytics */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Analyses</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {analyticsMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.url)}
-                    tooltip={item.title}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Settings */}
         <SidebarGroup>
           <SidebarGroupLabel>Paramètres</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -280,4 +196,4 @@ const AdminSidebar = () => {
   );
 };
 
-export default AdminSidebar;
+export default FarmerSidebar;

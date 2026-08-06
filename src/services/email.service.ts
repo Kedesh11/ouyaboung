@@ -6,10 +6,13 @@
 import {
   APP_URL,
   buildMerchantActionUrl,
+  buildFarmerActionUrl,
   type MerchantEmailType,
+  type FarmerEmailType,
 } from './email.shared';
 
 const INTERNAL_EMAIL_ENDPOINT = '/api/admin/merchant-email';
+const INTERNAL_FARMER_EMAIL_ENDPOINT = '/api/admin/farmer-email';
 
 interface MerchantEmailApiPayload {
   type: MerchantEmailType;
@@ -18,11 +21,19 @@ interface MerchantEmailApiPayload {
   reason?: string;
 }
 
+interface FarmerEmailApiPayload {
+  type: FarmerEmailType;
+  email: string;
+  farmName: string;
+  reason?: string;
+}
+
 const sendViaInternalApi = async (
-  payload: MerchantEmailApiPayload
+  endpoint: string,
+  payload: MerchantEmailApiPayload | FarmerEmailApiPayload
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const response = await fetch(INTERNAL_EMAIL_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +60,7 @@ export const sendMerchantApprovalEmail = async (
   email: string,
   businessName: string
 ): Promise<{ success: boolean; error?: string }> => {
-  return sendViaInternalApi({ type: 'approval', email, businessName });
+  return sendViaInternalApi(INTERNAL_EMAIL_ENDPOINT, { type: 'approval', email, businessName });
 };
 
 export const sendMerchantRejectionEmail = async (
@@ -57,7 +68,22 @@ export const sendMerchantRejectionEmail = async (
   businessName: string,
   reason?: string
 ): Promise<{ success: boolean; error?: string }> => {
-  return sendViaInternalApi({ type: 'rejection', email, businessName, reason });
+  return sendViaInternalApi(INTERNAL_EMAIL_ENDPOINT, { type: 'rejection', email, businessName, reason });
+};
+
+export const sendFarmerApprovalEmail = async (
+  email: string,
+  farmName: string
+): Promise<{ success: boolean; error?: string }> => {
+  return sendViaInternalApi(INTERNAL_FARMER_EMAIL_ENDPOINT, { type: 'approval', email, farmName });
+};
+
+export const sendFarmerRejectionEmail = async (
+  email: string,
+  farmName: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string }> => {
+  return sendViaInternalApi(INTERNAL_FARMER_EMAIL_ENDPOINT, { type: 'rejection', email, farmName, reason });
 };
 
 export const logEmailToConsole = (
