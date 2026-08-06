@@ -13,11 +13,12 @@ import { getFarmerTypeName } from "@/services/farmer.service";
 
 interface FarmerCardProps {
   farmer: Farmer;
+  basePath?: string;
 }
 
-const FarmerCard = ({ farmer }: FarmerCardProps) => {
+const FarmerCard = ({ farmer, basePath = "/agriculteurs" }: FarmerCardProps) => {
   return (
-    <Link href={`/agriculteurs/${farmer.slug}`}>
+    <Link href={`${basePath}/${farmer.slug}`}>
       <Card className="overflow-hidden hover:shadow-md transition-shadow h-full">
         <CardContent className="p-4 flex items-start gap-4">
           <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-muted flex-shrink-0 border border-border">

@@ -23,12 +23,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   Package,
+  ShoppingBag,
   Sprout,
   LogOut,
 } from "lucide-react";
 import { logout } from "@/services";
 import { useToast } from "@/hooks/use-toast";
-import { useFarmerItems } from "@/hooks/useFarmerData";
+import { useFarmerItems, useFarmerOrders } from "@/hooks/useFarmerData";
 
 const mainMenuItems = [
   {
@@ -41,6 +42,12 @@ const mainMenuItems = [
     title: "Mes produits",
     url: "/farmer/products",
     icon: Package,
+    badge: 0,
+  },
+  {
+    title: "Commandes reçues",
+    url: "/farmer/orders",
+    icon: ShoppingBag,
     badge: 0,
   },
 ];
@@ -71,10 +78,14 @@ const FarmerSidebar = ({
   const isCollapsed = state === "collapsed";
 
   const { data: products } = useFarmerItems(farmerId);
+  const { data: pendingOrders } = useFarmerOrders(farmerId);
 
   const menuItemsWithBadges = mainMenuItems.map(item => {
     if (item.url === "/farmer/products") {
       return { ...item, badge: products?.length || 0 };
+    }
+    if (item.url === "/farmer/orders") {
+      return { ...item, badge: pendingOrders?.length || 0 };
     }
     return item;
   });

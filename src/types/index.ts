@@ -293,6 +293,50 @@ export interface CreateOrderInput {
 }
 
 // ============================================
+// Farm Orders Types (marché B2B commerçant <-> agriculteur)
+// ============================================
+export interface FarmOrder {
+  id: string;
+  merchant_id: string;
+  farmer_id: string;
+  farm_product_id: string;
+  farm_product?: FarmProduct;
+  farmer?: Farmer;
+  merchant?: Merchant;
+  quantity: number;
+  unit: string;
+  price_per_unit: number; // in XAF
+  total_price: number; // in XAF
+  special_request?: string;
+  requested_date?: string;
+  status: FarmOrderStatus;
+  confirmed_at?: string;
+  refused_at?: string;
+  refusal_reason?: string;
+  ready_at?: string;
+  delivered_at?: string;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FarmOrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'refused'
+  | 'ready'
+  | 'delivered'
+  | 'cancelled';
+
+export interface CreateFarmOrderInput {
+  farm_product_id: string;
+  quantity: number;
+  special_request?: string;
+  requested_date?: string;
+}
+
+// ============================================
 // Pricing Types
 // ============================================
 export interface PricingRecommendation {
@@ -407,6 +451,12 @@ export type NotificationType =
   | 'farmer_pending'
   | 'farmer_verified'
   | 'farmer_refused'
+  | 'farm_order_pending'
+  | 'farm_order_confirmed'
+  | 'farm_order_refused'
+  | 'farm_order_ready'
+  | 'farm_order_delivered'
+  | 'farm_order_cancelled'
   | 'promotion'
   | 'system';
 

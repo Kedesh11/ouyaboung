@@ -91,6 +91,16 @@ export {
   deleteFarmProduct,
 } from './farm-products.api';
 
+// Farm Orders API
+export {
+  createFarmOrder,
+  getFarmOrderById,
+  getFarmOrdersByMerchant,
+  getFarmOrdersByFarmer,
+  updateFarmOrderStatus,
+  cancelFarmOrderViaRPC,
+} from './farm-orders.api';
+
 // Orders API
 export {
   createOrder,

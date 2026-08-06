@@ -99,6 +99,24 @@ export {
   isAvailabilityExpired,
 } from './farm-product.service';
 
+// Farm Order Service
+export {
+  createFarmOrder,
+  getFarmOrder,
+  getMerchantFarmOrders,
+  getFarmerFarmOrders,
+  confirm as confirmFarmOrder,
+  refuse as refuseFarmOrder,
+  markReady as markFarmOrderReady,
+  markDelivered as markFarmOrderDelivered,
+  cancel as cancelFarmOrder,
+  cancelFarmOrderViaRPC,
+  getStatusText as getFarmOrderStatusText,
+  getStatusColor as getFarmOrderStatusColor,
+  canCancel as canCancelFarmOrder,
+  formatFarmOrderForDisplay,
+} from './farm-order.service';
+
 // Contact Service
 export * from './contact.service';
 
