@@ -19,7 +19,7 @@ export interface User {
   updated_at: string;
 }
 
-export type UserRole = 'user' | 'merchant' | 'admin' | 'farmer';
+export type UserRole = 'user' | 'merchant' | 'admin' | 'farmer' | 'driver';
 
 export interface UserProfile extends User {
   address?: string;
@@ -337,6 +337,78 @@ export interface CreateFarmOrderInput {
 }
 
 // ============================================
+// Driver / Delivery Types (chauffeurs — livraison agriculteur -> commerçant)
+// ============================================
+export interface Driver {
+  id: string;
+  user_id: string;
+  full_name: string;
+  vehicle_type: VehicleType;
+  plate_number?: string;
+  phone: string;
+  email: string;
+  photo_url?: string;
+  city: string;
+  delivery_zone?: string;
+  rating: number;
+  total_reviews: number;
+  is_verified: boolean;
+  is_active: boolean;
+  is_refused?: boolean;
+  validated_at?: string;
+  refused_at?: string;
+  refusal_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type VehicleType = 'moto' | 'voiture' | 'camionnette' | 'tricycle' | 'other';
+
+export interface Delivery {
+  id: string;
+  farm_order_id: string;
+  farm_order?: FarmOrder;
+  driver_id?: string;
+  driver?: Driver;
+  status: DeliveryStatus;
+  accepted_at?: string;
+  picked_up_at?: string;
+  delivered_at?: string;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  proof_photo_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DeliveryStatus =
+  | 'unassigned'
+  | 'accepted'
+  | 'picked_up'
+  | 'in_transit'
+  | 'delivered'
+  | 'failed'
+  | 'cancelled';
+
+export interface DriverLocation {
+  id: string;
+  driver_id: string;
+  delivery_id: string;
+  latitude: number;
+  longitude: number;
+  recorded_at: string;
+  created_at: string;
+}
+
+export interface DriverLocationBroadcastPayload {
+  latitude: number;
+  longitude: number;
+  heading?: number | null;
+  speed?: number | null;
+  recorded_at: string;
+}
+
+// ============================================
 // Pricing Types
 // ============================================
 export interface PricingRecommendation {
@@ -457,6 +529,12 @@ export type NotificationType =
   | 'farm_order_ready'
   | 'farm_order_delivered'
   | 'farm_order_cancelled'
+  | 'driver_pending'
+  | 'driver_verified'
+  | 'driver_refused'
+  | 'delivery_assigned'
+  | 'delivery_picked_up'
+  | 'delivery_delivered'
   | 'promotion'
   | 'system';
 

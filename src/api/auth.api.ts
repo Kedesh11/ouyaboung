@@ -132,7 +132,7 @@ export const signUpWithEmail = async (
   const client = requireSupabaseClient();
   const redirectUrl = buildRedirectUrl('/auth');
   const safeRole =
-    signUpData.role === 'merchant' || signUpData.role === 'farmer'
+    signUpData.role === 'merchant' || signUpData.role === 'farmer' || signUpData.role === 'driver'
       ? signUpData.role
       : 'user';
 

@@ -1,0 +1,56 @@
+# ============================================
+# Load test - unauthenticated public pages
+# ============================================
+# Targets a local `next start` (production build) pointed at the local
+# Supabase stack - never a shared/production environment. Run with:
+#   npm run build && npm run start -- -p 3005   (in one terminal)
+#   npm run test:load                            (in another)
+config:
+  target: '{{ $processEnvironment.E2E_BASE_URL || "http://localhost:3005" }}'
+  phases:
+    - name: Warm up
+      duration: 30
+      arrivalRate: 2
+    - name: Ramp up
+      duration: 60
+      arrivalRate: 5
+      rampTo: 25
+    - name: Sustained peak
+      duration: 60
+      arrivalRate: 25
+  defaults:
+    headers:
+      user-agent: 'ouyaboung-load-test'
+
+scenarios:
+  - name: Accueil
+    weight: 3
+    flow:
+      - get:
+          url: '/'
+          expect:
+            - statusCode: 200
+
+  - name: Recherche invendus
+    weight: 4
+    flow:
+      - get:
+          url: '/search'
+          expect:
+            - statusCode: 200
+
+  - name: Répertoire agriculteurs
+    weight: 2
+    flow:
+      - get:
+          url: '/agriculteurs'
+          expect:
+            - statusCode: 200
+
+  - name: Fiche produit fixture
+    weight: 1
+    flow:
+      - get:
+          url: '/p/e2e-reservation-item'
+          expect:
+            - statusCode: 200

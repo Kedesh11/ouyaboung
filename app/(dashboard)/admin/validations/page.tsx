@@ -11,6 +11,8 @@ import MerchantValidationCard from "@/components/admin/MerchantValidationCard";
 import MerchantValidationModal from "@/components/admin/MerchantValidationModal";
 import FarmerValidationCard from "@/components/admin/FarmerValidationCard";
 import FarmerValidationModal from "@/components/admin/FarmerValidationModal";
+import DriverValidationCard from "@/components/admin/DriverValidationCard";
+import DriverValidationModal from "@/components/admin/DriverValidationModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -22,9 +24,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Search, Store, Sprout } from "lucide-react";
+import { Search, Store, Sprout, Truck } from "lucide-react";
 import { adminService } from "@/services/admin.service";
-import type { MerchantRegistration, FarmerRegistration } from "@/types/admin.types";
+import type { MerchantRegistration, FarmerRegistration, DriverRegistration } from "@/types/admin.types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -32,7 +34,7 @@ const ITEMS_PER_PAGE = 3;
 
 const AdminValidationsPage = () => {
   const { user } = useAuth();
-  const [activeEntityTab, setActiveEntityTab] = useState<"merchants" | "farmers">("merchants");
+  const [activeEntityTab, setActiveEntityTab] = useState<"merchants" | "farmers" | "drivers">("merchants");
 
   // ---- Merchants ----
   const [pendingMerchants, setPendingMerchants] = useState<MerchantRegistration[]>([]);
@@ -54,9 +56,20 @@ const AdminValidationsPage = () => {
   const [isFarmerModalOpen, setIsFarmerModalOpen] = useState(false);
   const [isFarmerProcessing, setIsFarmerProcessing] = useState(false);
 
+  // ---- Drivers ----
+  const [pendingDrivers, setPendingDrivers] = useState<DriverRegistration[]>([]);
+  const [driverSearchQuery, setDriverSearchQuery] = useState("");
+  const [isDriversLoading, setIsDriversLoading] = useState(true);
+  const [driverPage, setDriverPage] = useState(1);
+  const [selectedDriver, setSelectedDriver] = useState<DriverRegistration | null>(null);
+  const [driverModalMode, setDriverModalMode] = useState<'view' | 'validate' | 'refuse'>('view');
+  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
+  const [isDriverProcessing, setIsDriverProcessing] = useState(false);
+
   useEffect(() => {
     loadPendingMerchants();
     loadPendingFarmers();
+    loadPendingDrivers();
   }, []);
 
   const loadPendingMerchants = async () => {
@@ -82,6 +95,19 @@ const AdminValidationsPage = () => {
       toast.error("Erreur lors du chargement");
     } finally {
       setIsFarmersLoading(false);
+    }
+  };
+
+  const loadPendingDrivers = async () => {
+    setIsDriversLoading(true);
+    try {
+      const data = await adminService.getDrivers('pending');
+      setPendingDrivers(data);
+    } catch (error) {
+      console.error('Error loading pending drivers:', error);
+      toast.error("Erreur lors du chargement");
+    } finally {
+      setIsDriversLoading(false);
     }
   };
 
@@ -281,16 +307,112 @@ const AdminValidationsPage = () => {
     }
   };
 
+  // ---- Drivers filtering/pagination ----
+  const filteredDrivers = pendingDrivers.filter(driver => {
+    const query = driverSearchQuery.toLowerCase();
+    return (
+      driver.fullName.toLowerCase().includes(query) ||
+      driver.city.toLowerCase().includes(query) ||
+      driver.email.toLowerCase().includes(query)
+    );
+  });
+  const driverTotalPages = Math.ceil(filteredDrivers.length / ITEMS_PER_PAGE);
+  const paginatedDrivers = filteredDrivers.slice(
+    (driverPage - 1) * ITEMS_PER_PAGE,
+    driverPage * ITEMS_PER_PAGE
+  );
+
+  const handleDriverSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDriverSearchQuery(e.target.value);
+    setDriverPage(1);
+  };
+
+  const handleViewDriver = (driver: DriverRegistration) => {
+    setSelectedDriver(driver);
+    setDriverModalMode('view');
+    setIsDriverModalOpen(true);
+  };
+
+  const handleValidateDriver = (driver: DriverRegistration) => {
+    setSelectedDriver(driver);
+    setDriverModalMode('validate');
+    setIsDriverModalOpen(true);
+  };
+
+  const handleRefuseDriver = (driver: DriverRegistration) => {
+    setSelectedDriver(driver);
+    setDriverModalMode('refuse');
+    setIsDriverModalOpen(true);
+  };
+
+  const handleConfirmDriverAction = async (reason?: string) => {
+    if (!selectedDriver) return;
+    if (!user?.id) {
+      toast.error("Session admin invalide. Rechargez la page.");
+      return;
+    }
+    if (driverModalMode === 'refuse' && !reason?.trim()) {
+      toast.error("Le motif du refus est obligatoire.");
+      return;
+    }
+
+    setIsDriverProcessing(true);
+    try {
+      await adminService.updateDriverStatus({
+        driverId: selectedDriver.id,
+        action: driverModalMode === 'validate' ? 'validate' : 'refuse',
+        reason,
+        adminId: user.id,
+      });
+
+      const { sendDriverApprovalEmail, sendDriverRejectionEmail } =
+        await import('@/services/email.service');
+
+      if (driverModalMode === 'validate') {
+        const emailResult = await sendDriverApprovalEmail(
+          selectedDriver.email,
+          selectedDriver.fullName
+        );
+        if (!emailResult.success) {
+          console.warn('Approval email failed:', emailResult.error);
+        }
+      } else {
+        const emailResult = await sendDriverRejectionEmail(
+          selectedDriver.email,
+          selectedDriver.fullName,
+          reason
+        );
+        if (!emailResult.success) {
+          console.warn('Rejection email failed:', emailResult.error);
+        }
+      }
+
+      toast.success(
+        driverModalMode === 'validate'
+          ? `Chauffeur validé avec succès. Email envoyé à ${selectedDriver.email}`
+          : 'Chauffeur refusé. Il a été notifié.'
+      );
+
+      loadPendingDrivers();
+      setIsDriverModalOpen(false);
+    } catch (error) {
+      console.error('Error processing driver:', error);
+      toast.error("Une erreur est survenue");
+    } finally {
+      setIsDriverProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 lg:p-6">
       <div className="mb-4 md:mb-6">
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">Validations en attente</h1>
         <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
-          Commerces et agriculteurs nécessitant une validation
+          Commerces, agriculteurs et chauffeurs nécessitant une validation
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -313,9 +435,20 @@ const AdminValidationsPage = () => {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Truck className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{pendingDrivers.length}</p>
+              <p className="text-sm text-muted-foreground">Chauffeurs en attente</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Tabs value={activeEntityTab} onValueChange={(v) => setActiveEntityTab(v as "merchants" | "farmers")}>
+      <Tabs value={activeEntityTab} onValueChange={(v) => setActiveEntityTab(v as "merchants" | "farmers" | "drivers")}>
         <TabsList>
           <TabsTrigger value="merchants" className="gap-2">
             <Store className="w-4 h-4" />
@@ -324,6 +457,10 @@ const AdminValidationsPage = () => {
           <TabsTrigger value="farmers" className="gap-2">
             <Sprout className="w-4 h-4" />
             Agriculteurs ({pendingFarmers.length})
+          </TabsTrigger>
+          <TabsTrigger value="drivers" className="gap-2">
+            <Truck className="w-4 h-4" />
+            Chauffeurs ({pendingDrivers.length})
           </TabsTrigger>
         </TabsList>
 
@@ -474,6 +611,80 @@ const AdminValidationsPage = () => {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="drivers" className="space-y-4 mt-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher un chauffeur..."
+              value={driverSearchQuery}
+              onChange={handleDriverSearchChange}
+              className="pl-9"
+            />
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Demandes en attente</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {filteredDrivers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                  <Truck className="w-12 h-12 mb-3 opacity-50" />
+                  <p>
+                    {driverSearchQuery
+                      ? "Aucune demande ne correspond à votre recherche"
+                      : "Aucune demande de validation en attente"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {paginatedDrivers.map((driver) => (
+                    <DriverValidationCard
+                      key={driver.id}
+                      driver={driver}
+                      onView={handleViewDriver}
+                      onValidate={handleValidateDriver}
+                      onRefuse={handleRefuseDriver}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {driverTotalPages > 1 && (
+                <div className="mt-4">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={() => setDriverPage(p => Math.max(1, p - 1))}
+                          className={driverPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      {[...Array(driverTotalPages)].map((_, i) => (
+                        <PaginationItem key={i + 1}>
+                          <PaginationLink
+                            isActive={driverPage === i + 1}
+                            onClick={() => setDriverPage(i + 1)}
+                            className="cursor-pointer"
+                          >
+                            {i + 1}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() => setDriverPage(p => Math.min(driverTotalPages, p + 1))}
+                          className={driverPage === driverTotalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <MerchantValidationModal
@@ -492,6 +703,15 @@ const AdminValidationsPage = () => {
         onClose={() => setIsFarmerModalOpen(false)}
         onConfirm={handleConfirmFarmerAction}
         isLoading={isFarmerProcessing}
+      />
+
+      <DriverValidationModal
+        driver={selectedDriver}
+        mode={driverModalMode}
+        isOpen={isDriverModalOpen}
+        onClose={() => setIsDriverModalOpen(false)}
+        onConfirm={handleConfirmDriverAction}
+        isLoading={isDriverProcessing}
       />
     </div>
   );

@@ -1,0 +1,31 @@
+# ============================================
+# Load test - authenticated user journeys (real browser via Playwright)
+# ============================================
+# Heavier than public-pages.yml (spins up a real Chromium page per virtual
+# user) so concurrency stays modest - this is about catching regressions
+# under moderate concurrent load, not a destructive stress test. Requires
+# the e2e fixture accounts to exist (run `npx playwright test` once, or
+# just `supabase start` + the app - global-setup seeds them automatically
+# the first time the E2E suite runs).
+config:
+  target: '{{ $processEnvironment.E2E_BASE_URL || "http://localhost:3005" }}'
+  engines:
+    playwright:
+      launchOptions:
+        headless: true
+  processor: './authenticated-flows.js'
+  phases:
+    - name: Warm up
+      duration: 20
+      arrivalRate: 1
+    - name: Concurrent sessions
+      duration: 60
+      arrivalRate: 3
+
+scenarios:
+  - name: Utilisateur recherche des invendus
+    engine: playwright
+    testFunction: 'userSearchFlow'
+  - name: Marchand consulte ses commandes B2B
+    engine: playwright
+    testFunction: 'merchantFarmOrdersFlow'

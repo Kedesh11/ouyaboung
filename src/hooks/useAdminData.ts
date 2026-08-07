@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminService } from '@/services/admin.service';
-import type { MerchantRegistration, FarmerRegistration } from '@/types/admin.types';
+import type { MerchantRegistration, FarmerRegistration, DriverRegistration } from '@/types/admin.types';
 
 /**
  * Hook to fetch the full merchant directory for the admin dashboard.
@@ -37,4 +37,21 @@ export function useAdminFarmers() {
 export function useInvalidateAdminFarmers() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: ['admin', 'farmers'] });
+}
+
+/**
+ * Hook to fetch the full driver directory for the admin dashboard.
+ * Mirrors useAdminMerchants()/useAdminFarmers() above.
+ */
+export function useAdminDrivers() {
+  return useQuery<DriverRegistration[]>({
+    queryKey: ['admin', 'drivers'],
+    queryFn: () => adminService.getDrivers(),
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useInvalidateAdminDrivers() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] });
 }

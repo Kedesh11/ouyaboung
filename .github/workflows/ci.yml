@@ -63,3 +63,14 @@ jobs:
           # If your build needs these to be set (even if dummy values for build time)
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder"
+
+      # End-to-end regression suite (Playwright) - real browser against the
+      # local Supabase stack started above. playwright.config.ts builds and
+      # starts its own `next start` server pointed at the local stack, so
+      # this is independent of the placeholder build right above. See
+      # docs/E2E_TESTING.md.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E regression suite
+        run: npm run test:regression

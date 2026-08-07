@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
-    allowedRoles: Array<"user" | "merchant" | "admin" | "farmer">;
+    allowedRoles: Array<"user" | "merchant" | "admin" | "farmer" | "driver">;
     redirectTo?: string;
 }
 
@@ -51,6 +51,10 @@ export function MerchantRoute({ children }: { children: React.ReactNode }) {
 
 export function FarmerRoute({ children }: { children: React.ReactNode }) {
     return <ProtectedRoute allowedRoles={["farmer"]} redirectTo="/auth?role=farmer">{children}</ProtectedRoute>;
+}
+
+export function DriverRoute({ children }: { children: React.ReactNode }) {
+    return <ProtectedRoute allowedRoles={["driver"]} redirectTo="/auth?role=driver">{children}</ProtectedRoute>;
 }
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {

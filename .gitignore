@@ -47,3 +47,8 @@ dist-ssr
 /lighthouse-results
 /supabase/.temp
 /supabase/.branches
+
+# E2E / load test run artifacts (regenerate with `npm run test:e2e` / `test:load*`)
+/test-results
+/playwright-report
+/playwright/.cache

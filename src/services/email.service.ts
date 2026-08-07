@@ -9,10 +9,12 @@ import {
   buildFarmerActionUrl,
   type MerchantEmailType,
   type FarmerEmailType,
+  type DriverEmailType,
 } from './email.shared';
 
 const INTERNAL_EMAIL_ENDPOINT = '/api/admin/merchant-email';
 const INTERNAL_FARMER_EMAIL_ENDPOINT = '/api/admin/farmer-email';
+const INTERNAL_DRIVER_EMAIL_ENDPOINT = '/api/admin/driver-email';
 
 interface MerchantEmailApiPayload {
   type: MerchantEmailType;
@@ -28,9 +30,16 @@ interface FarmerEmailApiPayload {
   reason?: string;
 }
 
+interface DriverEmailApiPayload {
+  type: DriverEmailType;
+  email: string;
+  driverName: string;
+  reason?: string;
+}
+
 const sendViaInternalApi = async (
   endpoint: string,
-  payload: MerchantEmailApiPayload | FarmerEmailApiPayload
+  payload: MerchantEmailApiPayload | FarmerEmailApiPayload | DriverEmailApiPayload
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     const response = await fetch(endpoint, {
@@ -84,6 +93,21 @@ export const sendFarmerRejectionEmail = async (
   reason?: string
 ): Promise<{ success: boolean; error?: string }> => {
   return sendViaInternalApi(INTERNAL_FARMER_EMAIL_ENDPOINT, { type: 'rejection', email, farmName, reason });
+};
+
+export const sendDriverApprovalEmail = async (
+  email: string,
+  driverName: string
+): Promise<{ success: boolean; error?: string }> => {
+  return sendViaInternalApi(INTERNAL_DRIVER_EMAIL_ENDPOINT, { type: 'approval', email, driverName });
+};
+
+export const sendDriverRejectionEmail = async (
+  email: string,
+  driverName: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string }> => {
+  return sendViaInternalApi(INTERNAL_DRIVER_EMAIL_ENDPOINT, { type: 'rejection', email, driverName, reason });
 };
 
 export const logEmailToConsole = (

@@ -22,6 +22,7 @@ import {
   Loader2,
   Sprout,
   Calendar,
+  MapPin,
 } from "lucide-react";
 import {
   getMerchantFarmOrders,
@@ -33,6 +34,7 @@ import {
 import type { FarmOrder, FarmOrderStatus } from "@/types";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import DeliveryTrackingDialog from "@/components/delivery/DeliveryTrackingDialog";
 
 const MerchantFarmOrdersPage = () => {
   const { user } = useAuth();
@@ -42,6 +44,7 @@ const MerchantFarmOrdersPage = () => {
   const [activeTab, setActiveTab] = useState<FarmOrderStatus | "all">("all");
   const [merchantId, setMerchantId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) loadMerchantInfo();
@@ -209,23 +212,36 @@ const MerchantFarmOrdersPage = () => {
                       <p className="text-xs text-destructive mb-3">Motif: {order.refusal_reason}</p>
                     )}
 
-                    <div className="flex items-center justify-between pt-3 border-t">
+                    <div className="flex items-center justify-between pt-3 border-t gap-2">
                       <span className="font-bold text-primary">{formatted.totalPrice}</span>
-                      {canCancelFarmOrder(order) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-destructive"
-                          disabled={cancellingId === order.id}
-                          onClick={() => handleCancel(order)}
-                        >
-                          {cancellingId === order.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            "Annuler"
-                          )}
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {(order.status === "ready" || order.status === "delivered") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => setTrackingOrderId(order.id)}
+                          >
+                            <MapPin className="w-4 h-4" />
+                            Suivre
+                          </Button>
+                        )}
+                        {canCancelFarmOrder(order) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive"
+                            disabled={cancellingId === order.id}
+                            onClick={() => handleCancel(order)}
+                          >
+                            {cancellingId === order.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              "Annuler"
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -243,6 +259,14 @@ const MerchantFarmOrdersPage = () => {
             </p>
           </div>
         </Card>
+      )}
+
+      {trackingOrderId && (
+        <DeliveryTrackingDialog
+          farmOrderId={trackingOrderId}
+          open={!!trackingOrderId}
+          onOpenChange={(open) => !open && setTrackingOrderId(null)}
+        />
       )}
     </div>
   );
