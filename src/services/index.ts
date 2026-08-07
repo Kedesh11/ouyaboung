@@ -117,6 +117,35 @@ export {
   formatFarmOrderForDisplay,
 } from './farm-order.service';
 
+// Driver Service
+export {
+  getDriver,
+  getMyDriverProfile,
+  registerDriver,
+  updateDriverProfile,
+  createDefaultDriverProfile,
+  updateDriverPhotoByUserId,
+  getVehicleTypeName,
+} from './driver.service';
+
+// Delivery Service
+export {
+  getAvailableForPickup,
+  getDriverDeliveries,
+  getDelivery,
+  acceptDelivery,
+  markPickedUp,
+  markInTransit,
+  markDelivered as markDeliveryDelivered,
+  markFailed as markDeliveryFailed,
+  recordLocation,
+  getLastKnownLocation,
+  getStatusText as getDeliveryStatusText,
+  getStatusColor as getDeliveryStatusColor,
+  isDeliveryActive,
+  formatDeliveryForDisplay,
+} from './delivery.service';
+
 // Contact Service
 export * from './contact.service';
 
@@ -149,6 +178,8 @@ export {
   uploadMerchantAsset,
   uploadMerchantDocument,
   uploadFarmerAsset,
+  uploadDriverAsset,
+  uploadDeliveryProof,
 } from './storage.service';
 
 // Realtime Service
@@ -157,6 +188,9 @@ export {
   unsubscribeChannel,
   subscribeToOrders,
   subscribeToTransactions,
+  openDriverBroadcastChannel,
+  broadcastDriverLocation,
+  subscribeToDeliveryLocation,
 } from './realtime.service';
 
 // Payment Transactions Service

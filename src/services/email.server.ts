@@ -15,6 +15,9 @@ import {
   farmerApprovalHtml,
   farmerRejectionHtml,
   newFarmerAdminHtml,
+  driverApprovalHtml,
+  driverRejectionHtml,
+  newDriverAdminHtml,
 } from './email.shared';
 
 type SmtpResult = { success: boolean; error?: string };
@@ -367,6 +370,45 @@ export const sendAdminNewFarmerEmail = async (params: {
     farmName: params.farmName,
     farmerEmail: params.farmerEmail,
     farmerType: params.farmerType,
+    city: params.city,
+    createdAt: params.createdAt,
+    adminUrl: buildAdminValidationUrl(),
+  });
+  return sendWithSmtp(params.adminEmail, subject, html);
+};
+
+export const sendDriverApprovalEmail = async (
+  email: string,
+  driverName: string
+): Promise<SmtpResult> => {
+  const subject = `${driverName} - Votre profil chauffeur a ete approuve!`;
+  return sendWithSmtp(email, subject, driverApprovalHtml(email, driverName));
+};
+
+export const sendDriverRejectionEmail = async (
+  email: string,
+  driverName: string,
+  reason?: string
+): Promise<SmtpResult> => {
+  const subject = `${driverName} - Mise a jour de votre demande`;
+  return sendWithSmtp(email, subject, driverRejectionHtml(driverName, reason));
+};
+
+export const sendAdminNewDriverEmail = async (params: {
+  adminEmail: string;
+  adminName?: string;
+  driverName: string;
+  driverEmail: string;
+  vehicleType: string;
+  city: string;
+  createdAt: string;
+}): Promise<SmtpResult> => {
+  const subject = `Nouveau chauffeur a valider - ${params.driverName}`;
+  const html = newDriverAdminHtml({
+    adminName: params.adminName,
+    driverName: params.driverName,
+    driverEmail: params.driverEmail,
+    vehicleType: params.vehicleType,
     city: params.city,
     createdAt: params.createdAt,
     adminUrl: buildAdminValidationUrl(),

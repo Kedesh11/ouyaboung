@@ -14,7 +14,12 @@
     "test:integration": "vitest run --testNamePattern=integration",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:regression": "playwright test --grep @regression",
+    "test:load": "artillery run load/public-pages.yml",
+    "test:load:auth": "artillery run load/authenticated-flows.yml"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -86,6 +91,7 @@
     "@eslint/eslintrc": "^3.3.3",
     "@eslint/js": "^9.39.2",
     "@next/bundle-analyzer": "^16.1.6",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.3.1",
@@ -96,6 +102,8 @@
     "@vitejs/plugin-react-swc": "^3.11.0",
     "@vitest/coverage-v8": "^4.0.17",
     "@vitest/ui": "^4.0.17",
+    "artillery": "^2.0.33",
+    "artillery-engine-playwright": "^1.30.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.16.0",
     "eslint-plugin-react-hooks": "^5.1.0",

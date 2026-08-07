@@ -101,6 +101,25 @@ export {
   cancelFarmOrderViaRPC,
 } from './farm-orders.api';
 
+// Drivers API
+export {
+  getDriverById,
+  getDriverByUserId,
+  createDriver,
+  updateDriver,
+} from './drivers.api';
+
+// Deliveries API
+export {
+  getAvailableDeliveries,
+  getDeliveriesByDriver,
+  getDeliveryByFarmOrderId,
+  acceptDeliveryViaRPC,
+  updateDeliveryStatus,
+  insertDriverLocation,
+  getLatestDriverLocation,
+} from './deliveries.api';
+
 // Orders API
 export {
   createOrder,

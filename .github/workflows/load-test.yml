@@ -1,0 +1,69 @@
+name: Load Testing (Artillery)
+
+# Load tests are too slow/variable to gate every PR, so this never runs on
+# push - only on demand or on a schedule. See docs/E2E_TESTING.md.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+
+jobs:
+  load-test:
+    name: Load Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Seed fixture accounts
+        run: npx tsx -e "import('./e2e/global-setup.ts').then(m => m.default())"
+
+      - name: Build project
+        run: npm run build
+
+      - name: Start server
+        run: npm run start -- -p 3005 &
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3005 > /dev/null && exit 0
+            sleep 2
+          done
+          echo "Server did not become ready in time" >&2
+          exit 1
+
+      - name: Load test - public pages
+        run: npm run test:load
+
+      - name: Load test - authenticated flows
+        run: npm run test:load:auth
+
+      - name: Upload Artillery reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artillery-reports
+          path: '*.json'
+          if-no-files-found: ignore

@@ -33,6 +33,7 @@ import {
   Store,
   Calendar,
   MessageSquare,
+  MapPin,
 } from "lucide-react";
 import {
   getFarmerFarmOrders,
@@ -46,6 +47,7 @@ import {
 import type { FarmOrder, FarmOrderStatus } from "@/types";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import DeliveryTrackingDialog from "@/components/delivery/DeliveryTrackingDialog";
 
 type ActionKind = "confirm" | "refuse" | "ready" | "delivered";
 
@@ -61,6 +63,7 @@ const FarmerOrdersPage = () => {
   const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
   const [refusalReason, setRefusalReason] = useState("");
   const [isRefusing, setIsRefusing] = useState(false);
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) loadFarmerInfo();
@@ -313,6 +316,21 @@ const FarmerOrdersPage = () => {
               <span className="text-sm text-muted-foreground">Total</span>
               <span className="font-bold text-primary">{formatted.totalPrice}</span>
             </div>
+
+            {(order.status === "ready" || order.status === "delivered") && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-3 gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTrackingOrderId(order.id);
+                }}
+              >
+                <MapPin className="w-4 h-4" />
+                Suivre la livraison
+              </Button>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -492,6 +510,14 @@ const FarmerOrdersPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {trackingOrderId && (
+        <DeliveryTrackingDialog
+          farmOrderId={trackingOrderId}
+          open={!!trackingOrderId}
+          onOpenChange={(open) => !open && setTrackingOrderId(null)}
+        />
+      )}
     </div>
   );
 };

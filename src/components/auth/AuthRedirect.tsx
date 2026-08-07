@@ -32,6 +32,7 @@ export function AuthRedirect() {
                 'admin': '/admin',
                 'merchant': '/merchant',
                 'farmer': '/farmer',
+                'driver': '/driver',
                 'user': '/user',
             };
             const redirectPath = redirectMap[userRole];
@@ -43,10 +44,14 @@ export function AuthRedirect() {
             }
         }
 
-        // Redirect unauthenticated users from protected pages
+        // Redirect unauthenticated users from protected pages. The public
+        // registration pages (/merchant, /farmer, /driver + "/register")
+        // must stay reachable by signed-out visitors - mirrors the same
+        // exclusion already applied in middleware.ts and RouteGuard.tsx.
         const isProtectedRoute = pathname?.startsWith('/user') ||
-            pathname?.startsWith('/merchant') ||
-            pathname?.startsWith('/farmer') ||
+            (pathname?.startsWith('/merchant') && !pathname?.startsWith('/merchant/register')) ||
+            (pathname?.startsWith('/farmer') && !pathname?.startsWith('/farmer/register')) ||
+            (pathname?.startsWith('/driver') && !pathname?.startsWith('/driver/register')) ||
             pathname?.startsWith('/admin');
 
         if (!isAuthenticated && isProtectedRoute) {
@@ -54,7 +59,9 @@ export function AuthRedirect() {
                 ? 'merchant'
                 : pathname?.startsWith('/farmer')
                     ? 'farmer'
-                    : undefined;
+                    : pathname?.startsWith('/driver')
+                        ? 'driver'
+                        : undefined;
             const authUrl = role ? `/auth?role=${role}` : '/auth';
             if (isDev) {
                 console.log('🔒 [AuthRedirect] Redirecting to auth:', authUrl);

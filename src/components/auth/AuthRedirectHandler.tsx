@@ -42,6 +42,9 @@ const AuthRedirectHandlerContent = () => {
         case 'farmer':
           router.replace('/farmer');
           break;
+        case 'driver':
+          router.replace('/driver');
+          break;
         case 'user':
         default:
           router.replace('/user');

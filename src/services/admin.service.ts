@@ -18,6 +18,9 @@ import type {
   FarmerRegistration,
   FarmerValidationAction,
   FarmerStatus,
+  DriverRegistration,
+  DriverValidationAction,
+  DriverStatus,
   AdminClient,
   AdminProduct,
   PlatformSettings,
@@ -28,6 +31,8 @@ const MERCHANT_LIST_COLUMNS =
   'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
 const FARMER_LIST_COLUMNS =
   'id,user_id,farm_name,farmer_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
+const DRIVER_LIST_COLUMNS =
+  'id,user_id,full_name,vehicle_type,plate_number,phone,email,photo_url,city,delivery_zone,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,created_at,updated_at';
 
 // Transform DB merchant to MerchantRegistration
 const transformMerchant = (dbMerchant: any): MerchantRegistration => ({
@@ -79,6 +84,28 @@ const transformFarmer = (dbFarmer: any): FarmerRegistration => ({
   refusalReason: dbFarmer.refusal_reason,
   latitude: dbFarmer.latitude,
   longitude: dbFarmer.longitude,
+});
+
+// Transform DB driver to DriverRegistration
+const transformDriver = (dbDriver: any): DriverRegistration => ({
+  id: dbDriver.id,
+  fullName: dbDriver.full_name,
+  email: dbDriver.email,
+  phone: dbDriver.phone,
+  city: dbDriver.city,
+  vehicleType: dbDriver.vehicle_type,
+  plateNumber: dbDriver.plate_number || undefined,
+  deliveryZone: dbDriver.delivery_zone || undefined,
+  status: dbDriver.is_verified
+    ? 'validated'
+    : dbDriver.is_refused
+      ? 'refused'
+      : 'pending',
+  createdAt: new Date(dbDriver.created_at),
+  updatedAt: new Date(dbDriver.updated_at),
+  validatedAt: dbDriver.validated_at ? new Date(dbDriver.validated_at) : undefined,
+  refusedAt: dbDriver.refused_at ? new Date(dbDriver.refused_at) : undefined,
+  refusalReason: dbDriver.refusal_reason,
 });
 
 // Service Functions
@@ -462,6 +489,138 @@ export const adminService = {
     }
 
     return transformFarmer(data);
+  },
+
+  // Get all drivers with optional status filter
+  getDrivers: async (
+    status?: DriverStatus,
+    page: number = 1,
+    perPage: number = 200
+  ): Promise<DriverRegistration[]> => {
+    if (!isSupabaseConfigured()) {
+      console.warn('Supabase not configured');
+      return [];
+    }
+
+    const client = requireSupabaseClient();
+    let query = client.from(DB_TABLES.DRIVERS).select(DRIVER_LIST_COLUMNS);
+
+    if (status === 'validated') {
+      query = query.eq('is_verified', true);
+    } else if (status === 'refused') {
+      query = query.eq('is_refused', true);
+    } else if (status === 'pending') {
+      query = query.eq('is_verified', false).eq('is_refused', false);
+    }
+
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range((page - 1) * perPage, page * perPage - 1);
+
+    if (error) {
+      console.error('Error fetching drivers:', error);
+      throw error;
+    }
+
+    return (data || []).map(transformDriver);
+  },
+
+  // Get driver by ID
+  getDriverById: async (id: string): Promise<DriverRegistration | null> => {
+    if (!isSupabaseConfigured()) {
+      return null;
+    }
+
+    const client = requireSupabaseClient();
+    const { data, error } = await client
+      .from(DB_TABLES.DRIVERS)
+      .select(DRIVER_LIST_COLUMNS)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching driver:', error);
+      throw error;
+    }
+
+    return data ? transformDriver(data) : null;
+  },
+
+  // Validate or refuse a driver
+  updateDriverStatus: async (action: DriverValidationAction): Promise<DriverRegistration> => {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase not configured');
+    }
+
+    const refusalReason = action.reason?.trim();
+    if (action.action === 'refuse' && !refusalReason) {
+      throw new Error('Le motif du refus est obligatoire.');
+    }
+
+    const client = requireSupabaseClient();
+    const updates = action.action === 'validate'
+      ? {
+        is_verified: true,
+        is_refused: false,
+        is_active: true,
+        validated_at: new Date().toISOString(),
+        refused_at: null,
+        refusal_reason: null,
+        updated_at: new Date().toISOString(),
+      }
+      : {
+        is_verified: false,
+        is_refused: true,
+        is_active: false,
+        refused_at: new Date().toISOString(),
+        refusal_reason: refusalReason,
+        updated_at: new Date().toISOString(),
+      };
+
+    const { data, error } = await client
+      .from(DB_TABLES.DRIVERS)
+      .update(updates)
+      .eq('id', action.driverId)
+      .select(DRIVER_LIST_COLUMNS)
+      .single();
+
+    if (error) {
+      console.error('Error updating driver status:', error);
+      throw error;
+    }
+
+    // Log admin activity
+    try {
+      await client.from(DB_TABLES.ADMIN_ACTIVITIES).insert({
+        type: action.action === 'validate' ? 'driver_validated' : 'driver_refused',
+        description: `Chauffeur ${action.action === 'validate' ? 'validé' : 'refusé'}: ${data.full_name}`,
+        metadata: { driver_id: action.driverId, admin_id: action.adminId },
+      });
+    } catch (err) {
+      console.warn('Failed to log activity:', err);
+    }
+
+    if (data.user_id) {
+      try {
+        await client.from(DB_TABLES.NOTIFICATIONS).insert({
+          user_id: data.user_id,
+          type: action.action === 'validate' ? 'driver_verified' : 'driver_refused',
+          title: action.action === 'validate' ? 'Profil chauffeur approuvé' : 'Profil chauffeur refusé',
+          message: action.action === 'validate'
+            ? `Votre profil chauffeur "${data.full_name}" est approuvé. Vous pouvez désormais accepter des livraisons.`
+            : `Votre profil chauffeur "${data.full_name}" a été refusé.${refusalReason ? ` Motif: ${refusalReason}` : ''}`,
+          data: {
+            driver_id: action.driverId,
+            action: action.action,
+            reason: refusalReason || null,
+          },
+        });
+      } catch (err) {
+        console.warn('Failed to notify driver after status update:', err);
+      }
+    }
+
+    return transformDriver(data);
   },
 
   // Get Admin KPIs. All counts/sums are computed in

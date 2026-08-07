@@ -61,6 +61,35 @@ export interface FarmerValidationAction {
   adminId: string;
 }
 
+// Driver Status Enum
+export type DriverStatus = 'pending' | 'validated' | 'refused';
+
+// Driver Registration
+export interface DriverRegistration {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  city: string;
+  vehicleType: string;
+  plateNumber?: string;
+  deliveryZone?: string;
+  status: DriverStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  validatedAt?: Date;
+  refusedAt?: Date;
+  refusalReason?: string;
+}
+
+// Driver Validation Action
+export interface DriverValidationAction {
+  driverId: string;
+  action: 'validate' | 'refuse';
+  reason?: string;
+  adminId: string;
+}
+
 // Admin KPIs
 export interface AdminKPIs {
   totalMerchants: number;
