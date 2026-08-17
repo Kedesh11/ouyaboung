@@ -1,7 +1,21 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { MapPin, Store } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MapPin, Store, Sprout, Bike, ChevronDown } from "lucide-react";
 import { PersonalizedBanner } from "@/components/analytics/PersonalizedBanner";
+
+const partnerLinks = [
+    { href: "/auth?role=merchant", label: "Commerçant", icon: Store },
+    { href: "/farmer/register", label: "Agriculteur", icon: Sprout },
+    { href: "/driver/register", label: "Chauffeur", icon: Bike },
+];
 
 export default function Home() {
     return (
@@ -28,12 +42,24 @@ export default function Home() {
                                     Trouver des invendus
                                 </Button>
                             </Link>
-                            <Link href="/auth?role=merchant">
-                                <Button variant="outline" size="lg" className="gap-2 w-full sm:w-auto h-12 px-8 text-lg">
-                                    <Store className="w-5 h-5" />
-                                    Je suis commerçant
-                                </Button>
-                            </Link>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="lg" className="gap-2 w-full sm:w-auto h-12 px-8 text-lg">
+                                        Devenir partenaire
+                                        <ChevronDown className="w-5 h-5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="center">
+                                    {partnerLinks.map(({ href, label, icon: Icon }) => (
+                                        <DropdownMenuItem key={href} asChild>
+                                            <Link href={href} className="gap-2 cursor-pointer">
+                                                <Icon className="w-4 h-4" />
+                                                {label}
+                                            </Link>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
 
                         <div className="mx-auto mt-6 max-w-2xl">

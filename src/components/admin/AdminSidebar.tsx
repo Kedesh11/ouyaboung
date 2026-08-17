@@ -24,6 +24,7 @@ import {
   LayoutDashboard,
   Store,
   Sprout,
+  Truck,
   Users,
   Package,
   ShoppingBag,
@@ -72,22 +73,26 @@ const AdminSidebar = () => {
   const { toast } = useToast();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const [stats, setStats] = useState({ merchants: 0, validations: 0, farmers: 0, pendingFarmers: 0 });
+  const [stats, setStats] = useState({ merchants: 0, validations: 0, farmers: 0, pendingFarmers: 0, drivers: 0, pendingDrivers: 0 });
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const { adminService } = await import("@/services/admin.service");
-        const [kpis, farmers, pendingFarmers] = await Promise.all([
+        const [kpis, farmers, pendingFarmers, drivers, pendingDrivers] = await Promise.all([
           adminService.getKPIs(),
           adminService.getFarmers(),
           adminService.getFarmers('pending'),
+          adminService.getDrivers(),
+          adminService.getDrivers('pending'),
         ]);
         setStats({
           merchants: kpis.totalMerchants,
-          validations: kpis.pendingMerchants + pendingFarmers.length,
+          validations: kpis.pendingMerchants + pendingFarmers.length + pendingDrivers.length,
           farmers: farmers.length,
           pendingFarmers: pendingFarmers.length,
+          drivers: drivers.length,
+          pendingDrivers: pendingDrivers.length,
         });
       } catch (error) {
         console.error("Error fetching sidebar stats:", error);
@@ -113,6 +118,12 @@ const AdminSidebar = () => {
       url: "/admin/farmers",
       icon: Sprout,
       badge: stats.farmers,
+    },
+    {
+      title: "Chauffeurs",
+      url: "/admin/drivers",
+      icon: Truck,
+      badge: stats.drivers,
     },
     {
       title: "Validations",

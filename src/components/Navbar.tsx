@@ -5,9 +5,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Leaf, Menu, X, Store } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Leaf, Menu, X, Store, Sprout, Bike, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { UserMenu } from "@/components/auth/UserMenu";
+
+const partnerLinks = [
+  { href: "/auth?role=merchant", label: "Commerçant", icon: Store },
+  { href: "/farmer/register", label: "Agriculteur", icon: Sprout },
+  { href: "/driver/register", label: "Chauffeur", icon: Bike },
+];
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -53,12 +65,24 @@ const Navbar = () => {
             <UserMenu />
           ) : (
             <>
-              <Link href="/auth?role=merchant">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <Store className="w-4 h-4" />
-                  Commerçant
-                </Button>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    Devenir partenaire
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {partnerLinks.map(({ href, label, icon: Icon }) => (
+                    <DropdownMenuItem key={href} asChild>
+                      <Link href={href} className="gap-2 cursor-pointer">
+                        <Icon className="w-4 h-4" />
+                        {label}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Link href="/auth">
                 <Button size="sm">Connexion</Button>
               </Link>
@@ -107,12 +131,16 @@ const Navbar = () => {
                 </div>
               ) : (
                 <>
-                  <Link href="/auth?role=merchant" onClick={() => setIsOpen(false)}>
-                    <Button variant="outline" className="w-full gap-2">
-                      <Store className="w-4 h-4" />
-                      Espace Commerçant
-                    </Button>
-                  </Link>
+                  <p className="text-sm font-medium text-muted-foreground px-2">Devenir partenaire</p>
+                  {partnerLinks.map(({ href, label, icon: Icon }) => (
+                    <Link key={href} href={href} onClick={() => setIsOpen(false)}>
+                      <Button variant="outline" className="w-full gap-2 justify-start">
+                        <Icon className="w-4 h-4" />
+                        {label}
+                      </Button>
+                    </Link>
+                  ))}
+                  <hr className="border-border" />
                   <Link href="/auth" onClick={() => setIsOpen(false)}>
                     <Button className="w-full">Connexion</Button>
                   </Link>

@@ -55,11 +55,40 @@ import {
   uploadDriverAsset,
 } from "@/services";
 
+const PLATE_NUMBER_REGEX = /^[A-Z]{2}-\d{4}-[A-Z]{2}$/;
+
+// Formats raw keystrokes into the GA-1234-LB layout as the user types:
+// scans left to right, routing each letter/digit into the next slot that
+// still needs one (2 letters, then 4 digits, then 2 letters), and inserts
+// the separating dashes automatically. Characters that don't fit any
+// remaining slot (wrong type, or once all 8 slots are full) are dropped.
+const formatPlateNumber = (raw: string) => {
+  let letters1 = "";
+  let digits = "";
+  let letters2 = "";
+
+  for (const char of raw.toUpperCase()) {
+    if (/[A-Z]/.test(char)) {
+      if (letters1.length < 2) letters1 += char;
+      else if (digits.length === 4 && letters2.length < 2) letters2 += char;
+    } else if (/[0-9]/.test(char)) {
+      if (letters1.length === 2 && digits.length < 4) digits += char;
+    }
+  }
+
+  return [letters1, digits, letters2].filter(Boolean).join("-");
+};
+
 const driverFormSchema = z.object({
   // Step 1: Driver Info
   full_name: z.string().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
   vehicle_type: z.string().min(1, "Sélectionnez un type de véhicule"),
-  plate_number: z.string().optional(),
+  plate_number: z
+    .string()
+    .optional()
+    .refine((val) => !val || PLATE_NUMBER_REGEX.test(val), {
+      message: "Format attendu : GA-1234-LB (2 lettres, 4 chiffres, 2 lettres)",
+    }),
 
   // Step 2: Contact Info
   email: z.string().email("Email invalide"),
@@ -433,7 +462,12 @@ const DriverRegisterPage = () => {
             <FormItem>
               <FormLabel>Plaque d'immatriculation</FormLabel>
               <FormControl>
-                <Input placeholder="Ex: GA-1234-LB" {...field} />
+                <Input
+                  placeholder="Ex: GA-1234-LB"
+                  maxLength={10}
+                  {...field}
+                  onChange={(e) => field.onChange(formatPlateNumber(e.target.value))}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

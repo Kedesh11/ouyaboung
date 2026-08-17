@@ -11,10 +11,33 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Leaf, User, Store, Mail, Lock, Phone, ArrowLeft, Loader2, UserCircle, X, Eye, EyeOff } from "lucide-react";
+import { Leaf, User, Store, Sprout, Bike, Mail, Lock, Phone, ArrowLeft, Loader2, UserCircle, X, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { login, register, loginWithOtp, verifyOtpCode } from "@/services";
 import type { UserRole } from "@/types";
+
+const roleOptions: { value: UserRole; label: string; icon: typeof User }[] = [
+    { value: "user", label: "Utilisateur", icon: User },
+    { value: "merchant", label: "Commerçant", icon: Store },
+    { value: "farmer", label: "Agriculteur", icon: Sprout },
+    { value: "driver", label: "Chauffeur", icon: Bike },
+];
+
+// Farmers & drivers have dedicated multi-step registration forms
+// (exploitation/véhicule, zone de livraison, etc.) - the generic signup
+// form here only collects the fields user/merchant need.
+const dedicatedRegisterPath: Partial<Record<UserRole, string>> = {
+    farmer: "/farmer/register",
+    driver: "/driver/register",
+};
+
+const roleHomePath: Record<UserRole, string> = {
+    user: "/user",
+    merchant: "/merchant",
+    farmer: "/farmer",
+    driver: "/driver",
+    admin: "/admin",
+};
 
 const AuthContent = () => {
     const searchParams = useSearchParams();
@@ -23,7 +46,10 @@ const AuthContent = () => {
     const [isLoading, setIsLoading] = useState(false);
 
     // Role is handled by AuthRedirectHandler or initial state
-    const initialRole = searchParams.get("role") === "merchant" ? "merchant" : "user";
+    const requestedRole = searchParams.get("role");
+    const initialRole: UserRole = requestedRole === "merchant" || requestedRole === "farmer" || requestedRole === "driver"
+        ? requestedRole
+        : "user";
     const [role, setRole] = useState<UserRole>(initialRole);
 
     // Login form state
@@ -245,7 +271,7 @@ const AuthContent = () => {
             setOtpMode(null);
             setOtpIdentifier("");
             // Redirect based on role
-            router.push(role === "merchant" ? "/merchant" : "/user");
+            router.push(roleHomePath[role] || "/user");
             router.refresh();
         } else {
             toast({
@@ -298,33 +324,23 @@ const AuthContent = () => {
 
                     <CardContent>
                         {/* Role Selection */}
-                        <div className="flex gap-3 mb-6">
-                            <button
-                                type="button"
-                                onClick={() => setRole("user")}
-                                className={`flex-1 p-4 rounded-xl border-2 transition-all ${role === "user"
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/50"
-                                    }`}
-                            >
-                                <User className={`w-6 h-6 mx-auto mb-2 ${role === "user" ? "text-primary" : "text-muted-foreground"}`} />
-                                <p className={`text-sm font-medium ${role === "user" ? "text-primary" : "text-muted-foreground"}`}>
-                                    Utilisateur
-                                </p>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setRole("merchant")}
-                                className={`flex-1 p-4 rounded-xl border-2 transition-all ${role === "merchant"
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/50"
-                                    }`}
-                            >
-                                <Store className={`w-6 h-6 mx-auto mb-2 ${role === "merchant" ? "text-primary" : "text-muted-foreground"}`} />
-                                <p className={`text-sm font-medium ${role === "merchant" ? "text-primary" : "text-muted-foreground"}`}>
-                                    Commerçant
-                                </p>
-                            </button>
+                        <div className="grid grid-cols-4 gap-2 mb-6">
+                            {roleOptions.map(({ value, label, icon: Icon }) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => setRole(value)}
+                                    className={`p-3 rounded-xl border-2 transition-all ${role === value
+                                        ? "border-primary bg-primary/5"
+                                        : "border-border hover:border-primary/50"
+                                        }`}
+                                >
+                                    <Icon className={`w-5 h-5 mx-auto mb-1.5 ${role === value ? "text-primary" : "text-muted-foreground"}`} />
+                                    <p className={`text-xs font-medium ${role === value ? "text-primary" : "text-muted-foreground"}`}>
+                                        {label}
+                                    </p>
+                                </button>
+                            ))}
                         </div>
 
                         <Tabs defaultValue="login" className="w-full">
@@ -405,6 +421,21 @@ const AuthContent = () => {
 
                             {/* Signup Tab */}
                             <TabsContent value="signup">
+                                {dedicatedRegisterPath[role] ? (
+                                    <div className="text-center py-6 space-y-4">
+                                        <p className="text-sm text-muted-foreground">
+                                            L&apos;inscription {role === "farmer" ? "agriculteur" : "chauffeur"} demande quelques
+                                            informations supplémentaires ({role === "farmer" ? "exploitation, zone" : "véhicule, zone de livraison"}).
+                                            Vous serez redirigé vers le formulaire dédié.
+                                        </p>
+                                        <Link href={dedicatedRegisterPath[role]!}>
+                                            <Button type="button" className="w-full gap-2" size="lg">
+                                                Continuer l&apos;inscription
+                                                <ArrowRight className="w-4 h-4" />
+                                            </Button>
+                                        </Link>
+                                    </div>
+                                ) : (
                                 <form onSubmit={handleSignup} className="space-y-4">
                                     {role === "merchant" && (
                                         <div className="space-y-2">
@@ -541,6 +572,7 @@ const AuthContent = () => {
                                         )}
                                     </Button>
                                 </form>
+                                )}
                             </TabsContent>
                         </Tabs>
 
