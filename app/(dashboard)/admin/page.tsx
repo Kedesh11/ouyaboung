@@ -12,12 +12,18 @@ import KPICard from "@/components/admin/KPICard";
 import ActivityFeed from "@/components/admin/ActivityFeed";
 import MerchantValidationCard from "@/components/admin/MerchantValidationCard";
 import MerchantValidationModal from "@/components/admin/MerchantValidationModal";
+import FarmerValidationCard from "@/components/admin/FarmerValidationCard";
+import FarmerValidationModal from "@/components/admin/FarmerValidationModal";
+import DriverValidationCard from "@/components/admin/DriverValidationCard";
+import DriverValidationModal from "@/components/admin/DriverValidationModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Store,
+  Sprout,
+  Truck,
   Users,
   Package,
   ShoppingBag,
@@ -33,7 +39,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { adminService } from "@/services/admin.service";
-import type { AdminKPIs, MerchantRegistration, AdminActivity, TopMerchant, GeoDistribution, AdminTrafficMetrics } from "@/types/admin.types";
+import type { AdminKPIs, MerchantRegistration, FarmerRegistration, DriverRegistration, AdminActivity, TopMerchant, GeoDistribution, AdminTrafficMetrics } from "@/types/admin.types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -51,6 +57,8 @@ const AdminDashboardPage = () => {
 
   const [kpis, setKPIs] = useState<AdminKPIs | null>(null);
   const [pendingMerchants, setPendingMerchants] = useState<MerchantRegistration[]>([]);
+  const [pendingFarmers, setPendingFarmers] = useState<FarmerRegistration[]>([]);
+  const [pendingDrivers, setPendingDrivers] = useState<DriverRegistration[]>([]);
   const [activities, setActivities] = useState<AdminActivity[]>([]);
   const [salesStats, setSalesStats] = useState<{ period: string; sales: number; revenue: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +69,16 @@ const AdminDashboardPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const [selectedFarmer, setSelectedFarmer] = useState<FarmerRegistration | null>(null);
+  const [farmerModalMode, setFarmerModalMode] = useState<'view' | 'validate' | 'refuse'>('view');
+  const [isFarmerModalOpen, setIsFarmerModalOpen] = useState(false);
+  const [isFarmerProcessing, setIsFarmerProcessing] = useState(false);
+
+  const [selectedDriver, setSelectedDriver] = useState<DriverRegistration | null>(null);
+  const [driverModalMode, setDriverModalMode] = useState<'view' | 'validate' | 'refuse'>('view');
+  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
+  const [isDriverProcessing, setIsDriverProcessing] = useState(false);
+
   useEffect(() => {
     loadDashboardData();
   }, []);
@@ -68,9 +86,11 @@ const AdminDashboardPage = () => {
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      const [kpisData, merchantsData, activitiesData, statsData, topMerchantsData, geoData, trafficData] = await Promise.all([
+      const [kpisData, merchantsData, farmersData, driversData, activitiesData, statsData, topMerchantsData, geoData, trafficData] = await Promise.all([
         adminService.getKPIs(),
         adminService.getMerchants('pending'),
+        adminService.getFarmers('pending'),
+        adminService.getDrivers('pending'),
         adminService.getRecentActivities(5),
         adminService.getSalesStats(),
         adminService.getTopMerchants(5),
@@ -79,6 +99,8 @@ const AdminDashboardPage = () => {
       ]);
       setKPIs(kpisData);
       setPendingMerchants(merchantsData);
+      setPendingFarmers(farmersData);
+      setPendingDrivers(driversData);
       setActivities(activitiesData);
       setSalesStats(statsData);
       setTopMerchants(topMerchantsData);
@@ -179,6 +201,144 @@ const AdminDashboardPage = () => {
     }
   };
 
+  const handleViewFarmer = (farmer: FarmerRegistration) => {
+    setSelectedFarmer(farmer);
+    setFarmerModalMode('view');
+    setIsFarmerModalOpen(true);
+  };
+
+  const handleValidateFarmer = (farmer: FarmerRegistration) => {
+    setSelectedFarmer(farmer);
+    setFarmerModalMode('validate');
+    setIsFarmerModalOpen(true);
+  };
+
+  const handleRefuseFarmer = (farmer: FarmerRegistration) => {
+    setSelectedFarmer(farmer);
+    setFarmerModalMode('refuse');
+    setIsFarmerModalOpen(true);
+  };
+
+  const handleConfirmFarmerAction = async (reason?: string) => {
+    if (!selectedFarmer) return;
+    if (!user?.id) {
+      toast.error("Session admin invalide. Rechargez la page.");
+      return;
+    }
+    if (farmerModalMode === 'refuse' && !reason?.trim()) {
+      toast.error("Le motif du refus est obligatoire.");
+      return;
+    }
+
+    setIsFarmerProcessing(true);
+    try {
+      await adminService.updateFarmerStatus({
+        farmerId: selectedFarmer.id,
+        action: farmerModalMode === 'validate' ? 'validate' : 'refuse',
+        reason,
+        adminId: user.id,
+      });
+
+      const { sendFarmerApprovalEmail, sendFarmerRejectionEmail } =
+        await import('@/services/email.service');
+
+      if (farmerModalMode === 'validate') {
+        const emailResult = await sendFarmerApprovalEmail(selectedFarmer.email, selectedFarmer.farmName);
+        if (!emailResult.success) {
+          console.warn('Approval email failed:', emailResult.error);
+        }
+      } else {
+        const emailResult = await sendFarmerRejectionEmail(selectedFarmer.email, selectedFarmer.farmName, reason);
+        if (!emailResult.success) {
+          console.warn('Rejection email failed:', emailResult.error);
+        }
+      }
+
+      toast.success(
+        farmerModalMode === 'validate'
+          ? 'Agriculteur validé avec succès. Un email a été envoyé.'
+          : 'Agriculteur refusé. Il a été notifié.'
+      );
+
+      loadDashboardData();
+      setIsFarmerModalOpen(false);
+    } catch (error) {
+      console.error('Error processing farmer:', error);
+      toast.error("Une erreur est survenue");
+    } finally {
+      setIsFarmerProcessing(false);
+    }
+  };
+
+  const handleViewDriver = (driver: DriverRegistration) => {
+    setSelectedDriver(driver);
+    setDriverModalMode('view');
+    setIsDriverModalOpen(true);
+  };
+
+  const handleValidateDriver = (driver: DriverRegistration) => {
+    setSelectedDriver(driver);
+    setDriverModalMode('validate');
+    setIsDriverModalOpen(true);
+  };
+
+  const handleRefuseDriver = (driver: DriverRegistration) => {
+    setSelectedDriver(driver);
+    setDriverModalMode('refuse');
+    setIsDriverModalOpen(true);
+  };
+
+  const handleConfirmDriverAction = async (reason?: string) => {
+    if (!selectedDriver) return;
+    if (!user?.id) {
+      toast.error("Session admin invalide. Rechargez la page.");
+      return;
+    }
+    if (driverModalMode === 'refuse' && !reason?.trim()) {
+      toast.error("Le motif du refus est obligatoire.");
+      return;
+    }
+
+    setIsDriverProcessing(true);
+    try {
+      await adminService.updateDriverStatus({
+        driverId: selectedDriver.id,
+        action: driverModalMode === 'validate' ? 'validate' : 'refuse',
+        reason,
+        adminId: user.id,
+      });
+
+      const { sendDriverApprovalEmail, sendDriverRejectionEmail } =
+        await import('@/services/email.service');
+
+      if (driverModalMode === 'validate') {
+        const emailResult = await sendDriverApprovalEmail(selectedDriver.email, selectedDriver.fullName);
+        if (!emailResult.success) {
+          console.warn('Approval email failed:', emailResult.error);
+        }
+      } else {
+        const emailResult = await sendDriverRejectionEmail(selectedDriver.email, selectedDriver.fullName, reason);
+        if (!emailResult.success) {
+          console.warn('Rejection email failed:', emailResult.error);
+        }
+      }
+
+      toast.success(
+        driverModalMode === 'validate'
+          ? 'Chauffeur validé avec succès. Un email a été envoyé.'
+          : 'Chauffeur refusé. Il a été notifié.'
+      );
+
+      loadDashboardData();
+      setIsDriverModalOpen(false);
+    } catch (error) {
+      console.error('Error processing driver:', error);
+      toast.error("Une erreur est survenue");
+    } finally {
+      setIsDriverProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6 lg:p-6">
       <div className="mb-4 md:mb-6">
@@ -274,6 +434,34 @@ const AdminDashboardPage = () => {
         />
       </div>
 
+      {/* Farmer & Driver KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KPICard
+          title="Agriculteurs actifs"
+          value={kpis?.activeFarmers ?? '-'}
+          icon={Sprout}
+          variant="success"
+        />
+        <KPICard
+          title="Agriculteurs en attente"
+          value={kpis?.pendingFarmers ?? '-'}
+          icon={Clock}
+          variant="warning"
+        />
+        <KPICard
+          title="Chauffeurs actifs"
+          value={kpis?.activeDrivers ?? '-'}
+          icon={Truck}
+          variant="success"
+        />
+        <KPICard
+          title="Chauffeurs en attente"
+          value={kpis?.pendingDrivers ?? '-'}
+          icon={Clock}
+          variant="warning"
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Sales Chart */}
         <Card className="lg:col-span-2">
@@ -337,20 +525,29 @@ const AdminDashboardPage = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {geoDistribution.map((geo) => (
-                <div key={geo.city} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{geo.city}</span>
-                    <span className="text-muted-foreground">{geo.merchantCount} commerces</span>
+              {geoDistribution.map((geo) => {
+                const geoTotal = geo.merchantCount + geo.farmerCount + geo.driverCount;
+                const maxTotal = Math.max(
+                  ...geoDistribution.map(g => g.merchantCount + g.farmerCount + g.driverCount),
+                  1
+                );
+                return (
+                  <div key={geo.city} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{geo.city}</span>
+                      <span className="text-muted-foreground">
+                        {geo.merchantCount} commerces · {geo.farmerCount} agriculteurs · {geo.driverCount} chauffeurs
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary"
+                        style={{ width: `${(geoTotal / maxTotal) * 100}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary"
-                      style={{ width: `${(geo.merchantCount / Math.max(...geoDistribution.map(g => g.merchantCount), 1)) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {geoDistribution.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">Aucune donnée disponible</p>
               )}
@@ -397,7 +594,83 @@ const AdminDashboardPage = () => {
         </CardContent>
       </Card>
 
-      {/* Validation Modal */}
+      {/* Pending Farmer Validations */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-500" />
+            Agriculteurs en attente de validation
+          </CardTitle>
+          <Link href="/admin/validations">
+            <Button variant="ghost" size="sm" className="gap-1">
+              Voir tout
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {pendingFarmers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <CheckCircle className="w-12 h-12 text-green-500 mb-3" />
+              <p className="text-muted-foreground">
+                Aucune demande en attente
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingFarmers.slice(0, 3).map((farmer) => (
+                <FarmerValidationCard
+                  key={farmer.id}
+                  farmer={farmer}
+                  onView={handleViewFarmer}
+                  onValidate={handleValidateFarmer}
+                  onRefuse={handleRefuseFarmer}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pending Driver Validations */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-500" />
+            Chauffeurs en attente de validation
+          </CardTitle>
+          <Link href="/admin/validations">
+            <Button variant="ghost" size="sm" className="gap-1">
+              Voir tout
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {pendingDrivers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <CheckCircle className="w-12 h-12 text-green-500 mb-3" />
+              <p className="text-muted-foreground">
+                Aucune demande en attente
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingDrivers.slice(0, 3).map((driver) => (
+                <DriverValidationCard
+                  key={driver.id}
+                  driver={driver}
+                  onView={handleViewDriver}
+                  onValidate={handleValidateDriver}
+                  onRefuse={handleRefuseDriver}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Validation Modals */}
       <MerchantValidationModal
         merchant={selectedMerchant}
         mode={modalMode}
@@ -405,6 +678,22 @@ const AdminDashboardPage = () => {
         onClose={() => setIsModalOpen(false)}
         onConfirm={handleConfirmAction}
         isLoading={isProcessing}
+      />
+      <FarmerValidationModal
+        farmer={selectedFarmer}
+        mode={farmerModalMode}
+        isOpen={isFarmerModalOpen}
+        onClose={() => setIsFarmerModalOpen(false)}
+        onConfirm={handleConfirmFarmerAction}
+        isLoading={isFarmerProcessing}
+      />
+      <DriverValidationModal
+        driver={selectedDriver}
+        mode={driverModalMode}
+        isOpen={isDriverModalOpen}
+        onClose={() => setIsDriverModalOpen(false)}
+        onConfirm={handleConfirmDriverAction}
+        isLoading={isDriverProcessing}
       />
     </div>
   );

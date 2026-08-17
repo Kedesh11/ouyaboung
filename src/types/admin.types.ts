@@ -96,6 +96,14 @@ export interface AdminKPIs {
   activeMerchants: number;
   pendingMerchants: number;
   refusedMerchants: number;
+  totalFarmers: number;
+  activeFarmers: number;
+  pendingFarmers: number;
+  refusedFarmers: number;
+  totalDrivers: number;
+  activeDrivers: number;
+  pendingDrivers: number;
+  refusedDrivers: number;
   totalClients: number;
   activeProducts: number;
   activeBaskets: number;
@@ -135,6 +143,8 @@ export interface AdminTrafficMetrics {
 export interface GeoDistribution {
   city: string;
   merchantCount: number;
+  farmerCount: number;
+  driverCount: number;
   salesCount: number;
 }
 

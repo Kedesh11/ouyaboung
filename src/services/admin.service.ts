@@ -632,6 +632,14 @@ export const adminService = {
       activeMerchants: 0,
       pendingMerchants: 0,
       refusedMerchants: 0,
+      totalFarmers: 0,
+      activeFarmers: 0,
+      pendingFarmers: 0,
+      refusedFarmers: 0,
+      totalDrivers: 0,
+      activeDrivers: 0,
+      pendingDrivers: 0,
+      refusedDrivers: 0,
       totalClients: 0,
       activeProducts: 0,
       activeBaskets: 0,
@@ -652,6 +660,14 @@ export const adminService = {
       active_merchants?: number;
       pending_merchants?: number;
       refused_merchants?: number;
+      total_farmers?: number;
+      active_farmers?: number;
+      pending_farmers?: number;
+      refused_farmers?: number;
+      total_drivers?: number;
+      active_drivers?: number;
+      pending_drivers?: number;
+      refused_drivers?: number;
       total_clients?: number;
       active_products?: number;
       total_sales?: number;
@@ -671,6 +687,14 @@ export const adminService = {
       activeMerchants: data.active_merchants || 0,
       pendingMerchants: data.pending_merchants || 0,
       refusedMerchants: data.refused_merchants || 0,
+      totalFarmers: data.total_farmers || 0,
+      activeFarmers: data.active_farmers || 0,
+      pendingFarmers: data.pending_farmers || 0,
+      refusedFarmers: data.refused_farmers || 0,
+      totalDrivers: data.total_drivers || 0,
+      activeDrivers: data.active_drivers || 0,
+      pendingDrivers: data.pending_drivers || 0,
+      refusedDrivers: data.refused_drivers || 0,
       totalClients: data.total_clients || 0,
       activeProducts: data.active_products || 0,
       activeBaskets: 0,
@@ -698,6 +722,8 @@ export const adminService = {
     return (data || []).map((row: any) => ({
       city: row.city,
       merchantCount: row.merchant_count || 0,
+      farmerCount: row.farmer_count || 0,
+      driverCount: row.driver_count || 0,
       salesCount: 0, // Would need to join with orders
     }));
   },

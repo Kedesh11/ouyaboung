@@ -55,17 +55,34 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 ### Pour les Commerçants
 
 - Gestion des invendus et inventaire
+- Marché B2B : commande de produits directement auprès des agriculteurs partenaires
+- Suivi des commandes agriculteurs et des livraisons associées
 - Traitement des paiements Q-Gabon
 - Analytics et statistiques de ventes
 - Notifications en temps réel
 - Gestion du profil public
 
+### Pour les Agriculteurs
+
+- Répertoire public des exploitations (recherche, filtres, fiches détaillées)
+- Catalogue de produits vendus aux commerçants (marché B2B)
+- Gestion des commandes reçues (confirmation, préparation, mise à disposition)
+- Inscription dédiée avec validation admin
+
+### Pour les Chauffeurs
+
+- Réseau de livraison agriculteur → commerçant
+- Prise en charge des livraisons disponibles (pool de commandes non assignées)
+- Suivi de statut en temps réel (récupérée, en route, livrée) avec géolocalisation
+- Preuve de livraison par photo
+- Inscription dédiée avec validation admin
+
 ### Pour les Administrateurs
 
-- Gestion des utilisateurs et commerçants
-- Validation des inscriptions marchands
-- Dashboard global avec métriques
-- Visualisation géographique
+- Gestion des utilisateurs, commerçants, agriculteurs et chauffeurs
+- Validation des inscriptions (commerçants, agriculteurs, chauffeurs) avec motif de refus
+- Dashboard global avec métriques par rôle (actifs, en attente, refusés)
+- Visualisation géographique multi-rôles
 - Rapports et analytics
 
 ---
@@ -177,7 +194,11 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 - **Version Control**: Git + GitHub
 - **Package Manager**: npm
 - **Linting**: ESLint + Prettier
-- **Testing**: Lighthouse CI
+- **Testing**:
+  - Lighthouse CI (performance/SEO)
+  - Vitest (unitaire/intégration mockée)
+  - [Playwright](https://playwright.dev/) (E2E/régression contre Supabase local)
+  - [Artillery](https://www.artillery.io/) (tests de charge, HTTP + parcours authentifiés)
 
 ### PWA & Offline
 
@@ -233,6 +254,16 @@ npm start                # Serveur production
 # Tests & Qualité
 npm run lint             # ESLint
 npm run type-check       # TypeScript check
+npm run test:unit        # Tests unitaires/intégration (Vitest, mockés)
+
+# Tests End-to-End (nécessite `supabase start` en local)
+npm run test:e2e         # Suite Playwright complète
+npm run test:e2e:ui      # Suite Playwright en mode UI (debug)
+npm run test:regression  # Parcours critiques uniquement (tag @regression, CI)
+
+# Tests de charge (nécessite un build lancé en local, non-bloquant en CI)
+npm run test:load        # Artillery - pages publiques (HTTP)
+npm run test:load:auth   # Artillery - parcours authentifiés (Playwright engine)
 
 # Performance
 ./scripts/lighthouse-audit.sh  # Lighthouse CI (5 routes)
@@ -240,6 +271,8 @@ npm run type-check       # TypeScript check
 # Optimisation
 node scripts/optimize-icons.mjs # Optimiser PWA icons
 ```
+
+> Détails de la suite E2E (comptes de test, scénarios couverts, comment lire un rapport) : [docs/E2E_TESTING.md](./docs/E2E_TESTING.md)
 
 ---
 
@@ -251,10 +284,16 @@ ouyaboung/
 │   ├── (public)/                 # Routes publiques
 │   │   ├── p/[slug]/            # Pages produits (ISR)
 │   │   ├── m/[slug]/            # Pages marchands (ISR)
+│   │   ├── agriculteurs/        # Répertoire public des agriculteurs
+│   │   ├── merchant/register/   # Inscription commerçant
+│   │   ├── farmer/register/     # Inscription agriculteur
+│   │   ├── driver/register/     # Inscription chauffeur
 │   │   └── search/              # Recherche + carte
 │   ├── (dashboard)/             # Routes protégées
-│   │   ├── admin/               # Dashboard admin
-│   │   ├── merchant/            # Dashboard marchand
+│   │   ├── admin/               # Dashboard admin (+ validations multi-rôles)
+│   │   ├── merchant/            # Dashboard marchand (+ farm-orders B2B)
+│   │   ├── farmer/              # Dashboard agriculteur
+│   │   ├── driver/              # Dashboard chauffeur (livraisons, GPS)
 │   │   └── user/                # Dashboard utilisateur
 │   ├── api/                     # API Routes
 │   │   ├── analytics/events/    # Ingestion batch tracking
@@ -290,6 +329,16 @@ ouyaboung/
 ├── scripts/
 │   ├── lighthouse-audit.sh      # Lighthouse automation
 │   └── optimize-icons.js        # Icon optimization
+│
+├── e2e/                          # Suite Playwright (intégration/régression)
+│   ├── *.spec.ts                # Parcours critiques (tag @regression)
+│   ├── fixtures/                 # Comptes/données de test
+│   └── utils/                    # Helpers auth, DB, assertions
+│
+├── load/                         # Scénarios Artillery (tests de charge)
+│
+├── supabase/
+│   └── migrations/               # Migrations SQL (schéma, RLS, RPC)
 │
 ├── lighthouse-results/          # Lighthouse JSON reports
 │
@@ -329,6 +378,7 @@ Référence complète des contrats API : `docs/analytics-api.md`.
 - **[Testing Guide](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/testing_guide.md)** - Procédures de validation
 - **[Lighthouse Results](https://github.com/Kedesh11/ouyaboung/blob/feat/ref/.gemini/brain/lighthouse_results.md)** - Analyse détaillée
 - **[Analytics API](./docs/analytics-api.md)** - Endpoints tracking/intelligence/export
+- **[E2E Testing](./docs/E2E_TESTING.md)** - Suite Playwright/Artillery : comptes de test, parcours couverts, comment lancer/lire les rapports
 - **[Intelligence Strategy](./brain/intelligence_strategy.md)** - KPIs, scoring, segmentation, roadmap ML
 - **[ML Pipeline Contract](./brain/ML_PIPELINE_CONTRACT.md)** - Contrat I/O pour intégration Python
 

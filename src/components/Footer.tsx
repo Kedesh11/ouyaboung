@@ -44,6 +44,7 @@ const Footer = () => {
               <li><Link href="/agriculteurs" className="text-sm text-muted-foreground hover:text-primary transition-colors">Répertoire des agriculteurs</Link></li>
               <li><Link href="/auth?role=merchant" className="text-sm text-muted-foreground hover:text-primary transition-colors">Devenir partenaire</Link></li>
               <li><Link href="/farmer/register" className="text-sm text-muted-foreground hover:text-primary transition-colors">Devenir agriculteur partenaire</Link></li>
+              <li><Link href="/driver/register" className="text-sm text-muted-foreground hover:text-primary transition-colors">Devenir chauffeur partenaire</Link></li>
             </ul>
           </div>
 
