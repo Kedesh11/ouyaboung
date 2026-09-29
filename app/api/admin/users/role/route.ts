@@ -67,7 +67,7 @@ const resolveAdminAuth = async (req: NextRequest): Promise<AuthResult> => {
     .eq('user_id', user.id)
     .maybeSingle();
 
-  const role = profile?.role || user.user_metadata?.role || 'user';
+  const role = profile?.role || user.app_metadata?.role || 'user';
   if (role !== 'admin') {
     return { ok: false, status: 403, reason: 'Forbidden' };
   }

@@ -142,7 +142,7 @@ export const isAuthenticated = async (): Promise<boolean> => {
  */
 export const getUserRole = async (): Promise<UserRole | null> => {
   const { data } = await apiGetCurrentUser();
-  return (data?.user?.user_metadata?.role as UserRole) || null;
+  return (data?.user?.app_metadata?.role as UserRole) || null;
 };
 
 /**

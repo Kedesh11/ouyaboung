@@ -58,10 +58,9 @@ export async function middleware(request: NextRequest) {
     let userRole: string | null = null
 
     if (user) {
-        const metadataRole = typeof user.user_metadata?.role === 'string'
-            ? user.user_metadata.role
-            : (typeof user.app_metadata?.role === 'string' ? user.app_metadata.role : null)
-        userRole = metadataRole
+        // Only app_metadata is trusted: user_metadata is writable by the user
+        // themselves (supabase.auth.updateUser), so it must never drive authorization.
+        userRole = typeof user.app_metadata?.role === 'string' ? user.app_metadata.role : null
 
         let shouldLookupProfileRole = !userRole && (isUserRoute || isMerchantRoute || isFarmerRoute || isDriverRoute || isAdminRoute || isAuthPage)
 

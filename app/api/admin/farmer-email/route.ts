@@ -66,7 +66,7 @@ const assertAdmin = async (): Promise<{ ok: true } | { ok: false; status: number
     return { ok: false, status: 500, error: profileError.message };
   }
 
-  const role = profile?.role || user.user_metadata?.role || 'user';
+  const role = profile?.role || user.app_metadata?.role || 'user';
   if (role !== 'admin') {
     return { ok: false, status: 403, error: 'Forbidden' };
   }

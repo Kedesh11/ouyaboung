@@ -59,7 +59,7 @@ export const useProfile = () => {
           full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || '',
           phone: user.user_metadata?.phone || null,
           avatar_url: user.user_metadata?.avatar_url || null,
-          role: user.user_metadata?.role || user.app_metadata?.role || 'user',
+          role: user.app_metadata?.role || 'user',
         };
 
         const { data: createdProfile, error: createError } = await client

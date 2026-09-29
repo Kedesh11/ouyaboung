@@ -105,7 +105,7 @@ export const updateUserProfile = async (
   const role =
     (updates.role as UserProfile['role']) ||
     (existingProfile?.role as UserProfile['role']) ||
-    (authUser?.user?.user_metadata?.role as UserProfile['role']) ||
+    (authUser?.user?.app_metadata?.role as UserProfile['role']) ||
     'user';
 
   // Prepare payload without id first

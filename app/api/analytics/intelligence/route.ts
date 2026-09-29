@@ -94,7 +94,7 @@ const resolveAuthContext = async (req: NextRequest): Promise<AuthContext> => {
 
     return {
       authenticated: true,
-      isAdmin: (profile?.role || user.user_metadata?.role || user.app_metadata?.role) === 'admin',
+      isAdmin: (profile?.role || user.app_metadata?.role) === 'admin',
       userId: user.id,
       viaServiceKey: false,
     };
@@ -137,7 +137,7 @@ const resolveAuthContext = async (req: NextRequest): Promise<AuthContext> => {
 
   return {
     authenticated: true,
-    isAdmin: (profile?.role || user.user_metadata?.role || user.app_metadata?.role) === 'admin',
+    isAdmin: (profile?.role || user.app_metadata?.role) === 'admin',
     userId: user.id,
     viaServiceKey: false,
   };
