@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { evaluateWebhookAuthorization, isLocalSupabaseUrl, type WebhookAuthResult } from './webhook-auth.ts'
 import { isFinalInternalStatus, mapLegacyStatus, mapProviderStatus } from './singpay-status.ts'
+import { canTransitionPaymentStatus, inFlightWindowStart, isReportedAmountValid } from './payment-guards.ts'
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -270,6 +271,23 @@ export const initiateSingPayPayment = async ({ req, operator }: PaymentInput) =>
     return json({ success: false, error: { message: 'Invalid order amount', code: 'INVALID_AMOUNT' } }, 400)
   }
 
+  // Refuse a second charge while a previous attempt for this order is still
+  // awaiting the customer's phone confirmation (double click / retry).
+  const { data: inFlight } = await serviceClient
+    .from('payment_transactions')
+    .select('id')
+    .eq('order_id', order.id)
+    .in('status', ['initiated', 'pending'])
+    .gte('created_at', inFlightWindowStart())
+    .limit(1)
+
+  if (inFlight && inFlight.length > 0) {
+    return json({
+      success: false,
+      error: { message: 'Un paiement est deja en cours pour cette commande. Validez la demande sur votre telephone.', code: 'PAYMENT_IN_PROGRESS' },
+    }, 409)
+  }
+
   const platformWallet = await getOrCreatePlatformWallet(serviceClient)
   const payoutAccount = await getMerchantPayoutAccount(serviceClient, order.merchant_id)
   const requirePayout = getEnv('SINGPAY_REQUIRE_VERIFIED_PAYOUT') !== 'false'
@@ -476,7 +494,19 @@ const createSettlementIfNeeded = async (client: any, paymentTransaction: any) =>
     .select()
     .single()
 
-  if (error) throw new Error(`Impossible de creer le settlement: ${error.message}`)
+  if (error) {
+    // A concurrent callback won the race on the unique (payment, recipient) index.
+    if (error.code === '23505') {
+      const { data: raced } = await client
+        .from('payment_settlements')
+        .select('id,status')
+        .eq('payment_transaction_id', paymentTransaction.id)
+        .eq('recipient_type', 'merchant')
+        .maybeSingle()
+      if (raced) return raced
+    }
+    throw new Error(`Impossible de creer le settlement: ${error.message}`)
+  }
   return data
 }
 
@@ -497,13 +527,18 @@ const executeTransferIfEnabled = async (client: any, settlement: any, paymentTra
     amount: settlement.net_amount,
   }
 
-  await client
+  // Atomic claim: only the caller that flips ready -> processing sends the transfer.
+  const { data: claimed } = await client
     .from('payment_settlements')
     .update({
       status: 'processing',
       raw_transfer_request: transferPayload,
     })
     .eq('id', settlement.id)
+    .eq('status', 'ready')
+    .select('id')
+
+  if (!claimed || claimed.length === 0) return settlement
 
   let transferData: any
   let transferOk = false
@@ -568,6 +603,16 @@ export const handleSingPayCallback = async (req: Request) => {
   const legacyStatus = mapLegacyStatus(newStatus)
   const isFinal = isFinalInternalStatus(newStatus)
 
+  if (!canTransitionPaymentStatus(paymentTransaction.status, newStatus)) {
+    console.warn('[SingPay] Ignoring stale callback', { reference, from: paymentTransaction.status, to: newStatus })
+    return json({ success: true, message: 'Callback ignored: status transition not allowed' })
+  }
+
+  if (newStatus === 'confirmed' && !isReportedAmountValid(Number(paymentTransaction.amount), parsed.amount)) {
+    console.error('[SingPay] Amount mismatch on callback', { reference, expected: paymentTransaction.amount, reported: parsed.amount })
+    return json({ error: 'Amount mismatch' }, 409)
+  }
+
   await client
     .from('payment_transactions')
     .update({
@@ -599,6 +644,7 @@ export const handleSingPayCallback = async (req: Request) => {
       .from('orders')
       .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
       .eq('id', paymentTransaction.order_id)
+      .eq('status', 'pending')
 
     const settlement = await createSettlementIfNeeded(client, paymentTransaction)
     const updatedSettlement = await executeTransferIfEnabled(
@@ -702,6 +748,15 @@ export const syncSingPayTransactionStatus = async (req: Request) => {
   const legacyStatus = mapLegacyStatus(newStatus)
   const isFinal = isFinalInternalStatus(newStatus)
 
+  if (!canTransitionPaymentStatus(paymentTransaction.status, newStatus)) {
+    return json({ success: true, data: { paymentTransaction, provider: providerData } })
+  }
+
+  if (newStatus === 'confirmed' && !isReportedAmountValid(Number(paymentTransaction.amount), parsed.amount)) {
+    console.error('[SingPay] Amount mismatch on sync', { reference: paymentTransaction.internal_reference, expected: paymentTransaction.amount, reported: parsed.amount })
+    return json({ error: 'Amount mismatch' }, 409)
+  }
+
   const { data: updatedPaymentTransaction } = await serviceClient
     .from('payment_transactions')
     .update({
@@ -734,6 +789,7 @@ export const syncSingPayTransactionStatus = async (req: Request) => {
       .from('orders')
       .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
       .eq('id', paymentTransaction.order_id)
+      .eq('status', 'pending')
 
     const settlement = await createSettlementIfNeeded(serviceClient, paymentTransaction)
     const updatedSettlement = await executeTransferIfEnabled(
