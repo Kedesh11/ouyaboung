@@ -206,8 +206,8 @@ describe("admin.service", () => {
 
       expect(rpcMock).toHaveBeenCalledWith("get_admin_geo_distribution");
       expect(result).toEqual([
-        { city: "Libreville", merchantCount: 4, salesCount: 0 },
-        { city: "Port-Gentil", merchantCount: 1, salesCount: 0 },
+        { city: "Libreville", merchantCount: 4, farmerCount: 0, driverCount: 0, salesCount: 0 },
+        { city: "Port-Gentil", merchantCount: 1, farmerCount: 0, driverCount: 0, salesCount: 0 },
       ]);
     });
 

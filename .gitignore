@@ -52,3 +52,11 @@ dist-ssr
 /test-results
 /playwright-report
 /playwright/.cache
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local tooling / scratch files
+/.gemini
+/supabase/snippets
+/supabase/migrations/*.bak
