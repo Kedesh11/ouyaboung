@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
-import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
+import { resolveAdminAuth, getSupabaseAdmin } from '@/lib/admin/auth';
 
 export const runtime = 'nodejs';
-
-interface AuthResult {
-  ok: boolean;
-  status: number;
-  reason?: string;
-}
 
 interface DailyTrafficRow {
   period_date: string;
@@ -27,86 +18,6 @@ interface TrafficSummaryRow {
   unique_visitors_30d: number;
   recurring_visitors_7d: number;
 }
-
-const getSupabaseAdmin = () => {
-  const { url } = getSupabasePublicEnv();
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
-  if (!url || !serviceRole) return null;
-  return createClient(url, serviceRole);
-};
-
-const resolveAdminAuth = async (req: NextRequest): Promise<AuthResult> => {
-  const { url: supabaseUrl, anonKey } = getSupabasePublicEnv();
-  const adminClient = getSupabaseAdmin();
-  if (!supabaseUrl || !anonKey || !adminClient) {
-    return { ok: false, status: 500, reason: 'Supabase configuration missing' };
-  }
-
-  const authHeader = req.headers.get('authorization');
-
-  if (authHeader?.toLowerCase().startsWith('bearer ')) {
-    const token = authHeader.substring(7).trim();
-    const authClient = createClient(supabaseUrl, anonKey);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await authClient.auth.getUser(token);
-
-    if (userError || !user) {
-      return { ok: false, status: 401, reason: 'Unauthenticated' };
-    }
-
-    const { data: profile } = await adminClient
-      .from('profiles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    const role = profile?.role || user.app_metadata?.role || 'user';
-    if (role !== 'admin') {
-      return { ok: false, status: 403, reason: 'Forbidden' };
-    }
-
-    return { ok: true, status: 200 };
-  }
-
-  const cookieStore = await cookies();
-  const cookieClient = createServerClient(supabaseUrl, anonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
-      },
-    },
-  });
-
-  const {
-    data: { user },
-    error: userError,
-  } = await cookieClient.auth.getUser();
-
-  if (userError || !user) {
-    return { ok: false, status: 401, reason: 'Unauthenticated' };
-  }
-
-  const { data: profile } = await adminClient
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  const role = profile?.role || user.app_metadata?.role || 'user';
-  if (role !== 'admin') {
-    return { ok: false, status: 403, reason: 'Forbidden' };
-  }
-
-  return { ok: true, status: 200 };
-};
 
 export async function GET(req: NextRequest) {
   const requestId = crypto.randomUUID();

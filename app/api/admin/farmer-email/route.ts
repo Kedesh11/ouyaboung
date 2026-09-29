@@ -1,8 +1,6 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendFarmerApprovalEmail, sendFarmerRejectionEmail } from '@/services/email.server';
-import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
+import { resolveAdminAuth } from '@/lib/admin/auth';
 
 export const runtime = 'nodejs';
 
@@ -26,56 +24,15 @@ const isValidPayload = (payload: unknown): payload is FarmerEmailPayload => {
   );
 };
 
-const assertAdmin = async (): Promise<{ ok: true } | { ok: false; status: number; error: string }> => {
-  const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabasePublicEnv();
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return { ok: false, status: 500, error: 'Supabase config missing' };
-  }
-
-  const cookieStore = await cookies();
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
-        });
-      },
-    },
-  });
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return { ok: false, status: 401, error: 'Unauthenticated' };
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    return { ok: false, status: 500, error: profileError.message };
-  }
-
-  const role = profile?.role || user.app_metadata?.role || 'user';
-  if (role !== 'admin') {
-    return { ok: false, status: 403, error: 'Forbidden' };
-  }
-
-  return { ok: true };
+const assertAdmin = async (
+  request: NextRequest
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> => {
+  const auth = await resolveAdminAuth(request);
+  return auth.ok ? { ok: true } : { ok: false, status: auth.status, error: auth.reason || 'Unauthorized' };
 };
 
 export async function POST(request: NextRequest) {
-  const auth = await assertAdmin();
+  const auth = await assertAdmin(request);
   if (auth.ok === false) {
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
   }
