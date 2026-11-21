@@ -183,16 +183,6 @@ export function stopProductDwellTracker() {
   productSeenSet.clear();
 }
 
-export function observeProduct(el: HTMLElement) {
-  if (!productObserver) startProductDwellTracker();
-  productObserver?.observe(el);
-}
-
-export function unobserveProduct(el: HTMLElement) {
-  productObserver?.unobserve(el);
-  emitProductDwell(el);
-}
-
 // ------------------------------------------------------------
 // Intent & Price-Sensitivity Trackers
 // ------------------------------------------------------------
@@ -220,10 +210,6 @@ const getEventElement = (event: Event): HTMLElement | null => {
 
 export function trackIntentSignal(type: string, metadata: Record<string, string | number | boolean> = {}) {
   tracker.track(EventType.INTENT_SIGNAL, { signal_type: type, ...metadata });
-}
-
-export function trackPriceHesitation(productId: string, metadata: Record<string, string | number | boolean> = {}) {
-  tracker.track(EventType.PRICE_HESITATION, { product_id: productId, ...metadata });
 }
 
 export function startIntentTracker() {

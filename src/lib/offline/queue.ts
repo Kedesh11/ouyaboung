@@ -72,14 +72,4 @@ export const enqueueOfflineQueueItem = async <TPayload>(
 };
 
 // Compatibility helper for existing sync-only callers (avoids breaking runtime edge cases).
-export const getOfflineQueueSyncFallback = (): OfflineQueueItem[] => {
-  if (!hasBrowserStorage()) return [];
-  try {
-    const raw = window.localStorage.getItem(OFFLINE_QUEUE_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as OfflineQueueItem[]) : [];
-  } catch {
-    return [];
-  }
-};
+

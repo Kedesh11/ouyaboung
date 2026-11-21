@@ -13,13 +13,10 @@ import { supabaseClient } from '@/api/supabaseClient';
 import { calculatePaymentFees, getFeeRates, PaymentFees } from '@/lib/payment-fees';
 import {
     validateAirtelPhone,
-    validateMoovPhone,
     normalizePhone,
     getAirtelPhoneError,
     getMoovPhoneError,
-    detectOperator
 } from '@/lib/phone-validation';
-import type { QGabonPaymentResponse } from '@/types/qgabon';
 import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
 const { url: supabaseUrl } = getSupabasePublicEnv();

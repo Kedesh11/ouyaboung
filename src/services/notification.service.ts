@@ -12,8 +12,6 @@ import type {
   NotificationCategory,
 } from '@/types/notification.types';
 
-// Mock preferences cache for now, as we focus on notifications table first
-const mockPreferences: Map<string, NotificationPreferences> = new Map();
 const NOTIFICATION_COLUMNS =
   'id,user_id,type,title,message,data,is_read,created_at';
 

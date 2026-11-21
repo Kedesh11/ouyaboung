@@ -23,5 +23,4 @@ export const mealsToWaterL = (meals: number): number => meals * WATER_PER_MEAL_L
 // Kept as a practical approximation for UX equivalents.
 export const co2KgToTrees = (co2Kg: number): number => Math.round(co2Kg / 22);
 export const co2KgToCarKm = (co2Kg: number): number => Math.round(co2Kg / CAR_CO2_KG_PER_KM);
-export const co2KgToShowers = (co2Kg: number): number => Math.round(co2Kg / 0.5);
-export const co2KgToPhoneCharges = (co2Kg: number): number => Math.round(co2Kg / 0.008);
+

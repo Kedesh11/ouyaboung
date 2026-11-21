@@ -13,7 +13,6 @@ import {
     SidebarMenuItem,
     SidebarHeader,
     SidebarFooter,
-    useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -98,7 +97,6 @@ interface AdminSidebarProps {
 const AdminSidebar = ({ userName, userEmail, userImage }: AdminSidebarProps) => {
     const pathname = usePathname();
     const { signOut } = useAuth();
-    const { isMobile } = useSidebar();
 
     return (
         <Sidebar collapsible="icon">

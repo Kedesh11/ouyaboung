@@ -5,7 +5,6 @@ import {
     getMerchantStats,
     getMerchantOrders,
     getMerchantItems,
-    getActiveOrders,
     getActive // Import generic active orders fetcher
 } from '@/services';
 import type { OrderStatus } from '@/types';

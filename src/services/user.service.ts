@@ -10,11 +10,9 @@ import {
   getUserPreferences,
   updateUserPreferences,
   getUserFavorites,
-  addToFavorites,
   removeFromFavorites,
-  getUserImpact,
 } from '@/api';
-import type { ApiResponse, UserProfile, UserPreferences, UserImpact, UserLocationPreference } from '@/types';
+import type { ApiResponse, UserProfile, UserPreferences, UserLocationPreference } from '@/types';
 
 /**
  * Get user profile by ID
@@ -136,16 +134,6 @@ export const getFavorites = async (userId: string): Promise<ApiResponse<string[]
 };
 
 /**
- * Add a merchant to favorites
- */
-export const addFavorite = async (
-  userId: string,
-  merchantId: string
-): Promise<ApiResponse<null>> => {
-  return addToFavorites(userId, merchantId);
-};
-
-/**
  * Remove a merchant from favorites
  */
 export const removeFavorite = async (
@@ -155,35 +143,3 @@ export const removeFavorite = async (
   return removeFromFavorites(userId, merchantId);
 };
 
-/**
- * Toggle favorite status
- */
-export const toggleFavorite = async (
-  userId: string,
-  merchantId: string,
-  isFavorite: boolean
-): Promise<ApiResponse<null>> => {
-  if (isFavorite) {
-    return removeFromFavorites(userId, merchantId);
-  }
-  return addToFavorites(userId, merchantId);
-};
-
-/**
- * Get user's environmental impact statistics
- */
-export const getImpactStats = async (userId: string): Promise<ApiResponse<UserImpact>> => {
-  return getUserImpact(userId);
-};
-
-/**
- * Format user impact for display
- */
-export const formatImpactForDisplay = (impact: UserImpact) => {
-  return {
-    foodSaved: `${impact.food_saved_kg.toFixed(1)} kg`,
-    moneySaved: `${impact.money_saved_xaf.toLocaleString()} XAF`,
-    co2Avoided: `${impact.co2_avoided_kg.toFixed(1)} kg`,
-    ordersCount: impact.orders_count,
-  };
-};

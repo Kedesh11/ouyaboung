@@ -4,12 +4,9 @@
 // ============================================
 
 import {
-  getFarmProductById,
-  getFarmProductBySlug,
   getFarmProductsByFarmer,
   createFarmProduct,
   updateFarmProduct,
-  deleteFarmProduct,
 } from '@/api';
 import type {
   ApiResponse,
@@ -17,20 +14,6 @@ import type {
   FarmProductCategory,
   CreateFarmProductInput,
 } from '@/types';
-
-/**
- * Get farm product by ID
- */
-export const getItem = async (itemId: string): Promise<ApiResponse<FarmProduct>> => {
-  return getFarmProductById(itemId);
-};
-
-/**
- * Get farm product by slug
- */
-export const getItemBySlug = async (slug: string): Promise<ApiResponse<FarmProduct>> => {
-  return getFarmProductBySlug(slug);
-};
 
 /**
  * Get all products for a farmer
@@ -120,13 +103,6 @@ export const updateListing = async (
 };
 
 /**
- * Delete a farm product listing
- */
-export const deleteListing = async (itemId: string): Promise<ApiResponse<null>> => {
-  return deleteFarmProduct(itemId);
-};
-
-/**
  * Get category display name
  */
 export const getCategoryName = (category: FarmProductCategory): string => {
@@ -150,10 +126,3 @@ export const formatPricePerUnit = (priceXaf: number, unit: string): string => {
   return `${priceXaf.toLocaleString()} XAF / ${unit}`;
 };
 
-/**
- * Check if a product's availability window has ended
- */
-export const isAvailabilityExpired = (availableUntil?: string): boolean => {
-  if (!availableUntil) return false;
-  return new Date(availableUntil) < new Date(new Date().toDateString());
-};

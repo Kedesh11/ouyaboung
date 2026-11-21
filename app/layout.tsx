@@ -1,7 +1,6 @@
 
 import React, { Suspense } from 'react';
 import type { Metadata, Viewport } from "next";
-// import { Inter } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,7 +11,6 @@ import { PageTrackerInit } from "@/components/analytics/PageTrackerInit";
 import { SkipToContent } from "@/components/seo/AccessibilityHelpers";
 import { DeferredAppEnhancements } from "@/components/app/DeferredAppEnhancements";
 
-// const inter = Inter({ subsets: ["latin"] });
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://ouyaboung-eight.vercel.app";
 const DEV_SW_RESET_SCRIPT = `

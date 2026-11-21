@@ -34,13 +34,12 @@ import { MerchantRegistration } from "@/types/admin.types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useAdminMerchants, useInvalidateAdminMerchants } from "@/hooks/useAdminData";
+import { useAdminMerchants } from "@/hooks/useAdminData";
 
 const ITEMS_PER_PAGE = 3;
 
 const AdminMerchantsPage = () => {
   const { data: merchants = [], isLoading, error } = useAdminMerchants();
-  const invalidateMerchants = useInvalidateAdminMerchants();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantRegistration | null>(null);
@@ -52,12 +51,6 @@ const AdminMerchantsPage = () => {
       toast.error("Erreur lors du chargement des commerces");
     }
   }, [error]);
-
-  const handleValidationSuccess = (updatedMerchant: MerchantRegistration) => {
-    invalidateMerchants();
-    toast.success(`Statut du commerce mis à jour: ${updatedMerchant.status === 'validated' ? 'Validé' : 'Refusé'}`);
-    setSelectedMerchant(null);
-  };
 
   const filteredMerchants = merchants.filter(merchant => {
     const query = searchQuery.toLowerCase();

@@ -70,16 +70,6 @@ export const markDelivered = async (
 };
 
 /**
- * Mark a delivery as failed (driver action, motif obligatoire)
- */
-export const markFailed = async (
-  deliveryId: string,
-  reason: string
-): Promise<ApiResponse<Delivery>> => {
-  return updateDeliveryStatus(deliveryId, 'failed', { cancellation_reason: reason });
-};
-
-/**
  * Record a throttled GPS position for an active delivery
  */
 export const recordLocation = async (

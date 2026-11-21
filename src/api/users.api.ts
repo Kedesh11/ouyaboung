@@ -5,9 +5,9 @@
 
 import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES } from './routes';
-import { AVG_MEAL_WEIGHT_KG } from '@/lib/impactCalculations';
 
-import type { ApiResponse, UserProfile, UserPreferences, UserImpact } from '@/types';
+
+import type { ApiResponse, UserProfile, UserPreferences, } from '@/types';
 
 const PROFILE_LIST_COLUMNS =
   'id,user_id,email,phone,full_name,first_name,last_name,avatar_url,role,address,city,quartier,preferences,created_at,updated_at';
@@ -287,37 +287,6 @@ export const getUserFavorites = async (
 };
 
 /**
- * Add merchant to favorites
- */
-export const addToFavorites = async (
-  userId: string,
-  merchantId: string
-): Promise<ApiResponse<null>> => {
-  if (!isSupabaseConfigured()) {
-    return {
-      data: null,
-      error: { code: 'NOT_CONFIGURED', message: 'Supabase is not configured' },
-      success: false,
-    };
-  }
-
-  const client = requireSupabaseClient();
-  const { error } = await client
-    .from(DB_TABLES.FAVORITES)
-    .insert({ user_id: userId, merchant_id: merchantId });
-
-  if (error) {
-    return {
-      data: null,
-      error: { code: error.code, message: error.message },
-      success: false,
-    };
-  }
-
-  return { data: null, error: null, success: true };
-};
-
-/**
  * Remove merchant from favorites
  */
 export const removeFromFavorites = async (
@@ -348,53 +317,6 @@ export const removeFromFavorites = async (
   }
 
   return { data: null, error: null, success: true };
-};
-
-/**
- * Get user impact statistics
- */
-export const getUserImpact = async (
-  userId: string
-): Promise<ApiResponse<UserImpact>> => {
-  if (!isSupabaseConfigured()) {
-    return {
-      data: null,
-      error: { code: 'NOT_CONFIGURED', message: 'Supabase is not configured' },
-      success: false,
-    };
-  }
-
-  const client = requireSupabaseClient();
-  const { data, error } = await client
-    .from(DB_TABLES.IMPACT_LOGS)
-    .select('food_saved_kg,money_saved_xaf,co2_avoided_kg')
-    .eq('user_id', userId);
-
-  if (error) {
-    return {
-      data: null,
-      error: { code: error.code, message: error.message },
-      success: false,
-    };
-  }
-
-  // Aggregate impact data
-  const totalFoodSavedKg = data?.reduce((sum, log) => sum + (log.food_saved_kg || 0), 0) || 0;
-  const impact: UserImpact = {
-    user_id: userId,
-    food_saved_kg: totalFoodSavedKg,
-    money_saved_xaf: data?.reduce((sum, log) => sum + (log.money_saved_xaf || 0), 0) || 0,
-    co2_avoided_kg: data?.reduce((sum, log) => sum + (log.co2_avoided_kg || 0), 0) || 0,
-    orders_count: data?.length || 0,
-    total_meals_saved: Math.round(totalFoodSavedKg / AVG_MEAL_WEIGHT_KG),
-    favorite_merchants: [],
-  };
-
-  return {
-    data: impact,
-    error: null,
-    success: true,
-  };
 };
 
 /**

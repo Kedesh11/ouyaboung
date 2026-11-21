@@ -11,7 +11,6 @@ import {
   getCurrentUser as apiGetCurrentUser,
   resetPassword as apiResetPassword,
   updatePassword as apiUpdatePassword,
-  onAuthStateChange,
   signInWithOtp,
   verifyOtp,
   updateUser,
@@ -77,11 +76,6 @@ export const getAuthUser = async () => {
 };
 
 /**
- * Get current user (re-exported from API for backward compatibility)
- */
-export const getCurrentUser = apiGetCurrentUser;
-
-/**
  * Request password reset
  */
 export const requestPasswordReset = async (
@@ -97,15 +91,6 @@ export const changePassword = async (
   newPassword: string
 ): Promise<ApiResponse<null>> => {
   return apiUpdatePassword(newPassword);
-};
-
-/**
- * Subscribe to authentication state changes
- */
-export const subscribeToAuthChanges = (
-  callback: (event: string, session: unknown) => void
-) => {
-  return onAuthStateChange(callback);
 };
 
 /**
@@ -127,22 +112,6 @@ export const verifyOtpCode = async (
   type: 'email' | 'phone' = 'email'
 ): Promise<ApiResponse<{ user: User; session: unknown }>> => {
   return verifyOtp(identifier, token, type);
-};
-
-/**
- * Check if user is authenticated
- */
-export const isAuthenticated = async (): Promise<boolean> => {
-  const { data } = await getSession();
-  return !!data?.session;
-};
-
-/**
- * Get user role from session
- */
-export const getUserRole = async (): Promise<UserRole | null> => {
-  const { data } = await apiGetCurrentUser();
-  return (data?.user?.app_metadata?.role as UserRole) || null;
 };
 
 /**

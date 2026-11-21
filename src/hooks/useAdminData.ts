@@ -17,11 +17,6 @@ export function useAdminMerchants() {
   });
 }
 
-export function useInvalidateAdminMerchants() {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['admin', 'merchants'] });
-}
-
 /**
  * Hook to fetch the full farmer directory for the admin dashboard.
  * Mirrors useAdminMerchants() above.
@@ -32,11 +27,6 @@ export function useAdminFarmers() {
     queryFn: () => adminService.getFarmers(),
     staleTime: 1000 * 60,
   });
-}
-
-export function useInvalidateAdminFarmers() {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['admin', 'farmers'] });
 }
 
 /**
@@ -51,7 +41,3 @@ export function useAdminDrivers() {
   });
 }
 
-export function useInvalidateAdminDrivers() {
-  const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['admin', 'drivers'] });
-}

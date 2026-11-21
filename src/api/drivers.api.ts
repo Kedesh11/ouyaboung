@@ -11,34 +11,6 @@ const DRIVER_LIST_COLUMNS =
   'id,user_id,full_name,vehicle_type,plate_number,phone,email,photo_url,city,delivery_zone,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,created_at,updated_at';
 
 /**
- * Get driver by ID
- */
-export const getDriverById = async (
-  driverId: string
-): Promise<ApiResponse<Driver>> => {
-  const client = requireSupabaseClient();
-  const { data, error } = await client
-    .from(DB_TABLES.DRIVERS)
-    .select(DRIVER_LIST_COLUMNS)
-    .eq('id', driverId)
-    .maybeSingle();
-
-  if (error) {
-    return {
-      data: null,
-      error: { code: error.code, message: error.message },
-      success: false,
-    };
-  }
-
-  return {
-    data: data as Driver,
-    error: null,
-    success: true,
-  };
-};
-
-/**
  * Get driver by user ID
  */
 export const getDriverByUserId = async (

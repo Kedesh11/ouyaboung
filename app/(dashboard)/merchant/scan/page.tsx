@@ -47,11 +47,6 @@ interface ValidationResult {
     };
 }
 
-type ValidateQrApiResponse = ValidationResult & {
-    error?: string;
-    code?: string;
-};
-
 const VALIDATION_HARD_TIMEOUT_MS = 12000;
 const SCANNER_FRAME_WIDTH = 1280;
 const SCANNER_FRAME_HEIGHT = 720;

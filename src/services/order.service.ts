@@ -8,7 +8,6 @@ import {
   getOrderById,
   getOrdersByUser,
   getOrdersByMerchant,
-  updateOrderStatus,
   cancelOrder,
   confirmOrder,
   markOrderReady,

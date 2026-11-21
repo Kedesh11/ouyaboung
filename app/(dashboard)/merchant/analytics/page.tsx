@@ -8,12 +8,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
   TrendingUp,
-  TrendingDown,
   Package,
   ShoppingBag,
   Wallet,
@@ -23,8 +22,6 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
   AreaChart,
   Area,
   BarChart,

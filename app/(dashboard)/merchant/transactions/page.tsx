@@ -69,26 +69,6 @@ interface MerchantTransaction {
     consumed_at: string;
 }
 
-const MERCHANT_TRANSACTION_COLUMNS = [
-    "transaction_id",
-    "transaction_date",
-    "payment_status",
-    "q_gabon_reference",
-    "base_amount",
-    "total_amount",
-    "merchant_revenue",
-    "q_gabon_fees",
-    "payment_phone_number",
-    "operator",
-    "status_code",
-    "product_name",
-    "customer_name",
-    "customer_phone",
-    "order_status",
-    "order_quantity",
-    "pickup_code",
-    "consumed_at",
-].join(",");
 
 // Status mapping
 const STATUS_MAP = {

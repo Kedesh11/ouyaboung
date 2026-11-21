@@ -14,8 +14,6 @@ import { Badge } from "@/components/ui/badge";
 
 import {
     Bell,
-    CheckCircle,
-    Clock,
     AlertCircle,
     ShoppingBag,
     Info,

@@ -313,20 +313,6 @@ export const updatePassword = async (
 };
 
 /**
- * Subscribe to auth state changes
- */
-export const onAuthStateChange = (
-  callback: (event: string, session: unknown) => void
-) => {
-  if (!isSupabaseConfigured()) {
-    return { data: { subscription: { unsubscribe: () => { } } } };
-  }
-
-  const client = requireSupabaseClient();
-  return client.auth.onAuthStateChange(callback);
-};
-
-/**
  * Sign in with OTP (phone or email)
  */
 export const signInWithOtp = async (

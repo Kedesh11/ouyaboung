@@ -75,31 +75,6 @@ interface UserTransaction {
     order_status: string;
 }
 
-const USER_TRANSACTION_COLUMNS = [
-    "transaction_id",
-    "transaction_date",
-    "payment_status",
-    "q_gabon_reference",
-    "base_amount",
-    "airtel_fees",
-    "pvit_fees",
-    "app_fees",
-    "total_amount",
-    "merchant_revenue",
-    "q_gabon_fees",
-    "payment_phone_number",
-    "operator_owner_charge",
-    "q_gabon_transaction_id",
-    "merchant_reference_id",
-    "operator",
-    "operator_fees",
-    "status_code",
-    "message",
-    "product_name",
-    "merchant_name",
-    "customer_phone",
-    "order_status",
-].join(",");
 
 // Status mapping
 const STATUS_MAP = {
