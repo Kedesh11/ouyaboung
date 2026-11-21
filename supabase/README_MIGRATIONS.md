@@ -9,7 +9,7 @@ supabase/
 ├── migrations/     # ~49 fichiers horodatés, a appliquer TOUS, dans l'ordre
 │                   # chronologique du nom de fichier (schema initial -> auth
 │                   # v2 -> workflow marchand -> paiements -> intelligence ->
-│                   # paiements SingPay multi-tenant). Ne pas se limiter aux
+│                   # paiements marketplace multi-tenant). Ne pas se limiter aux
 │                   # deux premiers fichiers.
 ├── seed.sql                                 # Données de test
 └── README_MIGRATIONS.md                     # Ce fichier
@@ -17,7 +17,7 @@ supabase/
 
 Avant de considérer un environnement à jour, vérifiez avec
 `docs/sql/verify_pending_migrations.sql` que les objets créés par les
-migrations les plus récentes (paiement SingPay multi-tenant, RPC de
+migrations les plus récentes (paiement marketplace multi-tenant, RPC de
 réservation atomique, RPC géo) existent bien.
 
 ## 🗄️ Tables de la base de données

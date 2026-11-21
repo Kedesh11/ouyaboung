@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetSession } = vi.hoisted(() => ({
-  mockGetSession: vi.fn(),
-}));
+const { mockGetSession } = vi.hoisted(() => {
+  // The payment flow is off by default; these tests exercise the enabled flow.
+  process.env.NEXT_PUBLIC_PAYMENT_FLOW_ENABLED = "true";
+  return { mockGetSession: vi.fn() };
+});
 
 vi.mock("@/api/supabaseClient", () => ({
   supabaseClient: {

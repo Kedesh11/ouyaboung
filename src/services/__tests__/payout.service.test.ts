@@ -51,7 +51,7 @@ describe("payout.service", () => {
       const insertedRow = {
         id: "payout-1",
         merchant_id: "m1",
-        provider: "singpay",
+        provider: "pvit",
         operator: "airtel",
         label: "Compte principal",
         msisdn: AIRTEL_NUMBER,
@@ -84,7 +84,7 @@ describe("payout.service", () => {
       expect(builder.insert).toHaveBeenCalledWith(
         expect.objectContaining({
           merchant_id: "m1",
-          provider: "singpay",
+          provider: "pvit",
           operator: "airtel",
           verification_status: "pending",
           is_active: true,
@@ -147,7 +147,7 @@ describe("payout.service", () => {
       return builder;
     };
 
-    it("returns the merchant's SingPay payout accounts", async () => {
+    it("returns the merchant's PVIT payout accounts", async () => {
       const rows = [{ id: "payout-1" }];
       const builder = createThenableBuilder({ data: rows, error: null });
       mocks.requireSupabaseClient.mockReturnValue({ from: vi.fn(() => builder) });

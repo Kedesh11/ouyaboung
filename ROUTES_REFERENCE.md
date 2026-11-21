@@ -102,13 +102,9 @@ Ce document liste les routes de l'application Next.js 15 (App Router).
 
 | Fonction | Description |
 |----------|-------------|
-| `initiate-airtel` | Paiement Airtel Money (Q-Gabon) |
-| `initiate-moov` | Paiement Moov Money |
-| `initiate-payment` | Initiation paiement générique |
-| `airtel-callback` | Webhook callback Airtel |
-| `moov-callback` | Webhook callback Moov |
-| `payment-callback` | Webhook paiement générique |
 | `validate-qr` | Validation code QR retrait |
+
+> Les fonctions de paiement (initiation et callbacks) seront ajoutees avec l'integration PVIT.
 
 ## Couche données applicative
 

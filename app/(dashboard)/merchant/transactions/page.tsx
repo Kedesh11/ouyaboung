@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import {
     getMerchantPaymentTransactions,
-    syncSingPayTransactionStatus,
-    subscribeToTransactions,
+      subscribeToTransactions,
     unsubscribeChannel,
 } from "@/services";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +31,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag, RefreshCw, Filter } from "lucide-react";
+import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag, Filter } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -93,7 +92,6 @@ export default function MerchantTransactionsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState<MerchantTransaction | null>(null);
     const [statusFilter, setStatusFilter] = useState("all");
-    const [syncingReference, setSyncingReference] = useState<string | null>(null);
 
     const fetchTransactions = async () => {
         try {
@@ -134,29 +132,6 @@ export default function MerchantTransactionsPage() {
     const filteredTransactions = transactions.filter((tx) => (
         statusFilter === "all" ? true : tx.payment_status === statusFilter
     ));
-
-    const handleSyncTransaction = async (tx: MerchantTransaction) => {
-        const reference = tx.provider_reference || tx.q_gabon_reference;
-        if (!reference && !tx.provider_transaction_id) {
-            toast.error("Reference SingPay indisponible");
-            return;
-        }
-
-        setSyncingReference(reference || tx.provider_transaction_id);
-        const result = await syncSingPayTransactionStatus({
-            reference: reference || undefined,
-            transactionId: tx.provider_transaction_id || undefined,
-        });
-        setSyncingReference(null);
-
-        if (!result.success) {
-            toast.error(result.error?.message || "Synchronisation impossible");
-            return;
-        }
-
-        toast.success("Statut SingPay synchronise");
-        fetchTransactions();
-    };
 
     // Calculate stats
     const totalRevenue = transactions
@@ -336,14 +311,6 @@ export default function MerchantTransactionsPage() {
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => handleSyncTransaction(tx)}
-                                                    disabled={syncingReference === reference}
-                                                >
-                                                    <RefreshCw className={`w-4 h-4 ${syncingReference === reference ? "animate-spin" : ""}`} />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
                                                     onClick={() => setSelectedTransaction(tx)}
                                                 >
                                                     <Eye className="w-4 h-4" />
@@ -433,11 +400,11 @@ export default function MerchantTransactionsPage() {
                                     <p className="font-medium">{selectedTransaction.operator}</p>
                                 </div>
                                 <div>
-                                    <p className="text-muted-foreground">Statut SingPay</p>
+                                    <p className="text-muted-foreground">Statut fournisseur</p>
                                     <p className="font-medium">{selectedTransaction.provider_status || selectedTransaction.status_code || 'N/A'}</p>
                                 </div>
                                 <div>
-                                    <p className="text-muted-foreground">Résultat SingPay</p>
+                                    <p className="text-muted-foreground">Résultat fournisseur</p>
                                     <p className="font-medium">{selectedTransaction.provider_result || 'N/A'}</p>
                                 </div>
                                 <div>

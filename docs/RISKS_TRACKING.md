@@ -19,8 +19,8 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 
 ## R2 - Webhooks paiement ouverts si secret absent
 
-**Statut:** corrige et durci cote code, mecanisme de signature officiel SingPay toujours a confirmer  
-**Risque:** si `QGABON_WEBHOOK_SECRET`/`SINGPAY_CALLBACK_SECRET` est absent, les callbacks acceptaient toute requete des que `ALLOW_INSECURE_WEBHOOKS=true` trainait dans les secrets d'un environnement, sans lien avec le fait que cet environnement soit reellement local ou non. La comparaison de secret etait aussi un `===` simple, vulnerable en theorie a une attaque par timing.  
+**Statut:** socle de verification conserve (`webhook-auth.ts`), a rebrancher sur les callbacks PVIT  
+**Risque:** si le secret de webhook est absent, les callbacks acceptaient toute requete des que `ALLOW_INSECURE_WEBHOOKS=true` trainait dans les secrets d'un environnement, sans lien avec le fait que cet environnement soit reellement local ou non. La comparaison de secret etait aussi un `===` simple, vulnerable en theorie a une attaque par timing.  
 **Impact:** confirmation frauduleuse de paiements, commandes confirmees sans paiement reel, reversement declenche pour une commande jamais payee.
 
 **Decision d'ingenierie:** extraire la logique dans `supabase/functions/_shared/webhook-auth.ts` (pure, testable sous Vitest) : comparaison a temps constant (`timingSafeEqual`), et le contournement `ALLOW_INSECURE_WEBHOOKS` n'a plus d'effet que si `SUPABASE_URL` pointe vers le stack local (`127.0.0.1`/`localhost`/`kong:`) - impossible a declencher par erreur sur un vrai projet Supabase, meme si le flag est mal configure en secrets.
@@ -28,10 +28,10 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 **Criteres d'acceptation:**
 - Production sans secret retourne `401`, quelle que soit la valeur de `ALLOW_INSECURE_WEBHOOKS`, des que `SUPABASE_URL` n'est pas une URL locale. **Fait, voir `webhook-auth.ts` + `webhook-auth.test.ts` (12 tests).**
 - La comparaison de secret n'est plus vulnerable au timing. **Fait via `timingSafeEqual`.**
-- Les tentatives refusees sont loguees avec leur motif (`missing_secret_configuration`, `missing_provided_secret`, `secret_mismatch`). **Fait dans `handleSingPayCallback`.**
+- Les tentatives refusees sont loguees avec leur motif (`missing_secret_configuration`, `missing_provided_secret`, `secret_mismatch`). **Le handler de callback precedent a ete retire avec l'ancien fournisseur: a refaire pour PVIT.**
 - La documentation de deploiement liste le secret comme obligatoire. **Fait.**
 
-**Reste ouvert:** aucune signature HMAC officielle SingPay n'est documentee cote fournisseur (`docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md` §13). Le secret partage reste une hypothese de securite, pas une garantie contractuelle - a remplacer par la signature officielle des qu'elle est confirmee avec SingPay.
+**Reste ouvert:** PVIT ne signe pas ses webhooks: l'authenticite repose sur la liste blanche de ses adresses IP et sur la verification du statut via l'API de statut avant toute confirmation.
 
 ## R3 - QR Code accepte sur commande non payee
 
@@ -88,25 +88,20 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 
 ## R7 - Paiement non multi-tenant
 
-**Statut:** socle implemente, activation production a valider  
-**Risque:** le paiement Q-Gabon actuel reste structure autour d'une configuration plateforme globale sans ledger de reversement dynamique. Le modele cible SingPay impose un portefeuille principal Ouyaboung, des beneficiaires Airtel/Moov verifies et des settlements idempotents.  
-**Impact:** mauvais destinataire de reversement, commission incorrecte, double paiement marchand, reconciliation difficile, risque de melanger les transactions de plusieurs boutiques.
+**Statut:** schema en place, integration du fournisseur (PVIT) a realiser  
+**Risque:** un paiement structure autour d'une configuration plateforme globale, sans ledger de reversement, expose a un mauvais destinataire de reversement, une commission incorrecte, un double paiement marchand et une reconciliation difficile.  
+**Impact:** pertes financieres et litiges entre boutiques.
 
-**Decision d'ingenierie:** ne pas modifier partiellement le paiement dans ce lot. Documenter l'architecture cible SingPay avec wallet principal et reversements dynamiques, puis ouvrir un chantier paiement specifique couvrant schema, Edge Functions, callbacks, dashboard marchand, admin, settlement et tests.
+**Decision d'ingenierie:** encaisser sur un portefeuille principal Ouyaboung, puis repartir vers les numeros Airtel/Moov verifies des boutiques et de l'admin, avec un ledger idempotent. Le code du precedent fournisseur a ete retire; le schema (`platform_payment_wallets`, `merchant_payout_accounts`, `admin_payout_accounts`, `payment_transactions`, `payment_settlements`) est conserve et n'accepte plus que le fournisseur `pvit`.
 
-**Criteres d'acceptation du futur chantier:**
-- Ouyaboung possede un wallet principal SingPay actif par environnement. **Socle fait via `platform_payment_wallets` + variables env.**
-- Chaque boutique possede un ou plusieurs numeros payout Airtel/Moov verifies. **Schema/RLS faits, UI dediee a finaliser.**
-- L'admin peut aussi configurer des numeros payout Airtel/Moov verifies. **Schema/RLS faits, UI dediee a finaliser.**
-- L'Edge Function resout le wallet principal, le marchand et le payout depuis `order -> food_item -> merchant`, jamais depuis le client. **Fait.**
-- Les callbacks confirment une transaction interne rattachee a la commande, a la boutique et au wallet principal. **Fait.**
-- Les settlements calculent commission plateforme et montant net marchand. **Fait avec `PLATFORM_COMMISSION_RATE`.**
-- Les reversements SingPay sont idempotents et traces avant/apres `POST /transfer`. **Socle fait, activation protegee par `SINGPAY_TRANSFERS_ENABLED=false`.**
-- Les comptes payout sont proteges par RLS et validation admin. **Fait cote schema.**
-- Les secrets SingPay restent serveur uniquement. **Fait cote variables serveur.**
-- Les statuts SingPay sont mappes vers les statuts internes sans confirmer une commande tant que le resultat provider n'est pas `Success`. **Fait.**
-
-**Documentation cible:** `docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md` et `docs/SINGPAY_SWAGGER_ANALYSIS.md`.
+**Criteres d'acceptation du chantier PVIT:**
+- Ouyaboung possede un compte d'operation actif par environnement. **A faire.**
+- Chaque boutique possede un ou plusieurs numeros de reversement Airtel/Moov verifies. **Schema/RLS faits, UI marchand presente, validation admin a faire.**
+- L'Edge Function resout le marchand et le beneficiaire depuis `order -> food_item -> merchant`, jamais depuis le client. **A faire.**
+- Les callbacks confirment une transaction interne apres verification du statut aupres du fournisseur. **A faire.**
+- Les settlements calculent commission plateforme et montant net marchand. **A faire.**
+- Les comptes de reversement sont proteges par RLS et validation admin. **Fait cote schema.**
+- Les secrets du fournisseur restent serveur uniquement. **A respecter.**
 
 ## R8 - Composants dupliques et divergents (Navbar, Footer, FoodCard, UserMenu)
 

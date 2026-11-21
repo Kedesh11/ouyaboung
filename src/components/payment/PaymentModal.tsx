@@ -107,12 +107,12 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                         {PAYMENT_FLOW_ENABLED ? (
                             <>
                                 <CreditCard className="w-5 h-5" />
-                                Paiement Mobile (SingPay)
+                                Paiement Mobile Money
                             </>
                         ) : (
                             <>
                                 <Info className="w-5 h-5" />
-                                Paiement Sur Place (Temporaire)
+                                Paiement indisponible
                             </>
                         )}
                     </DialogTitle>
@@ -121,11 +121,11 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                 {!PAYMENT_FLOW_ENABLED ? (
                     <div className="flex flex-col gap-4 py-4">
                         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                            Le paiement mobile est temporairement indisponible. Veuillez regler votre commande directement chez le marchand.
+                            Le paiement en ligne est momentanement indisponible. Votre reservation est conservee: reessayez plus tard ou contactez le marchand.
                         </div>
 
                         <div className="rounded-md border bg-muted/40 p-4 space-y-2">
-                            <p className="text-sm text-muted-foreground">Montant a regler sur place</p>
+                            <p className="text-sm text-muted-foreground">Montant de la commande</p>
                             <p className="text-2xl font-bold text-primary">{amount.toLocaleString()} XAF</p>
                         </div>
 

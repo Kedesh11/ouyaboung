@@ -180,7 +180,6 @@ export {
   getUserPaymentTransactions,
   getMerchantPaymentTransactions,
   getAdminPaymentTransactions,
-  syncSingPayTransactionStatus,
 } from './payment-transactions.service';
 
 export {

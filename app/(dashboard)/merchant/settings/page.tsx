@@ -383,7 +383,7 @@ const MerchantSettingsPage = () => {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Validation requise</AlertTitle>
                 <AlertDescription>
-                  Les paiements sont bloques tant qu&apos;aucun compte de reversement n&apos;est verifie avec son Disbursement ID SingPay.
+                  Les paiements sont bloques tant qu&apos;aucun compte de reversement n&apos;est verifie.
                 </AlertDescription>
               </Alert>
 

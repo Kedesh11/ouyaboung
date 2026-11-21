@@ -1,7 +1,13 @@
 // Pure payment-safety guards - no Deno/network imports - so they run
 // identically in the Edge Function and under vitest (Node).
 
-import type { InternalPaymentStatus } from "./singpay-status.ts";
+export type InternalPaymentStatus =
+  | "pending"
+  | "confirmed"
+  | "failed"
+  | "expired"
+  | "cancelled"
+  | "refunded";
 
 const FINAL_STATUSES: readonly string[] = [
   "confirmed",

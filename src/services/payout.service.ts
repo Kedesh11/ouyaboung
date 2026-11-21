@@ -11,7 +11,7 @@ export type PayoutOperator = 'airtel' | 'moov';
 export interface MerchantPayoutAccount {
   id: string;
   merchant_id: string;
-  provider: 'singpay';
+  provider: 'pvit';
   operator: PayoutOperator;
   label: string;
   msisdn: string;
@@ -47,7 +47,7 @@ export const getMerchantPayoutAccounts = async (
     .from('merchant_payout_accounts')
     .select('*')
     .eq('merchant_id', merchantId)
-    .eq('provider', 'singpay')
+    .eq('provider', 'pvit')
     .order('is_default', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -92,7 +92,7 @@ export const createMerchantPayoutAccount = async (
     .from('merchant_payout_accounts')
     .insert({
       merchant_id: input.merchantId,
-      provider: 'singpay',
+      provider: 'pvit',
       operator: input.operator,
       label: input.label.trim() || (input.operator === 'airtel' ? 'Airtel Money' : 'Libertis/Moov Money'),
       msisdn: input.msisdn.trim(),
