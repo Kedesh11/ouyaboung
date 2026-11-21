@@ -132,7 +132,7 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 **Criteres d'acceptation:**
 - La CI execute `npm run test:coverage` et echoue sous le seuil. **Fait.**
 - `payout.service.ts` et `admin.service.ts` (dont `updateMerchantStatus`, miroir applicatif du trigger anti-escalade de privilege) et `payment-transactions.service.ts` ont des tests de chemin nominal et d'erreur. **Fait.**
-- `transaction.service.ts` (donnees mock en memoire, jamais appele en dehors du barrel `src/services/index.ts`) est identifie comme code mort plutot que teste inutilement. **Constate, suppression a decider separement.**
+- `transaction.service.ts` (donnees mock en memoire, jamais appele en dehors du barrel `src/services/index.ts`) est identifie comme code mort plutot que teste inutilement. **Supprime lors de l'assainissement R15.**
 
 ## R10 - Absence de transport d'erreur en production
 
@@ -193,3 +193,22 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 **Impact:** degradation progressive (bloat, index a maintenir) si le volume grossit fortement, mais aucune preuve actuelle que ce soit deja le cas.
 
 **Decision d'ingenierie:** ne pas partitionner sans donnees de volume reel - ce serait une optimisation prematuree et risquee (migration lourde, verrous). Surveiller `pg_stat_user_tables.n_live_tup` sur `user_events` via `docs/sql/performance_diagnostics.sql` et ne partitionner que lorsque le volume le justifie.
+
+## R15 - Code mort et dependances inutilisees
+
+**Statut:** corrige (assainissement du 21 novembre 2026)  
+**Risque:** fichiers, fonctions exportees, composants UI et dependances npm jamais utilises s'accumulaient (modules `lib/auth/{mfa,session,validation,errors,types}`, `src/mock/`, `transaction.service.ts`, `pricing.api.ts`, types Q-Gabon, composants shadcn non importes, 21 paquets npm).  
+**Impact:** surface de maintenance et d'audit inutile, bundle et installation plus lourds, documentation divergente du code reel, fausse impression de fonctionnalites existantes (MFA, gestion de sessions).
+
+**Decision d'ingenierie:** supprimer tout symbole sans aucune reference (graphe d'imports TypeScript, y compris imports dynamiques), puis verifier par `tsc`, `eslint`, `vitest` et `next build`. Le code seulement reference par des tests est conserve tant que sa suppression n'est pas decidee explicitement.
+
+**Criteres d'acceptation:**
+- Aucun fichier orphelin hors `tailwind.config.ts` (config), `src/types/supabase.ts` (types generes) et `src/lib/logger.ts` (voir ci-dessous). **Fait.**
+- Les barrels `src/api/index.ts` et `src/services/index.ts` n'exportent que des symboles existants et utilises. **Fait.**
+- Les dependances npm sans reference ont ete retirees de `package.json`. **Fait.**
+- Les guides `docs/auth-migration-guide.md` et `docs/INSTALL_DEPENDENCIES.md`, qui decrivaient le module d'authentification supprime, ont ete retires. **Fait.**
+
+**Reste ouvert:**
+- `src/lib/logger.ts` n'est appele nulle part: le branchement Sentry decrit en R10 n'est donc pas effectif tant que le code applicatif n'utilise pas `logger.error`/`logger.warn`.
+- Fonctions couvertes par des tests mais jamais appelees en production (`order.service`, `notification.service`, `phone-validation`, `payment-fees`): suppression a decider avec leurs tests.
+- Erreur ignoree dans `updateUserPreferences` (`src/api/users.api.ts`) et etats `loading` jamais affiches dans plusieurs pages admin/marchand: a traiter comme defauts, pas comme code mort.

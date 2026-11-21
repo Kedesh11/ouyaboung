@@ -314,7 +314,6 @@ ouyaboung/
 │   │   └── useWebVitals.ts      # Web Vitals monitoring
 │   ├── lib/
 │   │   └── seo/                 # SEO utils
-│   │       ├── metadata.ts      # Meta tag generation
 │   │       └── schemas.ts       # JSON-LD schemas
 │   ├── services/                # API services
 │   ├── contexts/                # React contexts
@@ -328,7 +327,7 @@ ouyaboung/
 │
 ├── scripts/
 │   ├── lighthouse-audit.sh      # Lighthouse automation
-│   └── optimize-icons.js        # Icon optimization
+│   └── optimize-icons.mjs       # Icon optimization
 │
 ├── e2e/                          # Suite Playwright (intégration/régression)
 │   ├── *.spec.ts                # Parcours critiques (tag @regression)
