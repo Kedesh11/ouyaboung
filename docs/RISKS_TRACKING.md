@@ -207,3 +207,19 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 - `src/lib/logger.ts` n'est appele nulle part: le branchement Sentry decrit en R10 n'est donc pas effectif tant que le code applicatif n'utilise pas `logger.error`/`logger.warn`.
 - Fonctions couvertes par des tests mais jamais appelees en production (`order.service`, `notification.service`, `phone-validation`, `payment-fees`): suppression a decider avec leurs tests.
 - Erreur ignoree dans `updateUserPreferences` (`src/api/users.api.ts`) et etats `loading` jamais affiches dans plusieurs pages admin/marchand: a traiter comme defauts, pas comme code mort.
+
+## R16 - Commandes modifiables directement par les clients API (contournement du paiement)
+
+**Statut:** corrige par migration `20261121100000_orders_client_update_guard.sql`, a deployer  
+**Risque:** les politiques RLS d'origine sur `orders` permettaient a un client authentifie, via l'API REST Supabase et sans passer par l'application, (1) d'inserer une commande avec prix et statut libres, (2) de passer sa commande en `confirmed` sans payer (le QR de retrait accepte les commandes `confirmed`), (3) d'abaisser `total_price` avant le paiement (le montant debite est `orders.total_price`). Un marchand pouvait aussi modifier le prix ou le marchand d'une commande de sa boutique.  
+**Impact:** retrait de produits sans paiement, paiement d'un montant arbitraire, detournement du reversement vers une autre boutique.
+
+**Decision d'ingenierie:** la table `orders` n'est plus ecrivable librement par les clients API. La creation passe uniquement par `create_order_atomic` (plus de politique d'insertion). Un trigger `BEFORE UPDATE` verrouille les colonnes de prix et de propriete et n'autorise que les transitions legitimes: annulation d'une commande non payee, cycle de retrait cote marchand (`confirmed -> ready -> completed/picked_up/no_show`). Le passage a `confirmed` est reserve au paiement (service_role). Les chemins serveur (service_role, fonctions `SECURITY DEFINER`) ne sont pas concernes. L'annulation, par RPC ou par API, est refusee tant qu'un paiement est en cours ou confirme.
+
+**Criteres d'acceptation:**
+- Un client ne peut ni inserer une commande, ni modifier prix/marchand/produit/quantite/code de retrait, ni passer une commande en `confirmed`. **Verifie sur un Postgres jetable (schema minimal reproduisant les politiques d'origine).**
+- Le cycle marchand (`ready`, `completed`) et l'annulation d'une commande non payee continuent de fonctionner. **Verifie.**
+- L'annulation d'une commande payee ou en cours de paiement est refusee (`PAYMENT_LOCKED` cote RPC). **Verifie.**
+- Migration a appliquer sur Supabase puis a recetter avec les parcours e2e (reservation, annulation, scan QR). **A faire.**
+
+**Reste ouvert:** annuler une commande deja payee exige une intervention admin tant qu'aucun flux de remboursement n'existe; le delai de 10 minutes de la fenetre de paiement en cours est fixe dans `order_has_active_payment`.
