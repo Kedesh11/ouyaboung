@@ -26,6 +26,18 @@ export interface MerchantPayoutAccount {
   updated_at: string;
 }
 
+export interface DriverPayoutAccount extends Omit<MerchantPayoutAccount, 'merchant_id'> {
+  driver_id: string;
+}
+
+export interface CreateDriverPayoutInput {
+  driverId: string;
+  operator: PayoutOperator;
+  label: string;
+  msisdn: string;
+  isDefault?: boolean;
+}
+
 export interface CreateMerchantPayoutInput {
   merchantId: string;
   operator: PayoutOperator;
@@ -179,3 +191,64 @@ export const verifyMerchantPayoutAccount = async (
     };
   }
 };
+
+// ============================================
+// Comptes de reversement des chauffeurs (paiement des transports)
+// ============================================
+
+export const getDriverPayoutAccounts = async (
+  driverId: string
+): Promise<ApiResponse<DriverPayoutAccount[]>> => {
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from('driver_payout_accounts')
+    .select('*')
+    .eq('driver_id', driverId)
+    .eq('provider', 'pvit')
+    .order('is_default', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return { data: null, error: { code: error.code, message: error.message }, success: false };
+  }
+  return { data: (data || []) as DriverPayoutAccount[], error: null, success: true };
+};
+
+/** Propose un numero Mobile Money: il reste "pending" jusqu'a la verification par PVIT. */
+export const createDriverPayoutAccount = async (
+  input: CreateDriverPayoutInput
+): Promise<ApiResponse<DriverPayoutAccount>> => {
+  const phoneError = validatePayoutPhone(input.operator, input.msisdn);
+  if (phoneError) {
+    return { data: null, error: { code: 'INVALID_PHONE', message: phoneError }, success: false };
+  }
+  const normalizedPhone = normalizePhone(input.msisdn);
+  if (!normalizedPhone) {
+    return { data: null, error: { code: 'PHONE_NORMALIZATION_ERROR', message: 'Numero Mobile Money invalide.' }, success: false };
+  }
+
+  const client = requireSupabaseClient();
+  const { data, error } = await client
+    .from('driver_payout_accounts')
+    .insert({
+      driver_id: input.driverId,
+      provider: 'pvit',
+      operator: input.operator,
+      label: input.label.trim() || (input.operator === 'airtel' ? 'Airtel Money' : 'Libertis/Moov Money'),
+      msisdn: input.msisdn.trim(),
+      normalized_msisdn: normalizedPhone,
+      verification_status: 'pending',
+      is_default: input.isDefault ?? false,
+      is_active: true,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    return { data: null, error: { code: error.code, message: error.message }, success: false };
+  }
+  return { data: data as DriverPayoutAccount, error: null, success: true };
+};
+
+/** La verification KYC est la meme Edge Function que pour les boutiques (elle reconnait le chauffeur). */
+export const verifyDriverPayoutAccount = verifyMerchantPayoutAccount;

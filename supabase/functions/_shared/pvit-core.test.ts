@@ -3,7 +3,6 @@ import {
   beneficiaryCodeFor,
   buildAck,
   buildSplitPayload,
-  computeSplit,
   evaluateCallbackIp,
   extractClientIp,
   generateReference,
@@ -12,7 +11,6 @@ import {
   mapPvitStatus,
   normalizeLocalPhone,
   parseCallback,
-  parseCommissionRate,
   parseCsv,
   parsePositiveInt,
   resolveAllowedOrigin,
@@ -75,30 +73,12 @@ describe("generateReference", () => {
   });
 });
 
-describe("commission and split", () => {
-  it("has no silent default: a missing or invalid rate is null", () => {
-    for (const raw of [undefined, null, "", "  ", "abc", "1.5", "1", "-0.2"]) {
-      expect(parseCommissionRate(raw)).toBeNull();
-    }
-    expect(parseCommissionRate("0.15")).toBe(0.15);
-    expect(parseCommissionRate("0.10")).toBe(0.1);
-    expect(parseCommissionRate("0")).toBe(0);
-  });
-
+describe("limits and beneficiary codes", () => {
   it("reads tunable limits from the environment, else the fallback", () => {
     expect(parsePositiveInt("7", 5)).toBe(7);
     for (const raw of [undefined, null, "", "0", "-3", "2.5", "abc"]) {
       expect(parsePositiveInt(raw, 5)).toBe(5);
     }
-  });
-
-  it("splits whole XAF with no money created or lost", () => {
-    for (const amount of [1, 7, 999, 1000, 2550, 12345]) {
-      const { feeAmount, merchantNetAmount } = computeSplit(amount, 0.1);
-      expect(feeAmount + merchantNetAmount).toBe(amount);
-      expect(Number.isInteger(feeAmount) && Number.isInteger(merchantNetAmount)).toBe(true);
-    }
-    expect(computeSplit(5000, 0.1)).toEqual({ feeAmount: 500, merchantNetAmount: 4500 });
   });
 
   it("derives a stable alphanumeric beneficiary code", () => {

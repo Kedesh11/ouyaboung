@@ -44,6 +44,13 @@ const job = (over: Record<string, unknown> = {}) => ({
   dropoff_longitude: null,
   cargo_description: "40 régimes de bananes",
   distance_km: 1.5,
+  route_distance_km: 12.4,
+  fare_amount: 8650,
+  platform_fee: 865,
+  driver_net: 7785,
+  payment_status: "unpaid",
+  seconds_to_pay: null,
+  paid_at: null,
   proposal_expires_at: "2026-11-22T12:03:00Z",
   seconds_left: 170,
   created_at: "2026-11-22T12:00:00Z",
@@ -56,6 +63,7 @@ const job = (over: Record<string, unknown> = {}) => ({
 const acceptedJob = (over: Record<string, unknown> = {}) =>
   job({
     status: "accepted",
+    payment_status: "paid",
     seconds_left: null,
     proposal_expires_at: null,
     client: { name: "Ferme Alpha", phone: "077 11 11 11", address: "Route Alpha" },
@@ -83,6 +91,16 @@ describe("TransportJobsCard", () => {
     expect(screen.getByText("Marché de Mont-Bouët")).toBeTruthy();
     expect(screen.getByTestId("pickup-map")).toBeTruthy();
     expect(screen.getByRole("timer").textContent).toMatch(/2 min 5\d s|2 min 4\d s/);
+  });
+
+  it("shows the driver their full earnings: no commission is deducted", async () => {
+    mocks.getMyTransportJobs.mockResolvedValue(ok([job({ fare_amount: 8650, driver_net: 8650, platform_fee: 865 })]));
+    renderCard();
+    const earnings = await screen.findByTestId("transport-earnings");
+    expect(earnings.textContent).toContain("8 650 FCFA");
+    expect(earnings.textContent).toContain("versé en intégralité");
+    expect(earnings.textContent).not.toContain("865 FCFA");
+    expect(earnings.textContent).toContain("trajet 12.4 km");
   });
 
   it("hides the client's phone and name until the job is accepted", async () => {
@@ -132,6 +150,29 @@ describe("TransportJobsCard", () => {
     expect(await screen.findByText("Délai dépassé")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Accepter" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Refuser" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps the loading button locked until the farmer has paid, and says why", async () => {
+    mocks.getMyTransportJobs.mockResolvedValue(ok([acceptedJob({ payment_status: "unpaid", seconds_to_pay: 600 })]));
+    renderCard();
+    const state = await screen.findByTestId("transport-payment-state");
+    expect(state.textContent).toContain("En attente du paiement de l'agriculteur");
+    expect(state.textContent).toMatch(/9 min 5\d s|10 min 00 s/);
+    expect((screen.getByRole("button", { name: "Marchandise chargée" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("also keeps it locked while the payment is only pending", async () => {
+    mocks.getMyTransportJobs.mockResolvedValue(ok([acceptedJob({ payment_status: "pending" })]));
+    renderCard();
+    expect((await screen.findByTestId("transport-payment-state")).textContent).toContain("en cours de validation");
+    expect((screen.getByRole("button", { name: "Marchandise chargée" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("unlocks loading once the course is paid", async () => {
+    mocks.getMyTransportJobs.mockResolvedValue(ok([acceptedJob({ payment_status: "paid" })]));
+    renderCard();
+    expect((await screen.findByTestId("transport-payment-state")).textContent).toContain("Course payée");
+    expect((screen.getByRole("button", { name: "Marchandise chargée" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("moves an accepted job to loaded, then delivered", async () => {

@@ -9,8 +9,8 @@
  */
 
 import { ApiResponse } from '@/types';
+import type { FeeBreakdown } from '@/api/fees.api';
 import { supabaseClient } from '@/api/supabaseClient';
-import { calculatePaymentFees, getFeeRates, PaymentFees } from '@/lib/payment-fees';
 import {
     validateAirtelPhone,
     normalizePhone,
@@ -64,6 +64,8 @@ export interface PaymentInitiationResponse {
         app: number;
         total: number;
     };
+    /** Detail de ce qui a ete preleve au client (commission, PVIT, operateur), calcule par le serveur. */
+    breakdown?: FeeBreakdown;
     status: string;
     message: string;
     transaction: any; // Full transaction object for flexibility
@@ -73,8 +75,7 @@ export interface PaymentInitiationResponse {
 // EXPORTS DES UTILITAIRES
 // ============================================
 
-export { calculatePaymentFees, validateAirtelPhone, getFeeRates };
-export type { PaymentFees };
+export { validateAirtelPhone };
 
 // ============================================
 // SERVICE PUBLIC
@@ -148,15 +149,7 @@ export const initiateAirtelPayment = async (
 
         console.log('[Payment Service] Phone validated successfully');
 
-        // === 2. CALCUL DES FRAIS ===
-        const fees = calculatePaymentFees(request.baseAmount);
-        console.log('[Payment Service] Fees calculated:', {
-            base: fees.baseAmount,
-            airtel: fees.airtelFees,
-            pvit: fees.pvitFees,
-            app: fees.appFees,
-            total: fees.finalAmount
-        });
+        // Les frais (commission, PVIT, operateur) sont calcules par le serveur: jamais cote client.
 
         // === 3. RÉCUPÉRATION DU TOKEN D'AUTHENTIFICATION ===
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -245,6 +238,7 @@ export const initiateAirtelPayment = async (
                 qGabonReference: data.data.qGabonReference,
                 totalAmount: data.data.totalAmount,
                 fees: data.data.fees,
+                breakdown: data.data.breakdown,
                 status: data.data.status || 'PENDING',
                 message: data.data.message || 'Paiement initié avec succès',
                 transaction: data.data.transaction // Pass full object
@@ -325,8 +319,7 @@ export const initiateMoovPayment = async (
             };
         }
 
-        // === 2. CALCUL DES FRAIS ===
-        const fees = calculatePaymentFees(request.baseAmount);
+        // Les frais (commission, PVIT, operateur) sont calcules par le serveur: jamais cote client.
 
         // === 3. RÉCUPÉRATION DU TOKEN D'AUTHENTIFICATION ===
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -411,6 +404,7 @@ export const initiateMoovPayment = async (
                 qGabonReference: data.data.qGabonReference,
                 totalAmount: data.data.totalAmount,
                 fees: data.data.fees,
+                breakdown: data.data.breakdown,
                 status: data.data.status || 'PENDING',
                 message: data.data.message || 'Paiement Moov initié',
                 transaction: data.data.transaction

@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   Truck,
+  CreditCard,
   LogOut,
 } from "lucide-react";
 import { logout } from "@/services";
@@ -39,6 +40,12 @@ const mainMenuItems = [
     title: "Livraisons",
     url: "/driver/deliveries",
     icon: Truck,
+    badge: 0,
+  },
+  {
+    title: "Paiements",
+    url: "/driver/payments",
+    icon: CreditCard,
     badge: 0,
   },
 ];

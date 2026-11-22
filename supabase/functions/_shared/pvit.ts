@@ -15,12 +15,8 @@
 //  * Every database write is checked; a failure answers 500 so the state
 //    stays recoverable (confirmations are idempotent and can be replayed).
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   canTransitionPaymentStatus,
-  DEFAULT_INITIATION_WINDOW_MS,
-  DEFAULT_IN_FLIGHT_WINDOW_MS,
-  DEFAULT_MAX_INITIATIONS_PER_WINDOW,
   inFlightWindowStart,
   initiationWindowStart,
   isReportedAmountValid,
@@ -29,7 +25,6 @@ import {
   beneficiaryCodeFor,
   buildAck,
   buildSplitPayload,
-  computeSplit,
   evaluateCallbackIp,
   generateReference,
   hasOperatorPrefix,
@@ -37,203 +32,32 @@ import {
   mapPvitStatus,
   normalizeLocalPhone,
   parseCallback,
-  parseCommissionRate,
   parseInitiationResponse,
   parseCsv,
   parseIpMode,
-  parsePositiveInt,
-  resolveAllowedOrigin,
-  parseStatusResponse,
   phoneValidationMessage,
   toLegacyStatus,
   toPvitOperator,
   type Operator,
 } from './pvit-core.ts'
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
-
-const fail = (status: number, message: string, code: string, extra: Record<string, unknown> = {}) =>
-  json({ success: false, error: { message, code, ...extra } }, status)
-
-const getEnv = (name: string): string => Deno.env.get(name)?.trim() || ''
-
-// CORS for the browser-facing functions. The allowed origins come from
-// ALLOWED_ORIGINS (comma separated, e.g. the app URL); unset = any origin
-// (local development only). The webhook is server-to-server and has no CORS.
-const withCors = async (req: Request, run: () => Promise<Response>): Promise<Response> => {
-  const res = await run()
-  const headers = new Headers(res.headers)
-  headers.set('Access-Control-Allow-Headers', 'authorization, x-client-info, apikey, content-type')
-  const origin = resolveAllowedOrigin(req.headers.get('origin'), parseCsv(getEnv('ALLOWED_ORIGINS')))
-  if (origin) {
-    headers.set('Access-Control-Allow-Origin', origin)
-    if (origin !== '*') headers.set('Vary', 'Origin')
-  } else {
-    headers.delete('Access-Control-Allow-Origin')
-  }
-  return new Response(res.body, { status: res.status, headers })
-}
-
-const maskPhone = (phone: string) => `${phone.slice(0, 3)}****${phone.slice(-2)}`
-
-const getServiceClient = () => createClient(getEnv('SUPABASE_URL'), getEnv('SUPABASE_SERVICE_ROLE_KEY'))
-
-const getUserClient = (authHeader: string) =>
-  createClient(getEnv('SUPABASE_URL'), getEnv('SUPABASE_ANON_KEY'), {
-    global: { headers: { Authorization: authHeader } },
-  })
-
-// Throws when a Supabase write failed, so the handler can answer 500.
-const ensure = (label: string, res: any) => {
-  if (res?.error) throw new Error(`${label}: ${res.error.message || res.error.code || 'db error'}`)
-  return res
-}
-
-// ------------------------------------------------------------------- config
-
-type PvitConfig = {
-  baseUrl: string
-  commissionRate: number
-  maxInitiations: number
-  initiationWindowMs: number
-  inFlightWindowMs: number
-  operationAccountCode: string
-  callbackUrlCode: string
-  codeUrlPayment: string
-  codeUrlStatus: string
-  codeUrlSecret: string
-  codeUrlKyc: string
-  secretPassword: string
-  ownerCharge: 'CUSTOMER' | 'MERCHANT'
-}
-
-// Everything comes from the environment: no URL, rate or limit is hard-coded.
-// Returns null (=> 503 "not configured") when a required value is missing.
-const readConfig = (): PvitConfig | null => {
-  const commissionRate = parseCommissionRate(getEnv('PLATFORM_COMMISSION_RATE'))
-  const cfg = {
-    baseUrl: getEnv('PVIT_BASE_URL').replace(/\/$/, ''),
-    commissionRate,
-    maxInitiations: parsePositiveInt(getEnv('PAYMENT_MAX_INITIATIONS_PER_WINDOW'), DEFAULT_MAX_INITIATIONS_PER_WINDOW),
-    initiationWindowMs:
-      parsePositiveInt(getEnv('PAYMENT_INITIATION_WINDOW_MINUTES'), DEFAULT_INITIATION_WINDOW_MS / 60_000) * 60_000,
-    inFlightWindowMs:
-      parsePositiveInt(getEnv('PAYMENT_IN_FLIGHT_WINDOW_MINUTES'), DEFAULT_IN_FLIGHT_WINDOW_MS / 60_000) * 60_000,
-    operationAccountCode: getEnv('PVIT_OPERATION_ACCOUNT_CODE'),
-    callbackUrlCode: getEnv('PVIT_CALLBACK_URL_CODE'),
-    codeUrlPayment: getEnv('PVIT_CODE_URL_PAYMENT'),
-    codeUrlStatus: getEnv('PVIT_CODE_URL_STATUS'),
-    codeUrlSecret: getEnv('PVIT_CODE_URL_SECRET'),
-    codeUrlKyc: getEnv('PVIT_CODE_URL_KYC'),
-    secretPassword: getEnv('PVIT_SECRET_PASSWORD'),
-    ownerCharge: getEnv('PVIT_OWNER_CHARGE') === 'CUSTOMER' ? 'CUSTOMER' : 'MERCHANT',
-  } as PvitConfig
-  const required: Array<keyof PvitConfig> = ['baseUrl', 'operationAccountCode', 'codeUrlSecret', 'secretPassword']
-  if (cfg.commissionRate === null || !required.every((k) => cfg[k])) return null
-  return cfg
-}
-
-// ------------------------------------------------------------------- secret
-
-const SECRET_SAFETY_MARGIN_MS = 60_000
-
-// X-Secret lives 3600 s. The current one is shared through a service-only
-// table; it is renewed when missing/expiring (or forced after an auth error).
-const getSecret = async (client: any, cfg: PvitConfig, force = false): Promise<string> => {
-  if (!force) {
-    const { data } = await client
-      .from('payment_provider_secrets')
-      .select('secret,expires_at')
-      .eq('provider', 'pvit')
-      .eq('account_code', cfg.operationAccountCode)
-      .maybeSingle()
-    if (data?.secret && new Date(data.expires_at).getTime() - Date.now() > SECRET_SAFETY_MARGIN_MS) {
-      return data.secret
-    }
-  }
-
-  const response = await fetch(`${cfg.baseUrl}/v2/${cfg.codeUrlSecret}/renew-secret`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      operationAccountCode: cfg.operationAccountCode,
-      password: cfg.secretPassword,
-    }).toString(),
-  })
-  const body: any = await response.json().catch(() => ({}))
-  if (!response.ok || !body?.secret) {
-    throw new Error(`PVIT renew-secret failed (HTTP ${response.status})`)
-  }
-
-  const expiresInMs = (Number(body.expires_in) > 0 ? Number(body.expires_in) : 3600) * 1000
-  ensure(
-    'cache secret',
-    await client.from('payment_provider_secrets').upsert(
-      {
-        provider: 'pvit',
-        account_code: cfg.operationAccountCode,
-        secret: body.secret,
-        expires_at: new Date(Date.now() + expiresInMs).toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'provider,account_code' },
-    ),
-  )
-  return body.secret
-}
-
-// PVIT answers errors as {status_code, error, message}; the docs also show {code}.
-const providerErrorCode = (body: any): number => Number(body?.status_code ?? body?.code ?? body?.error?.code)
-
-// Authenticated call to PVIT; one automatic retry with a fresh secret when
-// the secret was rejected (3100 AUTHENTICATION_FAILED).
-const pvitFetch = async (client: any, cfg: PvitConfig, url: string, init: RequestInit = {}) => {
-  const call = async (force: boolean) => {
-    const secret = await getSecret(client, cfg, force)
-    const response = await fetch(url, {
-      ...init,
-      headers: { ...(init.headers as Record<string, string> | undefined), 'X-Secret': secret },
-    })
-    const body: any = await response.json().catch(() => ({}))
-    return { response, body }
-  }
-  let result = await call(false)
-  if (result.response.status === 403 && providerErrorCode(result.body) === 3100) result = await call(true)
-  return result
-}
-
-// ----------------------------------------------------------------- wallet row
-
-type Wallet = { id: string; wallet_id: string }
-
-// The platform "wallet" row is the PVIT operation account of Ouyaboung.
-const getOrCreatePlatformWallet = async (client: any, cfg: PvitConfig): Promise<Wallet> => {
-  const { data: existing, error } = await client
-    .from('platform_payment_wallets')
-    .select('id,wallet_id')
-    .eq('provider', 'pvit')
-    .eq('is_active', true)
-    .maybeSingle()
-  if (error) throw new Error(`platform wallet lookup: ${error.message}`)
-  if (existing?.wallet_id) return existing
-
-  const { data: created, error: insertError } = await client
-    .from('platform_payment_wallets')
-    .insert({
-      provider: 'pvit',
-      wallet_id: cfg.operationAccountCode,
-      callback_url: `${getEnv('SUPABASE_URL').replace(/\/$/, '')}/functions/v1/pvit-callback`,
-      is_active: true,
-    })
-    .select('id,wallet_id')
-    .single()
-  if (insertError || !created) throw new Error(`platform wallet create: ${insertError?.message || 'unknown'}`)
-  return created
-}
+import {
+  ensure,
+  fail,
+  getEnv,
+  getOrCreatePlatformWallet,
+  computeFeeBreakdown,
+  getServiceClient,
+  getUserClient,
+  json,
+  maskPhone,
+  providerErrorCode,
+  pvitFetch,
+  readConfig,
+  verifyWithProvider,
+  withCors,
+  type PvitConfig,
+} from './pvit-runtime.ts'
+import { handleTransportCallback, syncTransportPayment } from './pvit-transport.ts'
 
 type PayoutAccount = { id: string; operator: string; normalized_msisdn: string }
 
@@ -342,12 +166,17 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
 
     const wallet = await getOrCreatePlatformWallet(serviceClient, cfg)
     const reference = generateReference(order.id)
-    const { feeAmount, merchantNetAmount } = computeSplit(amount, cfg.commissionRate)
+    // The shop receives its price IN FULL; the customer pays the price plus the platform
+    // commission, the PVIT fee and the operator fee (admin-set rates, one shared calculation).
+    const baseAmount = amount
+    const breakdown = await computeFeeBreakdown(serviceClient, 'order', baseAmount, operator)
+    const charged = breakdown.total_amount
+    const platformTake = charged - baseAmount
     const payoutOperator: Operator = payout.operator === 'moov' ? 'moov' : 'airtel'
     const beneficiaryCode = beneficiaryCodeFor(payout.id)
 
     const pvitPayload = buildSplitPayload({
-      amount,
+      amount: charged,
       reference,
       customerPhone: phone,
       operatorCode: toPvitOperator(operator),
@@ -355,7 +184,7 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
       callbackUrlCode: cfg.callbackUrlCode,
       ownerCharge: cfg.ownerCharge,
       orderId: order.id,
-      merchantNetAmount,
+      merchantNetAmount: baseAmount,
       beneficiary: {
         msisdn: payout.normalized_msisdn,
         operatorCode: toPvitOperator(payoutOperator),
@@ -372,14 +201,16 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
           merchant_id: order.merchant_id,
           user_id: user.id,
           phone,
-          amount,
+          // What the shop is owed, then the customer-side fees (legacy column names:
+          // airtel_fees = operator fee, app_fees = platform commission) and the total charged.
+          amount: baseAmount,
           account_code: cfg.operationAccountCode,
           product: 'pvit',
           agent: 'PVIT',
-          airtel_fees: 0,
-          pvit_fees: 0,
-          app_fees: 0,
-          total_amount: amount,
+          airtel_fees: breakdown.operator_fee,
+          pvit_fees: breakdown.pvit_fee,
+          app_fees: breakdown.platform_fee,
+          total_amount: charged,
           operator: toPvitOperator(operator),
           status: 'PENDING',
           provider: 'pvit',
@@ -404,12 +235,13 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
           operator,
           internal_reference: reference,
           status: 'initiated',
-          amount,
+          amount: charged,
+          fee_breakdown: breakdown,
           // What we sent to PVIT, plus the split decided at initiation (the
-          // confirmation reads it back instead of recomputing the commission).
+          // confirmation reads it back instead of recomputing anything).
           raw_request: {
             ...pvitPayload,
-            ouyaboung: { payoutAccountId: payout.id, beneficiaryCode, feeAmount, merchantNetAmount },
+            ouyaboung: { payoutAccountId: payout.id, beneficiaryCode, feeAmount: platformTake, merchantNetAmount: baseAmount },
           },
         })
         .select()
@@ -501,8 +333,14 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
           transactionId: legacy.id,
           paymentTransactionId: payment.id,
           qGabonReference: reference,
-          totalAmount: amount,
-          fees: { airtel: 0, pvit: 0, app: 0, total: 0 },
+          totalAmount: charged,
+          fees: {
+            airtel: breakdown.operator_fee,
+            pvit: breakdown.pvit_fee,
+            app: breakdown.platform_fee,
+            total: breakdown.operator_fee + breakdown.pvit_fee + breakdown.platform_fee,
+          },
+          breakdown,
           status: legacyStatus,
           message,
         },
@@ -561,6 +399,8 @@ const applyConfirmation = async (client: any, payment: any, provider: { provider
 
   const split = payment.raw_request?.ouyaboung || {}
   const amount = Number(payment.amount)
+  // The shop is paid its full price; everything above it is the platform's (commission plus
+  // the amounts that cover PVIT and the operator).
   const merchantNet = Number.isFinite(Number(split.merchantNetAmount)) ? Number(split.merchantNetAmount) : amount
   const fee = Number.isFinite(Number(split.feeAmount)) ? Number(split.feeAmount) : amount - merchantNet
   const status = orderCancelled ? 'manual_review' : 'paid'
@@ -570,8 +410,8 @@ const applyConfirmation = async (client: any, payment: any, provider: { provider
       recipient_type: 'merchant',
       merchant_payout_account_id: split.payoutAccountId || null,
       disbursement_id: split.beneficiaryCode || null,
-      gross_amount: amount,
-      fee_amount: fee,
+      gross_amount: merchantNet,
+      fee_amount: 0,
       net_amount: merchantNet,
     },
     {
@@ -649,44 +489,6 @@ const applyNonConfirmed = async (client: any, payment: any, internal: string, pr
   )
 }
 
-type Verification =
-  | { ok: true; internal: string; providerStatus: string | null; amount: number | null; raw: unknown }
-  | { ok: false; kind: 'unavailable' | 'mismatch'; reason: string }
-
-// Asks PVIT for the authoritative state of a payment.
-//
-// Verified against the sandbox: the status API finds a transaction by OUR
-// merchant reference (merchant_reference_id); the PVIT id (PAY...) returned at
-// initiation is not found (4006). The PVIT id is only tried as a fallback.
-const verifyWithProvider = async (client: any, cfg: PvitConfig, payment: any): Promise<Verification> => {
-  if (!cfg.codeUrlStatus) return { ok: false, kind: 'unavailable', reason: 'status API not configured' }
-  try {
-    const lookup = (id: string) => {
-      const query = new URLSearchParams({
-        transactionId: id,
-        accountOperationCode: cfg.operationAccountCode,
-        transactionOperation: 'PAYMENT',
-      })
-      return pvitFetch(client, cfg, `${cfg.baseUrl}/${cfg.codeUrlStatus}/status?${query}`, { method: 'GET' })
-    }
-    const notFound = (r: { response: Response; body: any }) =>
-      r.response.status === 404 || providerErrorCode(r.body) === 4006
-
-    let result = await lookup(payment.internal_reference)
-    if (notFound(result) && payment.provider_transaction_id) result = await lookup(payment.provider_transaction_id)
-
-    const { response, body } = result
-    if (!response.ok) return { ok: false, kind: 'unavailable', reason: `status API HTTP ${response.status}` }
-    const parsed = parseStatusResponse(body)
-    if (parsed.merchantReferenceId && parsed.merchantReferenceId !== payment.internal_reference) {
-      return { ok: false, kind: 'mismatch', reason: 'reference mismatch' }
-    }
-    return { ok: true, internal: mapPvitStatus(parsed.status), providerStatus: parsed.status, amount: parsed.amount, raw: body }
-  } catch (error) {
-    return { ok: false, kind: 'unavailable', reason: error instanceof Error ? error.message : 'status lookup failed' }
-  }
-}
-
 // Shared by the webhook and the manual sync: verify, then apply what PVIT says.
 const reconcile = async (client: any, cfg: PvitConfig, payment: any) => {
   const verified = await verifyWithProvider(client, cfg, payment)
@@ -742,7 +544,11 @@ export const handlePvitCallback = async (req: Request) => {
       .eq('internal_reference', callback.merchantReferenceId)
       .maybeSingle()
     if (error) throw new Error(`payment lookup: ${error.message}`)
-    if (!payment) return json({ error: 'Transaction not found' }, 404)
+    if (!payment) {
+      // Not an order payment: it may be a transport payment (isolated handler).
+      const transport = await handleTransportCallback(client, cfg, callback)
+      return transport ?? json({ error: 'Transaction not found' }, 404)
+    }
 
     // Refund notifications (GIVE_CHANGE) are not handled here: acknowledge only.
     if (callback.transactionOperation && callback.transactionOperation !== 'PAYMENT') {
@@ -818,9 +624,14 @@ const syncPvitTransactionStatusImpl = async (req: Request) => {
     let query = client.from('payment_transactions').select(SELECT_PAYMENT)
     query = reference ? query.eq('internal_reference', reference) : query.eq('provider_transaction_id', transactionId)
     const { data: payment, error } = await query.maybeSingle()
-    if (error || !payment) return json({ error: 'Transaction not found' }, 404)
+    if (error) return json({ error: 'Transaction not found' }, 404)
 
     const { data: profile } = await client.from('profiles').select('role').eq('user_id', user.id).maybeSingle()
+    if (!payment) {
+      // Not an order payment: it may be a transport payment (isolated handler).
+      const transport = await syncTransportPayment(client, cfg, user.id, profile?.role === 'admin', { reference, transactionId })
+      return transport ?? json({ error: 'Transaction not found' }, 404)
+    }
     const { data: merchant } = await client.from('merchants').select('id').eq('user_id', user.id).maybeSingle()
     const canRead = payment.user_id === user.id || merchant?.id === payment.merchant_id || profile?.role === 'admin'
     if (!canRead) return json({ error: 'Forbidden' }, 403)
@@ -866,16 +677,31 @@ const verifyPayoutAccountImpl = async (req: Request) => {
 
   try {
     const client = getServiceClient()
-    const { data: account } = await client
+    // The number belongs to a shop (merchant) or to a transport driver.
+    let table: 'merchant_payout_accounts' | 'driver_payout_accounts' = 'merchant_payout_accounts'
+    let { data: account } = await client
       .from('merchant_payout_accounts')
       .select('id,merchant_id,operator,normalized_msisdn,verification_status,is_active')
       .eq('id', accountId)
       .maybeSingle()
+    if (!account) {
+      table = 'driver_payout_accounts'
+      account = (
+        await client
+          .from('driver_payout_accounts')
+          .select('id,driver_id,operator,normalized_msisdn,verification_status,is_active')
+          .eq('id', accountId)
+          .maybeSingle()
+      ).data
+    }
     if (!account) return fail(404, 'Account not found', 'ACCOUNT_NOT_FOUND')
 
-    const { data: merchant } = await client.from('merchants').select('id,user_id').eq('id', account.merchant_id).maybeSingle()
     const { data: profile } = await client.from('profiles').select('role').eq('user_id', user.id).maybeSingle()
-    if (merchant?.user_id !== user.id && profile?.role !== 'admin') return fail(403, 'Forbidden', 'FORBIDDEN')
+    const owner =
+      table === 'merchant_payout_accounts'
+        ? (await client.from('merchants').select('id,user_id').eq('id', account.merchant_id).maybeSingle()).data
+        : (await client.from('drivers').select('id,user_id').eq('id', account.driver_id).maybeSingle()).data
+    if (owner?.user_id !== user.id && profile?.role !== 'admin') return fail(403, 'Forbidden', 'FORBIDDEN')
 
     if (account.verification_status === 'verified') return json({ success: true, data: { status: 'verified' } })
     if (account.verification_status === 'disabled') return fail(409, 'Account disabled', 'ACCOUNT_DISABLED')
@@ -898,7 +724,7 @@ const verifyPayoutAccountImpl = async (req: Request) => {
       ensure(
         'account reject',
         await client
-          .from('merchant_payout_accounts')
+          .from(table)
           .update({ verification_status: 'rejected', rejection_reason: 'Numero inconnu chez l\'operateur' })
           .eq('id', account.id),
       )
@@ -911,7 +737,7 @@ const verifyPayoutAccountImpl = async (req: Request) => {
     ensure(
       'account verify',
       await client
-        .from('merchant_payout_accounts')
+        .from(table)
         .update({ verification_status: 'verified', rejection_reason: null, verified_at: new Date().toISOString() })
         .eq('id', account.id),
     )

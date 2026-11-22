@@ -45,6 +45,9 @@ import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, Filter, X, Se
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
+import { FeeBreakdownCard } from "@/components/payment/FeeBreakdownCard";
+import { transactionBreakdown } from "@/lib/fees";
+import type { FeeBreakdown } from "@/api/fees.api";
 
 // Types
 interface UserTransaction {
@@ -73,6 +76,8 @@ interface UserTransaction {
     merchant_name: string;
     customer_phone: string;
     order_status: string;
+    /** Detail fige des frais au moment du paiement (commission, PVIT, operateur). */
+    fee_breakdown?: FeeBreakdown | null;
 }
 
 
@@ -576,41 +581,13 @@ export default function UserTransactionsPage() {
                                 </p>
                             </div>
 
-                            {/* Montants détaillés */}
-                            <div className="space-y-2">
-                                <h3 className="font-semibold text-sm text-muted-foreground">💰 Détails Financiers</h3>
-                                <div className="bg-muted p-4 rounded space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                        <span>Prix du produit:</span>
-                                        <span className="font-medium">{formatCurrency(selectedTransaction.base_amount)}</span>
-                                    </div>
-                                    <div className="border-t my-2 pt-2">
-                                        <p className="text-xs text-muted-foreground mb-2">Frais de transaction</p>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span className="text-xs">Frais Airtel/Moov:</span>
-                                            <span className="text-xs">{formatCurrency(selectedTransaction.airtel_fees || 0)}</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span className="text-xs">Frais PVIT:</span>
-                                            <span className="text-xs">{formatCurrency(selectedTransaction.pvit_fees || 0)}</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span className="text-xs">Frais plateforme:</span>
-                                            <span className="text-xs">{formatCurrency(selectedTransaction.app_fees || 0)}</span>
-                                        </div>
-                                        {selectedTransaction.q_gabon_fees > 0 && (
-                                            <div className="flex justify-between text-blue-600">
-                                                <span className="text-xs">Frais Q-Gabon (total):</span>
-                                                <span className="text-xs font-medium">{formatCurrency(selectedTransaction.q_gabon_fees)}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="border-t pt-2 flex justify-between font-bold">
-                                        <span>Total payé:</span>
-                                        <span className="text-green-600">{formatCurrency(selectedTransaction.total_amount)}</span>
-                                    </div>
-                                </div>
-                            </div>
+                            {/* Detail des prelevements: marchand, plateforme, PVIT, operateur */}
+                            <FeeBreakdownCard
+                                breakdown={transactionBreakdown(selectedTransaction)}
+                                recipientLabel={selectedTransaction.merchant_name || 'le marchand'}
+                                title="Détail de ce que vous avez payé"
+                                settled
+                            />
 
                             {/* Informations */}
                             <div className="grid grid-cols-2 gap-4 text-sm">

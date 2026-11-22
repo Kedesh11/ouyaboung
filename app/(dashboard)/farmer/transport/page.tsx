@@ -422,6 +422,7 @@ export default function FarmerTransportPage() {
             : null
         }
         vehicleType={vehicleType}
+        mapCenter={center ?? DEFAULT_MAP_CENTER}
         pickup={centerSource === "device" ? center : null}
         farmAddress={farmAddress}
       />

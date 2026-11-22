@@ -51,6 +51,7 @@ export type NotificationType =
   | 'impact_milestone'
   | 'welcome'
   | 'system_update'
+  | 'fee_update'
   | 'security_alert';
 
 export interface NotificationPreferences {
