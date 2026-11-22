@@ -49,7 +49,6 @@ Ajoutez les variables suivantes dans **Settings > Environment Variables** sur Ve
 | `PVIT_OWNER_CHARGE` | Qui supporte les frais PVIT: `MERCHANT` (plateforme, defaut) ou `CUSTOMER` | `MERCHANT` |
 | `PVIT_CALLBACK_IP_MODE` | Controle de la source du callback: `report` (journalise, defaut), `enforce` (refuse), `off` | `report` |
 | `PVIT_CALLBACK_ALLOWED_IPS` | Adresses depuis lesquelles PVIT appelle le webhook (separees par des virgules). Liste vide + mode `enforce` = tout refuser | `176.31.65.18,...` |
-| `PLATFORM_COMMISSION_RATE` | Taux de commission plateforme (**obligatoire**: sans valeur valide, les paiements sont refuses) | `0.10` |
 | `PAYMENT_MAX_INITIATIONS_PER_WINDOW` | Tentatives de paiement max par utilisateur et par fenetre (defaut 5) | `5` |
 | `PAYMENT_INITIATION_WINDOW_MINUTES` | Fenetre des tentatives, en minutes (defaut 10) | `10` |
 | `PAYMENT_IN_FLIGHT_WINDOW_MINUTES` | Duree pendant laquelle un paiement en attente bloque un nouvel essai sur la meme commande (defaut 5) | `5` |

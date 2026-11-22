@@ -24,8 +24,9 @@ decidee et executee par PVIT a l'encaissement.
    et `operator`. Le serveur lit la commande (montant = `orders.total_price`), verifie
    l'appartenance, le statut `pending`, la limite de tentatives (5 / 10 min / utilisateur) et
    l'absence de paiement en cours (5 min / commande), puis exige un compte de reversement
-   **verifie** pour la boutique. Il calcule la commission (`PLATFORM_COMMISSION_RATE`, 10 % par
-   defaut), cree les lignes de ledger (`initiated`) et appelle PVIT. Reponse PVIT acceptee =
+   **verifie** pour la boutique. Il calcule le detail des frais (`compute_fee_breakdown`, voir §3ter:
+   le client paie le prix **plus** commission, frais PVIT et frais operateur; la boutique recoit
+   son prix en entier), cree les lignes de ledger (`initiated`) et appelle PVIT. Reponse PVIT acceptee =
    statut `pending` (l'initiation ne confirme jamais rien).
 2. **Confirmation du client** sur son telephone (USSD).
 3. **Webhook** (`pvit-callback`, sans JWT). PVIT notifie `SUCCESS` ou `FAILED`. Le callback n'est
@@ -94,9 +95,10 @@ agriculteur --(Airtel/Moov)--> compte d'operation Ouyaboung --split--> chauffeur
 2. L'agriculteur dispose de `transport_settings.payment_window_minutes` (15 par defaut,
    modifiable par l'admin) pour payer. Passe ce delai sans paiement, la course est annulee et
    le chauffeur libere (traitement a la demande, sans tache planifiee).
-3. `initiate-transport-payment` n'accepte que `requestId`, `phone` et `operator`. **Le montant,
-   la commission et la part du chauffeur sont ceux figes sur la demande** (tarif admin au moment
-   de la commande), jamais `PLATFORM_COMMISSION_RATE` ni une valeur du client.
+3. `initiate-transport-payment` n'accepte que `requestId`, `phone` et `operator`. **Le prix du
+   chauffeur est celui fige sur la demande** (tarif admin au moment de la commande); le client
+   paie ce prix plus commission, frais PVIT et frais operateur calcules par le serveur avec les
+   taux du moment (§3ter). Le chauffeur recoit son prix en entier. Aucune valeur n'est lue du client.
 4. Confirmation par le webhook `pvit-callback` (reference inconnue des commandes -> recherchee
    dans `transport_payments`) ou par la synchronisation `pvit-transaction-status`: dans les deux
    cas le statut est **toujours reverifie aupres de l'API PVIT**, avec controle du montant.
@@ -115,6 +117,36 @@ Deploiement: `supabase functions deploy initiate-transport-payment pvit-callback
 
 Pas encore recette contre l'API reelle: le comportement est valide par des tests (fausse API PVIT
 et base locale); un paiement sandbox transport reste a faire avant la production.
+
+## 3ter. Frais et commissions (payes par le client, reglables par l'admin)
+
+**Principe**: toutes les commissions de la plateforme sont payees par le **client** (le consommateur
+pour une commande, l'agriculteur pour un transport), jamais prelevees sur le marchand ou le
+chauffeur. Celui-ci recoit son prix en entier.
+
+```text
+total paye = prix + commission Ouyaboung + frais PVIT + frais operateur (Airtel ou Moov)
+```
+
+- Les frais PVIT et operateur sont une **estimation** facturee au client (taux admin). PVIT preleve
+  ses frais reels sur le compte d'operation de la plateforme (`owner_charge = MERCHANT`, comportement
+  verifie en sandbox): le client a deja paye de quoi les couvrir, le tout dans UN seul montant envoye
+  a PVIT. Frais PVIT et operateur sont calcules sur (prix + commission), arrondis a l'entier superieur;
+  la commission est arrondie au plus proche.
+- **Tous les taux sont dans `platform_fee_settings`**, modifiables depuis le tableau de bord admin
+  (« Frais & commissions »): commission commandes, commission transports, frais PVIT, Airtel, Moov.
+  Valeurs initiales provisoires (10 % / 10 % / 2,5 % / 1 % / 1 %).
+- **Chaque modification est journalisee** (`fee_change_log`: qui, quand, avant/apres) et **notifiee a
+  tous les utilisateurs** de la plateforme (notification `fee_update`, ancien -> nouveau taux).
+- **Un seul calcul** (`compute_fee_breakdown(flow, prix, operateur)`), utilise par la carte de detail
+  affichee avant de payer, par `initiate-payment` et `initiate-transport-payment`. Le detail est fige
+  sur chaque paiement (`fee_breakdown`) et reaffiche dans l'historique du payeur.
+- Avant de payer, une carte detaille ce que prend chacun: marchand/chauffeur (prix entier), plateforme,
+  PVIT, operateur, et le total.
+- Les anciens parametres `PLATFORM_COMMISSION_RATE` (variable d'environnement) et la commission de
+  `transport_settings` sont supprimes: une seule source de verite.
+- La vue `merchant_transactions` est desormais limitee au payeur, a la boutique concernee et aux admins
+  (elle etait lisible par tout utilisateur connecte).
 
 ## 4. Securite
 
@@ -146,7 +178,7 @@ et base locale); un paiement sandbox transport reste a faire avant la production
 supabase secrets set \
   PVIT_OPERATION_ACCOUNT_CODE=ACC_xxx PVIT_SECRET_PASSWORD=... \
   PVIT_CODE_URL_SECRET=... PVIT_CODE_URL_PAYMENT=... PVIT_CODE_URL_STATUS=... PVIT_CODE_URL_KYC=... \
-  PVIT_CALLBACK_URL_CODE=... PLATFORM_COMMISSION_RATE=0.10
+  PVIT_CALLBACK_URL_CODE=...
 supabase db push          # migration 20261121110000_payment_provider_secrets.sql
 supabase functions deploy initiate-payment pvit-callback pvit-transaction-status verify-payout-account
 ```
