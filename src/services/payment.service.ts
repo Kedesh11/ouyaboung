@@ -175,15 +175,16 @@ export const initiateAirtelPayment = async (
         }
 
         // === 4. APPEL À L'EDGE FUNCTION ===
+        // Le montant n'est jamais envoye: le serveur le lit sur la commande.
         const payload = {
             phone: normalizedPhone,
             orderId: request.orderId,
-            baseAmount: request.baseAmount
+            operator: 'airtel'
         };
 
-        console.log('[Payment Service] Calling Edge Function: initiate-airtel (via fetch)...');
+        console.log('[Payment Service] Calling Edge Function: initiate-payment (airtel)...');
 
-        const functionUrl = getFunctionUrl('initiate-airtel');
+        const functionUrl = getFunctionUrl('initiate-payment');
         if (!functionUrl) {
             return {
                 success: false,
@@ -343,15 +344,16 @@ export const initiateMoovPayment = async (
         }
 
         // === 4. APPEL À L'EDGE FUNCTION ===
+        // Le montant n'est jamais envoye: le serveur le lit sur la commande.
         const payload = {
             phone: normalizedPhone,
             orderId: request.orderId,
-            baseAmount: request.baseAmount
+            operator: 'moov'
         };
 
-        console.log('[Payment Service] Calling Edge Function: initiate-moov (via fetch)...');
+        console.log('[Payment Service] Calling Edge Function: initiate-payment (moov)...');
 
-        const functionUrl = getFunctionUrl('initiate-moov');
+        const functionUrl = getFunctionUrl('initiate-payment');
         if (!functionUrl) {
             return {
                 success: false,

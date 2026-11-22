@@ -1,5 +1,6 @@
 import { requireSupabaseClient, isSupabaseConfigured } from '@/api/supabaseClient';
 import type { ApiResponse } from '@/types';
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
 const USER_TRANSACTION_COLUMNS = [
   'transaction_id',
@@ -74,6 +75,12 @@ const MERCHANT_TRANSACTION_COLUMNS = [
 ].join(',');
 
 export type PaymentTransactionRecord = Record<string, unknown>;
+
+const getFunctionUrl = (name: string): string | null => {
+  const { url } = getSupabasePublicEnv();
+  if (!url) return null;
+  return `${url.replace(/\/$/, '')}/functions/v1/${name}`;
+};
 
 const getAuthenticatedUserId = async (): Promise<ApiResponse<string>> => {
   if (!isSupabaseConfigured()) {
@@ -189,4 +196,63 @@ export const getAdminPaymentTransactions = async (
   }
 
   return { data: (data || []) as PaymentTransactionRecord[], error: null, success: true };
+};
+
+export const syncPaymentTransactionStatus = async (
+  params: { reference?: string; transactionId?: string }
+): Promise<ApiResponse<unknown>> => {
+  if (!isSupabaseConfigured()) {
+    return {
+      data: null,
+      error: { code: 'NOT_CONFIGURED', message: 'Supabase is not configured' },
+      success: false,
+    };
+  }
+
+  const functionUrl = getFunctionUrl('pvit-transaction-status');
+  if (!functionUrl) {
+    return {
+      data: null,
+      error: { code: 'NOT_CONFIGURED', message: "URL d'Edge Function non configuree" },
+      success: false,
+    };
+  }
+
+  const client = requireSupabaseClient();
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) {
+    return {
+      data: null,
+      error: { code: 'UNAUTHORIZED', message: 'Non authentifie' },
+      success: false,
+    };
+  }
+
+  const response = await fetch(functionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(params),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.success) {
+    return {
+      data: null,
+      error: {
+        code: payload?.error?.code || 'PAYMENT_SYNC_FAILED',
+        message: payload?.error?.message || payload?.error || 'Synchronisation du paiement impossible',
+        details: payload,
+      },
+      success: false,
+    };
+  }
+
+  return {
+    data: payload.data,
+    error: null,
+    success: true,
+  };
 };

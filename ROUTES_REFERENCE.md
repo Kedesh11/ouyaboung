@@ -102,9 +102,11 @@ Ce document liste les routes de l'application Next.js 15 (App Router).
 
 | Fonction | Description |
 |----------|-------------|
+| `initiate-payment` | Initiation du paiement fractionne PVIT (Airtel / Moov) |
+| `pvit-callback` | Webhook de statut PVIT (sans JWT, verifie via l'API de statut) |
+| `pvit-transaction-status` | Resynchronisation du statut d'un paiement |
+| `verify-payout-account` | Verification KYC d'un numero de reversement |
 | `validate-qr` | Validation code QR retrait |
-
-> Les fonctions de paiement (initiation et callbacks) seront ajoutees avec l'integration PVIT.
 
 ## Couche données applicative
 

@@ -37,6 +37,7 @@ import {
   updateMerchantProfile,
   getMerchantPayoutAccounts,
   createMerchantPayoutAccount,
+  verifyMerchantPayoutAccount,
 } from "@/services";
 import type { MerchantPayoutAccount, PayoutOperator } from "@/services";
 import { useRouter } from "next/navigation";
@@ -51,6 +52,7 @@ const MerchantSettingsPage = () => {
   const [merchantId, setMerchantId] = useState<string | null>(null);
   const [payoutAccounts, setPayoutAccounts] = useState<MerchantPayoutAccount[]>([]);
   const [isSavingPayout, setIsSavingPayout] = useState(false);
+  const [verifyingAccountId, setVerifyingAccountId] = useState<string | null>(null);
   const [payoutForm, setPayoutForm] = useState({
     operator: "airtel" as PayoutOperator,
     label: "",
@@ -176,7 +178,28 @@ const MerchantSettingsPage = () => {
 
     setPayoutAccounts((current) => [result.data!, ...current]);
     setPayoutForm({ operator: "airtel", label: "", msisdn: "" });
-    toast.success("Compte Mobile Money soumis pour validation");
+    toast.success("Compte Mobile Money ajoute. Verification du numero en cours...");
+    await handleVerifyPayoutAccount(result.data.id);
+  };
+
+  // Verifie le numero aupres de l'operateur, puis recharge la liste.
+  const handleVerifyPayoutAccount = async (accountId: string) => {
+    if (!merchantId) return;
+
+    setVerifyingAccountId(accountId);
+    const result = await verifyMerchantPayoutAccount(accountId);
+    const refreshed = await getMerchantPayoutAccounts(merchantId);
+    setVerifyingAccountId(null);
+
+    if (refreshed.success && refreshed.data) {
+      setPayoutAccounts(refreshed.data);
+    }
+
+    if (result.success) {
+      toast.success("Numero verifie: il peut recevoir les reversements");
+    } else {
+      toast.error(result.error?.message || "Verification du numero impossible");
+    }
   };
 
   const getPayoutStatusLabel = (status: MerchantPayoutAccount["verification_status"]) => {
@@ -375,7 +398,7 @@ const MerchantSettingsPage = () => {
                 Reversements Mobile Money
               </CardTitle>
               <CardDescription>
-                Ajoutez le numero Airtel ou Libertis/Moov qui recevra les reversements apres validation admin.
+                Ajoutez le numero Airtel ou Libertis/Moov qui recevra les reversements. Il est verifie automatiquement aupres de l'operateur.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -435,7 +458,7 @@ const MerchantSettingsPage = () => {
                   className="w-full"
                 >
                   {isSavingPayout && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Soumettre pour validation
+                  Ajouter et verifier le numero
                 </Button>
               </div>
 
@@ -457,10 +480,27 @@ const MerchantSettingsPage = () => {
                         <p className="text-xs text-muted-foreground">
                           {account.operator === "airtel" ? "Airtel Money" : "Libertis/Moov Money"} · {account.normalized_msisdn}
                         </p>
+                        {account.verification_status === "rejected" && account.rejection_reason && (
+                          <p className="text-xs text-red-600">{account.rejection_reason}</p>
+                        )}
                       </div>
-                      <Badge className={getPayoutStatusClassName(account.verification_status)}>
-                        {getPayoutStatusLabel(account.verification_status)}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {(account.verification_status === "pending" || account.verification_status === "rejected") && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={verifyingAccountId === account.id}
+                            onClick={() => handleVerifyPayoutAccount(account.id)}
+                          >
+                            {verifyingAccountId === account.id && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                            Verifier
+                          </Button>
+                        )}
+                        <Badge className={getPayoutStatusClassName(account.verification_status)}>
+                          {getPayoutStatusLabel(account.verification_status)}
+                        </Badge>
+                      </div>
                     </div>
                   ))
                 )}

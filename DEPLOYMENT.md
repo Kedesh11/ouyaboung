@@ -45,16 +45,28 @@ Ajoutez les variables suivantes dans **Settings > Environment Variables** sur Ve
 | `SUPABASE_ANON_KEY` | Alias serveur de la cle anonyme Supabase | `eyJ...` |
 
 > [!IMPORTANT]
-> Ne jamais commiter vos clés secrètes (`service_role`, `BEAR_TOKEN`, `QGABON_WEBHOOK_SECRET`, secrets du fournisseur de paiement) dans le code. Utilisez toujours les variables d'environnement ou un stockage de secrets serveur.
-
-> [!WARNING]
-> `ALLOW_INSECURE_WEBHOOKS=true` est reserve au developpement local. En production, laissez cette variable absente ou a `false` et configurez toujours `QGABON_WEBHOOK_SECRET`.
+> Ne jamais commiter vos clés secrètes (`service_role`, `PVIT_SECRET_PASSWORD`, secrets du fournisseur de paiement) dans le code. Utilisez toujours les variables d'environnement ou un stockage de secrets serveur.
 
 > [!NOTE]
-> Le fournisseur de paiement est PVIT. Aucune Edge Function de paiement n'est deployee tant que l'integration n'est pas terminee: le flux de paiement mobile est desactive cote application (`NEXT_PUBLIC_PAYMENT_FLOW_ENABLED=false`). Le schema de paiement (wallet plateforme, comptes de reversement, ledger, settlements) est en place; voir la migration `20261121090000_payment_provider_pvit.sql`.
+> Le fournisseur de paiement est PVIT. Le paiement mobile est desactive cote application tant que `NEXT_PUBLIC_PAYMENT_FLOW_ENABLED` n'est pas a `true`. Le guide complet (comptes, callback, secrets, recette sandbox, mise en production) est dans `docs/PVIT_INTEGRATION.md`.
 
 > [!CAUTION]
-> Les identifiants et secrets du fournisseur de paiement ne doivent jamais etre transmis par le frontend. Ils sont resolus cote serveur depuis le wallet principal, la commande, la boutique et les comptes de reversement verifies.
+> Les identifiants et secrets PVIT ne doivent jamais etre transmis par le frontend: ce sont des secrets des Edge Functions (`supabase secrets set`). Le montant, la boutique, le beneficiaire et la commission sont toujours resolus cote serveur depuis la commande.
+
+### Edge Functions de paiement
+
+| Fonction | Role | JWT |
+|----------|------|-----|
+| `initiate-payment` | Initie le paiement fractionne (Airtel / Moov) | requis |
+| `pvit-callback` | Webhook de statut appele par PVIT | **non** (`verify_jwt = false` dans `supabase/config.toml`) |
+| `pvit-transaction-status` | Resynchronise un paiement via l'API de statut PVIT | requis |
+| `verify-payout-account` | Verifie un numero de reversement par KYC | requis |
+
+```bash
+supabase functions deploy initiate-payment pvit-callback pvit-transaction-status verify-payout-account
+```
+
+`pvit-callback` doit rester deploye sans verification JWT (reglage lu dans `supabase/config.toml`); les serveurs de PVIT n'envoient pas de JWT Supabase.
 
 ## 5. CI/CD (GitHub Actions)
 

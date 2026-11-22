@@ -180,11 +180,13 @@ export {
   getUserPaymentTransactions,
   getMerchantPaymentTransactions,
   getAdminPaymentTransactions,
+  syncPaymentTransactionStatus,
 } from './payment-transactions.service';
 
 export {
   getMerchantPayoutAccounts,
   createMerchantPayoutAccount,
+  verifyMerchantPayoutAccount,
 } from './payout.service';
 export type {
   MerchantPayoutAccount,

@@ -17,21 +17,23 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 
 **Suivi de deploiement:** appliquer `supabase/migrations/20260620130000_create_order_atomic.sql` avant de valider ce risque en production.
 
-## R2 - Webhooks paiement ouverts si secret absent
+## R2 - Webhooks de paiement forgeables
 
-**Statut:** socle de verification conserve (`webhook-auth.ts`), a rebrancher sur les callbacks PVIT  
-**Risque:** si le secret de webhook est absent, les callbacks acceptaient toute requete des que `ALLOW_INSECURE_WEBHOOKS=true` trainait dans les secrets d'un environnement, sans lien avec le fait que cet environnement soit reellement local ou non. La comparaison de secret etait aussi un `===` simple, vulnerable en theorie a une attaque par timing.  
-**Impact:** confirmation frauduleuse de paiements, commandes confirmees sans paiement reel, reversement declenche pour une commande jamais payee.
+**Statut:** corrige avec l'integration PVIT (callback `pvit-callback`), a recetter en sandbox  
+**Risque:** un webhook de paiement non authentifie permet de confirmer frauduleusement une commande (ou de faire echouer un vrai paiement). PVIT ne signe pas ses webhooks et ne fournit pas de secret partage.  
+**Impact:** commandes confirmees sans paiement reel, paiements legitimes marques en echec, reversement a la boutique pour une commande jamais payee.
 
-**Decision d'ingenierie:** extraire la logique dans `supabase/functions/_shared/webhook-auth.ts` (pure, testable sous Vitest) : comparaison a temps constant (`timingSafeEqual`), et le contournement `ALLOW_INSECURE_WEBHOOKS` n'a plus d'effet que si `SUPABASE_URL` pointe vers le stack local (`127.0.0.1`/`localhost`/`kong:`) - impossible a declencher par erreur sur un vrai projet Supabase, meme si le flag est mal configure en secrets.
+**Decision d'ingenierie:** un callback n'est jamais cru sur parole. Le statut est toujours verifie aupres de l'API de statut de PVIT (authentifiee par notre secret serveur) avant de confirmer une commande ou de faire echouer un paiement; le montant doit etre rapporte par PVIT et correspondre exactement a la commande. En complement, l'adresse source est controlee contre les adresses publiees par PVIT (`PVIT_CALLBACK_IP_MODE`: `enforce`, `report` par defaut, `off`; seule la derniere entree de `X-Forwarded-For`, ajoutee par la passerelle, est consideree). Les transitions de statut finales restent collantes (`payment-guards.ts`).
 
 **Criteres d'acceptation:**
-- Production sans secret retourne `401`, quelle que soit la valeur de `ALLOW_INSECURE_WEBHOOKS`, des que `SUPABASE_URL` n'est pas une URL locale. **Fait, voir `webhook-auth.ts` + `webhook-auth.test.ts` (12 tests).**
-- La comparaison de secret n'est plus vulnerable au timing. **Fait via `timingSafeEqual`.**
-- Les tentatives refusees sont loguees avec leur motif (`missing_secret_configuration`, `missing_provided_secret`, `secret_mismatch`). **Le handler de callback precedent a ete retire avec l'ancien fournisseur: a refaire pour PVIT.**
-- La documentation de deploiement liste le secret comme obligatoire. **Fait.**
+- Un callback SUCCESS alors que l'API de statut dit PENDING ne confirme rien. **Fait, teste.**
+- Un callback FAILED forge ne fait pas echouer un paiement en attente. **Fait, teste.**
+- Un montant different (callback ou API de statut) ou absent de l'API de statut bloque la confirmation. **Fait, teste.**
+- API de statut indisponible: reponse 502 sans aucun changement d'etat. **Fait, teste.**
+- Le callback est deploye sans JWT (`verify_jwt = false`), sinon la passerelle le refuserait avant d'atteindre le code. **Fait dans `supabase/config.toml`, a verifier au deploiement.**
+- Toute ecriture en base est verifiee: en cas d'echec, reponse 500 et rejeu possible sans doublon. **Fait, teste.**
 
-**Reste ouvert:** PVIT ne signe pas ses webhooks: l'authenticite repose sur la liste blanche de ses adresses IP et sur la verification du statut via l'API de statut avant toute confirmation.
+**Reste ouvert:** passer `PVIT_CALLBACK_IP_MODE` a `enforce` apres avoir verifie en sandbox que `X-Forwarded-For` contient bien l'adresse de PVIT en derniere position derriere la passerelle Supabase. Les Edge Functions n'ont pas d'adresse IP sortante fixe: le filtrage IP entrant cote PVIT (recommande pour la production) est donc inapplicable sans proxy.
 
 ## R3 - QR Code accepte sur commande non payee
 
@@ -88,20 +90,19 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 
 ## R7 - Paiement non multi-tenant
 
-**Statut:** schema en place, integration du fournisseur (PVIT) a realiser  
-**Risque:** un paiement structure autour d'une configuration plateforme globale, sans ledger de reversement, expose a un mauvais destinataire de reversement, une commission incorrecte, un double paiement marchand et une reconciliation difficile.  
+**Statut:** implemente avec PVIT (paiement fractionne), a recetter en sandbox puis en production  
+**Risque:** un paiement structure autour d'une configuration plateforme globale, sans ledger de reversement, expose a un mauvais destinataire, une commission incorrecte, un double paiement marchand et une reconciliation difficile.  
 **Impact:** pertes financieres et litiges entre boutiques.
 
-**Decision d'ingenierie:** encaisser sur un portefeuille principal Ouyaboung, puis repartir vers les numeros Airtel/Moov verifies des boutiques et de l'admin, avec un ledger idempotent. Le code du precedent fournisseur a ete retire; le schema (`platform_payment_wallets`, `merchant_payout_accounts`, `admin_payout_accounts`, `payment_transactions`, `payment_settlements`) est conserve et n'accepte plus que le fournisseur `pvit`.
+**Decision d'ingenierie:** le client paie sur le compte d'operation d'Ouyaboung; PVIT repartit le paiement dans la meme transaction (paiement fractionne): la boutique recoit un montant fixe (net), la commission reste sur le compte d'operation. Le ledger (`payment_transactions`, `payment_settlements`) trace chaque paiement et sa repartition. Voir `docs/PVIT_INTEGRATION.md`.
 
-**Criteres d'acceptation du chantier PVIT:**
-- Ouyaboung possede un compte d'operation actif par environnement. **A faire.**
-- Chaque boutique possede un ou plusieurs numeros de reversement Airtel/Moov verifies. **Schema/RLS faits, UI marchand presente, validation admin a faire.**
-- L'Edge Function resout le marchand et le beneficiaire depuis `order -> food_item -> merchant`, jamais depuis le client. **A faire.**
-- Les callbacks confirment une transaction interne apres verification du statut aupres du fournisseur. **A faire.**
-- Les settlements calculent commission plateforme et montant net marchand. **A faire.**
-- Les comptes de reversement sont proteges par RLS et validation admin. **Fait cote schema.**
-- Les secrets du fournisseur restent serveur uniquement. **A respecter.**
+**Criteres d'acceptation:**
+- Le beneficiaire, le montant et la commission sont resolus cote serveur depuis `order -> merchant -> compte de reversement verifie`, jamais depuis le client. **Fait, teste.**
+- Le net marchand et la commission sont decides a l'initiation et relus a la confirmation (pas de recalcul). **Fait, teste.**
+- Les comptes de reversement sont verifies par KYC aupres de l'operateur; le marchand ne peut pas se verifier lui-meme (RLS). **Fait (fonction `verify-payout-account`).**
+- Ledger de repartition idempotent (une ligne boutique et une ligne plateforme par paiement). **Fait, teste.**
+- Paiement confirme pour une commande annulee: ligne en `manual_review` et journal `REFUND_REQUIRED`. **Fait, teste.**
+- Resultat de repartition par beneficiaire: la documentation PVIT n'expose pas de statut par beneficiaire; la ligne boutique passe a `paid` sur la foi du statut global SUCCESS. **A verifier en sandbox et par le reporting PVIT.**
 
 ## R8 - Composants dupliques et divergents (Navbar, Footer, FoodCard, UserMenu)
 

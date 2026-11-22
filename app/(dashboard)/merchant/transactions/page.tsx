@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import {
     getMerchantPaymentTransactions,
+    syncPaymentTransactionStatus,
       subscribeToTransactions,
     unsubscribeChannel,
 } from "@/services";
@@ -31,7 +32,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag, Filter } from "lucide-react";
+import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag, Filter, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -91,6 +92,7 @@ export default function MerchantTransactionsPage() {
     const [transactions, setTransactions] = useState<MerchantTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState<MerchantTransaction | null>(null);
+    const [syncingReference, setSyncingReference] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState("all");
 
     const fetchTransactions = async () => {
@@ -143,6 +145,30 @@ export default function MerchantTransactionsPage() {
     const totalFees = transactions
         .filter(tx => tx.payment_status === 'SUCCESS')
         .reduce((sum, tx) => sum + (tx.total_amount - tx.merchant_revenue), 0);
+
+    // Demande a PVIT l'etat reel du paiement (utile si le webhook n'est pas arrive).
+    const handleSyncTransaction = async (tx: MerchantTransaction) => {
+      const reference = tx.provider_reference || tx.q_gabon_reference;
+      if (!reference && !tx.provider_transaction_id) {
+        toast.error("Reference de paiement indisponible");
+        return;
+      }
+
+      setSyncingReference(reference || tx.provider_transaction_id);
+      const result = await syncPaymentTransactionStatus({
+        reference: reference || undefined,
+        transactionId: tx.provider_transaction_id || undefined,
+      });
+      setSyncingReference(null);
+
+      if (!result.success) {
+        toast.error(result.error?.message || "Synchronisation impossible");
+        return;
+      }
+
+      toast.success("Statut du paiement synchronise");
+      fetchTransactions();
+    };
 
     return (
         <div className="space-y-4 md:space-y-6 p-4 md:p-6">
@@ -308,6 +334,14 @@ export default function MerchantTransactionsPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right space-x-1">
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => handleSyncTransaction(tx)}
+                                                  disabled={syncingReference === reference}
+                                                >
+                                                  <RefreshCw className={`w-4 h-4 ${syncingReference === reference ? "animate-spin" : ""}`} />
+                                                </Button>
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
