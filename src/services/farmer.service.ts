@@ -5,11 +5,9 @@
 
 import {
   getFarmers,
-  getFarmerById,
   getFarmerByUserId,
   createFarmer,
   updateFarmer,
-  searchFarmers,
   getFarmerBySlug,
 } from '@/api';
 import type {
@@ -42,13 +40,6 @@ export const listFarmers = async (options?: {
     limit,
     offset,
   });
-};
-
-/**
- * Get farmer by ID
- */
-export const getFarmer = async (farmerId: string): Promise<ApiResponse<Farmer>> => {
-  return getFarmerById(farmerId);
 };
 
 /**
@@ -196,16 +187,6 @@ export const updateFarmerProfile = async (
   });
 
   return updateFarmer(farmerId, updates);
-};
-
-/**
- * Search farmers by name or location
- */
-export const search = async (
-  query: string,
-  city?: GabonCity
-): Promise<ApiResponse<Farmer[]>> => {
-  return searchFarmers(query, city);
 };
 
 /**

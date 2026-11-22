@@ -5,6 +5,7 @@ import { Leaf, Instagram, Twitter, Facebook, Mail, MapPin, Phone } from "lucide-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+import { CONTACT_EMAIL } from "@/lib/config";
 const Footer = () => {
   return (
     <footer className="bg-card border-t border-border mt-20">
@@ -65,7 +66,7 @@ const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Mail className="w-4 h-4 text-primary" />
-                oyaboug@gmail.com
+                {CONTACT_EMAIL}
               </li>
               <li className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone className="w-4 h-4 text-primary" />

@@ -34,13 +34,12 @@ import { DriverRegistration } from "@/types/admin.types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useAdminDrivers, useInvalidateAdminDrivers } from "@/hooks/useAdminData";
+import { useAdminDrivers } from "@/hooks/useAdminData";
 
 const ITEMS_PER_PAGE = 3;
 
 const AdminDriversPage = () => {
   const { data: drivers = [], isLoading, error } = useAdminDrivers();
-  const invalidateDrivers = useInvalidateAdminDrivers();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedDriver, setSelectedDriver] = useState<DriverRegistration | null>(null);

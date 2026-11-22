@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://ouyaboung-eight.vercel.app";
 
+import { APP_BASE_URL } from "@/lib/config";
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [

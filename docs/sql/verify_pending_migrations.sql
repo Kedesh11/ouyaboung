@@ -31,7 +31,7 @@ select indexname
 from pg_indexes
 where tablename = 'merchants' and indexname = 'merchants_location_gist_idx';
 
--- 3) SingPay multi-tenant payment schema exists (R7)
+-- 3) Multi-tenant payment schema exists (R7)
 select table_name
 from information_schema.tables
 where table_schema = 'public'

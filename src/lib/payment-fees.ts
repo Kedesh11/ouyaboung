@@ -1,5 +1,5 @@
 /**
- * Calcul d'affichage du paiement Mobile Money SingPay
+ * Calcul d'affichage du paiement Mobile Money
  * 
  * La commission plateforme est calculee cote serveur dans le settlement.
  * Elle n'est pas surchargee au client dans l'ecran de paiement.
@@ -30,14 +30,14 @@ export interface PaymentFees {
 
 /**
  * Taux de frais visibles cote client.
- * La commission plateforme SingPay/Ouyaboung est geree par le ledger de settlement.
+ * La commission plateforme Ouyaboung est geree par le ledger de settlement.
  */
 const AIRTEL_FEE_RATE = 0;
 const PVIT_FEE_RATE = 0;
 const APP_FEE_RATE = 0;
 
 /**
- * Calcule le montant a afficher pour une transaction SingPay
+ * Calcule le montant a afficher pour une transaction Mobile Money
  * 
  * Fonction isolée et pure pour faciliter:
  * - Les tests unitaires

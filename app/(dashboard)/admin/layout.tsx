@@ -5,7 +5,7 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/s
 import AdminSidebar from "../../_components/AdminSidebar";
 import NotificationBell from "../../_components/NotificationBell";
 import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";

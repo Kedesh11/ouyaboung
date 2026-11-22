@@ -81,7 +81,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     let safetyTimeout: NodeJS.Timeout;
     const resolveRoleFromUser = (authUser: User): UserRole =>
-      ((authUser.user_metadata?.role || authUser.app_metadata?.role || 'user') as UserRole);
+      ((authUser.app_metadata?.role || 'user') as UserRole);
 
     const hydrateProfileState = async (authUser: User) => {
       const fallbackRole = resolveRoleFromUser(authUser);
@@ -270,14 +270,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (profile) {
           setUserRole(profile.role as UserRole);
         } else {
-          const role = refreshedUser.user_metadata?.role ||
-            refreshedUser.app_metadata?.role ||
-            'user';
+          const role = refreshedUser.app_metadata?.role || 'user';
           setUserRole(role as UserRole);
         }
 
         // Refresh merchant status
-        const roleToCheck = profile?.role || refreshedUser.user_metadata?.role;
+        const roleToCheck = profile?.role || refreshedUser.app_metadata?.role;
         if (roleToCheck === 'merchant') {
           const { data: merchant } = await client
             .from('merchants')

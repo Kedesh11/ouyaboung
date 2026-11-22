@@ -8,7 +8,7 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getAuthUser, getMyMerchantProfile } from "@/services";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, } from "@/components/ui/avatar";
 
 export default function MerchantDashboardLayout({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState<{

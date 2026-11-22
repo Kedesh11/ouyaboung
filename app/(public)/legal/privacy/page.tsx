@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+import { SUPPORT_EMAIL } from "@/lib/config";
 const PrivacyPolicy = () => {
   return (
     <main className="min-h-screen bg-background pt-24 pb-16 px-4">
@@ -132,9 +133,9 @@ const PrivacyPolicy = () => {
               ainsi que la limitation de certains traitements.
             </p>
             <Button asChild variant="outline" className="gap-2">
-              <a href="mailto:support@ouyaboung.ga">
+              <a href={`mailto:${SUPPORT_EMAIL}`}>
                 <Mail className="w-4 h-4" />
-                support@ouyaboung.ga
+                {SUPPORT_EMAIL}
               </a>
             </Button>
           </CardContent>

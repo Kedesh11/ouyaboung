@@ -4,6 +4,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 const sanitizeEnv = (value) => (typeof value === 'string' ? value.trim() : '');
 
+const supabaseAnonKey = sanitizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
 const supabaseImageHost = (() => {
     const supabaseUrl = sanitizeEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
     if (!supabaseUrl) return null;
@@ -77,6 +79,21 @@ const nextConfig = {
     },
 };
 
+
+// Workbox serializes matcher functions into the service worker with toString(), so
+// they cannot close over config variables. Build the matcher with the anon key
+// inlined as a literal (it is a public key, already shipped to every browser).
+const supabaseCacheMatcher = new Function(
+    `return ({ url, request }) => {
+        if (request.method !== 'GET') return false;
+        if (!/\\.supabase\\.co$/i.test(url.hostname)) return false;
+        if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/rest/v1/rpc/')) return false;
+        const authorization = request.headers.get('authorization');
+        if (!authorization) return true;
+        return authorization === ${JSON.stringify(supabaseAnonKey ? `Bearer ${supabaseAnonKey}` : '')} && ${JSON.stringify(!!supabaseAnonKey)};
+    };`
+)();
+
 const pwaConfig = {
     dest: 'public',
     register: true,
@@ -99,7 +116,11 @@ const pwaConfig = {
             },
         },
         {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            // Only anonymous GETs are cached. A request carrying a signed-in user's JWT
+            // returns user-specific rows (orders, profile, ...) and must never be stored
+            // in a cache shared by every account that uses this device, nor served stale
+            // after logout. Auth endpoints and RPC calls are never cached either.
+            urlPattern: supabaseCacheMatcher,
             handler: 'StaleWhileRevalidate',
             options: {
                 cacheName: 'supabase-api-cache',

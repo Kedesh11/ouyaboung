@@ -8,7 +8,7 @@
 import { useState, useEffect } from "react";
 import {
   getAdminPaymentTransactions,
-  syncSingPayTransactionStatus,
+  syncPaymentTransactionStatus,
   subscribeToTransactions,
   unsubscribeChannel,
 } from "@/services";
@@ -99,37 +99,6 @@ interface Transaction {
   customer_phone: string;
 }
 
-const ADMIN_TRANSACTION_COLUMNS = [
-  "transaction_id",
-  "transaction_date",
-  "payment_status",
-  "q_gabon_reference",
-  "base_amount",
-  "airtel_fees",
-  "pvit_fees",
-  "app_fees",
-  "total_amount",
-  "merchant_revenue",
-  "q_gabon_fees",
-  "payment_phone_number",
-  "operator_owner_charge",
-  "q_gabon_transaction_id",
-  "merchant_reference_id",
-  "operator",
-  "operator_fees",
-  "status_code",
-  "message",
-  "order_id",
-  "order_quantity",
-  "order_status",
-  "pickup_code",
-  "consumed_at",
-  "consumed_by",
-  "product_name",
-  "merchant_name",
-  "customer_name",
-  "customer_phone",
-].join(",");
 
 // Status mapping
 const STATUS_MAP = {
@@ -148,8 +117,8 @@ const AdminTransactionsPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [syncingReference, setSyncingReference] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchTransactions = async () => {
     try {
@@ -230,15 +199,16 @@ const AdminTransactionsPage = () => {
     setCurrentPage(1);
   };
 
+  // Demande a PVIT l'etat reel du paiement (utile si le webhook n'est pas arrive).
   const handleSyncTransaction = async (tx: Transaction) => {
     const reference = tx.provider_reference || tx.q_gabon_reference;
     if (!reference && !tx.provider_transaction_id) {
-      toast.error("Reference SingPay indisponible");
+      toast.error("Reference de paiement indisponible");
       return;
     }
 
     setSyncingReference(reference || tx.provider_transaction_id);
-    const result = await syncSingPayTransactionStatus({
+    const result = await syncPaymentTransactionStatus({
       reference: reference || undefined,
       transactionId: tx.provider_transaction_id || undefined,
     });
@@ -249,7 +219,7 @@ const AdminTransactionsPage = () => {
       return;
     }
 
-    toast.success("Statut SingPay synchronise");
+    toast.success("Statut du paiement synchronise");
     fetchTransactions();
   };
 
@@ -575,11 +545,11 @@ const AdminTransactionsPage = () => {
                   <p className="font-medium">{selectedTransaction.operator}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Statut SingPay</p>
+                  <p className="text-muted-foreground">Statut fournisseur</p>
                   <p className="font-medium">{selectedTransaction.provider_status || selectedTransaction.status_code || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Resultat SingPay</p>
+                  <p className="text-muted-foreground">Resultat fournisseur</p>
                   <p className="font-medium">{selectedTransaction.provider_result || 'N/A'}</p>
                 </div>
                 <div>

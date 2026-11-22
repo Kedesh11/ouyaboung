@@ -56,28 +56,6 @@ export interface TrackingEvent {
   client_ts:   number;
 }
 
-/**
- * The shape POSTed to /api/analytics/events.
- * We use snake_case to match the DB column names directly.
- */
-export interface TrackingBatchPayload {
-  events: TrackingEvent[];
-  sent_at?: number;
-}
-
-export interface TrackingIngestResponse {
-  success: boolean;
-  request_id: string;
-  accepted?: number;
-  inserted?: number;
-  dropped?: number;
-  error?: {
-    code: string;
-    message: string;
-    details?: unknown;
-  };
-}
-
 /** Configuration for the TrackingService singleton. */
 export interface TrackingConfig {
   /** API endpoint to send batches to. */

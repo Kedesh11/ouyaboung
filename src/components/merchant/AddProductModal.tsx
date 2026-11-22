@@ -29,11 +29,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Plus,
-  Trash2,
   ShoppingBasket,
   Package,
-  Clock,
-  Image as ImageIcon,
   X,
   Upload,
   Camera,

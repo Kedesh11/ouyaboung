@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const role = profile?.role || user.user_metadata?.role || 'user';
+    const role = profile?.role || user.app_metadata?.role || 'user';
     if (role !== 'merchant') {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }

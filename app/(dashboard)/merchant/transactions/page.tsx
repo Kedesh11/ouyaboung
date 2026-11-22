@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import {
     getMerchantPaymentTransactions,
-    syncSingPayTransactionStatus,
-    subscribeToTransactions,
+    syncPaymentTransactionStatus,
+      subscribeToTransactions,
     unsubscribeChannel,
 } from "@/services";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +32,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag, RefreshCw, Filter } from "lucide-react";
+import { Receipt, Eye, DollarSign, TrendingUp, Clock, CheckCircle, ShoppingBag, Filter, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -69,26 +69,6 @@ interface MerchantTransaction {
     consumed_at: string;
 }
 
-const MERCHANT_TRANSACTION_COLUMNS = [
-    "transaction_id",
-    "transaction_date",
-    "payment_status",
-    "q_gabon_reference",
-    "base_amount",
-    "total_amount",
-    "merchant_revenue",
-    "q_gabon_fees",
-    "payment_phone_number",
-    "operator",
-    "status_code",
-    "product_name",
-    "customer_name",
-    "customer_phone",
-    "order_status",
-    "order_quantity",
-    "pickup_code",
-    "consumed_at",
-].join(",");
 
 // Status mapping
 const STATUS_MAP = {
@@ -112,8 +92,8 @@ export default function MerchantTransactionsPage() {
     const [transactions, setTransactions] = useState<MerchantTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTransaction, setSelectedTransaction] = useState<MerchantTransaction | null>(null);
-    const [statusFilter, setStatusFilter] = useState("all");
     const [syncingReference, setSyncingReference] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState("all");
 
     const fetchTransactions = async () => {
         try {
@@ -155,29 +135,6 @@ export default function MerchantTransactionsPage() {
         statusFilter === "all" ? true : tx.payment_status === statusFilter
     ));
 
-    const handleSyncTransaction = async (tx: MerchantTransaction) => {
-        const reference = tx.provider_reference || tx.q_gabon_reference;
-        if (!reference && !tx.provider_transaction_id) {
-            toast.error("Reference SingPay indisponible");
-            return;
-        }
-
-        setSyncingReference(reference || tx.provider_transaction_id);
-        const result = await syncSingPayTransactionStatus({
-            reference: reference || undefined,
-            transactionId: tx.provider_transaction_id || undefined,
-        });
-        setSyncingReference(null);
-
-        if (!result.success) {
-            toast.error(result.error?.message || "Synchronisation impossible");
-            return;
-        }
-
-        toast.success("Statut SingPay synchronise");
-        fetchTransactions();
-    };
-
     // Calculate stats
     const totalRevenue = transactions
         .filter(tx => tx.payment_status === 'SUCCESS')
@@ -188,6 +145,30 @@ export default function MerchantTransactionsPage() {
     const totalFees = transactions
         .filter(tx => tx.payment_status === 'SUCCESS')
         .reduce((sum, tx) => sum + (tx.total_amount - tx.merchant_revenue), 0);
+
+    // Demande a PVIT l'etat reel du paiement (utile si le webhook n'est pas arrive).
+    const handleSyncTransaction = async (tx: MerchantTransaction) => {
+      const reference = tx.provider_reference || tx.q_gabon_reference;
+      if (!reference && !tx.provider_transaction_id) {
+        toast.error("Reference de paiement indisponible");
+        return;
+      }
+
+      setSyncingReference(reference || tx.provider_transaction_id);
+      const result = await syncPaymentTransactionStatus({
+        reference: reference || undefined,
+        transactionId: tx.provider_transaction_id || undefined,
+      });
+      setSyncingReference(null);
+
+      if (!result.success) {
+        toast.error(result.error?.message || "Synchronisation impossible");
+        return;
+      }
+
+      toast.success("Statut du paiement synchronise");
+      fetchTransactions();
+    };
 
     return (
         <div className="space-y-4 md:space-y-6 p-4 md:p-6">
@@ -354,12 +335,12 @@ export default function MerchantTransactionsPage() {
                                             </TableCell>
                                             <TableCell className="text-right space-x-1">
                                                 <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleSyncTransaction(tx)}
-                                                    disabled={syncingReference === reference}
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => handleSyncTransaction(tx)}
+                                                  disabled={syncingReference === reference}
                                                 >
-                                                    <RefreshCw className={`w-4 h-4 ${syncingReference === reference ? "animate-spin" : ""}`} />
+                                                  <RefreshCw className={`w-4 h-4 ${syncingReference === reference ? "animate-spin" : ""}`} />
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
@@ -453,11 +434,11 @@ export default function MerchantTransactionsPage() {
                                     <p className="font-medium">{selectedTransaction.operator}</p>
                                 </div>
                                 <div>
-                                    <p className="text-muted-foreground">Statut SingPay</p>
+                                    <p className="text-muted-foreground">Statut fournisseur</p>
                                     <p className="font-medium">{selectedTransaction.provider_status || selectedTransaction.status_code || 'N/A'}</p>
                                 </div>
                                 <div>
-                                    <p className="text-muted-foreground">Résultat SingPay</p>
+                                    <p className="text-muted-foreground">Résultat fournisseur</p>
                                     <p className="font-medium">{selectedTransaction.provider_result || 'N/A'}</p>
                                 </div>
                                 <div>

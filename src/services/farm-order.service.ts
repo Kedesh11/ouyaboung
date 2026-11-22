@@ -5,7 +5,6 @@
 
 import {
   createFarmOrder as createFarmOrderApi,
-  getFarmOrderById,
   getFarmOrdersByMerchant,
   getFarmOrdersByFarmer,
   updateFarmOrderStatus,
@@ -28,13 +27,6 @@ export const createFarmOrder = async (
   input: CreateFarmOrderInput
 ): Promise<ApiResponse<FarmOrder>> => {
   return createFarmOrderApi(input);
-};
-
-/**
- * Get a farm order by ID
- */
-export const getFarmOrder = async (orderId: string): Promise<ApiResponse<FarmOrder>> => {
-  return getFarmOrderById(orderId);
 };
 
 /**

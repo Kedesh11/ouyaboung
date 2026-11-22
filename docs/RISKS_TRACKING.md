@@ -17,21 +17,23 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 
 **Suivi de deploiement:** appliquer `supabase/migrations/20260620130000_create_order_atomic.sql` avant de valider ce risque en production.
 
-## R2 - Webhooks paiement ouverts si secret absent
+## R2 - Webhooks de paiement forgeables
 
-**Statut:** corrige et durci cote code, mecanisme de signature officiel SingPay toujours a confirmer  
-**Risque:** si `QGABON_WEBHOOK_SECRET`/`SINGPAY_CALLBACK_SECRET` est absent, les callbacks acceptaient toute requete des que `ALLOW_INSECURE_WEBHOOKS=true` trainait dans les secrets d'un environnement, sans lien avec le fait que cet environnement soit reellement local ou non. La comparaison de secret etait aussi un `===` simple, vulnerable en theorie a une attaque par timing.  
-**Impact:** confirmation frauduleuse de paiements, commandes confirmees sans paiement reel, reversement declenche pour une commande jamais payee.
+**Statut:** corrige avec l'integration PVIT (callback `pvit-callback`), a recetter en sandbox  
+**Risque:** un webhook de paiement non authentifie permet de confirmer frauduleusement une commande (ou de faire echouer un vrai paiement). PVIT ne signe pas ses webhooks et ne fournit pas de secret partage.  
+**Impact:** commandes confirmees sans paiement reel, paiements legitimes marques en echec, reversement a la boutique pour une commande jamais payee.
 
-**Decision d'ingenierie:** extraire la logique dans `supabase/functions/_shared/webhook-auth.ts` (pure, testable sous Vitest) : comparaison a temps constant (`timingSafeEqual`), et le contournement `ALLOW_INSECURE_WEBHOOKS` n'a plus d'effet que si `SUPABASE_URL` pointe vers le stack local (`127.0.0.1`/`localhost`/`kong:`) - impossible a declencher par erreur sur un vrai projet Supabase, meme si le flag est mal configure en secrets.
+**Decision d'ingenierie:** un callback n'est jamais cru sur parole. Le statut est toujours verifie aupres de l'API de statut de PVIT (authentifiee par notre secret serveur) avant de confirmer une commande ou de faire echouer un paiement; le montant doit etre rapporte par PVIT et correspondre exactement a la commande. En complement, l'adresse source est controlee contre les adresses publiees par PVIT (`PVIT_CALLBACK_IP_MODE`: `enforce`, `report` par defaut, `off`; seule la derniere entree de `X-Forwarded-For`, ajoutee par la passerelle, est consideree). Les transitions de statut finales restent collantes (`payment-guards.ts`).
 
 **Criteres d'acceptation:**
-- Production sans secret retourne `401`, quelle que soit la valeur de `ALLOW_INSECURE_WEBHOOKS`, des que `SUPABASE_URL` n'est pas une URL locale. **Fait, voir `webhook-auth.ts` + `webhook-auth.test.ts` (12 tests).**
-- La comparaison de secret n'est plus vulnerable au timing. **Fait via `timingSafeEqual`.**
-- Les tentatives refusees sont loguees avec leur motif (`missing_secret_configuration`, `missing_provided_secret`, `secret_mismatch`). **Fait dans `handleSingPayCallback`.**
-- La documentation de deploiement liste le secret comme obligatoire. **Fait.**
+- Un callback SUCCESS alors que l'API de statut dit PENDING ne confirme rien. **Fait, teste.**
+- Un callback FAILED forge ne fait pas echouer un paiement en attente. **Fait, teste.**
+- Un montant different (callback ou API de statut) ou absent de l'API de statut bloque la confirmation. **Fait, teste.**
+- API de statut indisponible: reponse 502 sans aucun changement d'etat. **Fait, teste.**
+- Le callback est deploye sans JWT (`verify_jwt = false`), sinon la passerelle le refuserait avant d'atteindre le code. **Fait dans `supabase/config.toml`, a verifier au deploiement.**
+- Toute ecriture en base est verifiee: en cas d'echec, reponse 500 et rejeu possible sans doublon. **Fait, teste.**
 
-**Reste ouvert:** aucune signature HMAC officielle SingPay n'est documentee cote fournisseur (`docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md` §13). Le secret partage reste une hypothese de securite, pas une garantie contractuelle - a remplacer par la signature officielle des qu'elle est confirmee avec SingPay.
+**Reste ouvert:** passer `PVIT_CALLBACK_IP_MODE` a `enforce` apres avoir verifie en sandbox que `X-Forwarded-For` contient bien l'adresse de PVIT en derniere position derriere la passerelle Supabase. Les Edge Functions n'ont pas d'adresse IP sortante fixe: le filtrage IP entrant cote PVIT (recommande pour la production) est donc inapplicable sans proxy.
 
 ## R3 - QR Code accepte sur commande non payee
 
@@ -88,25 +90,19 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 
 ## R7 - Paiement non multi-tenant
 
-**Statut:** socle implemente, activation production a valider  
-**Risque:** le paiement Q-Gabon actuel reste structure autour d'une configuration plateforme globale sans ledger de reversement dynamique. Le modele cible SingPay impose un portefeuille principal Ouyaboung, des beneficiaires Airtel/Moov verifies et des settlements idempotents.  
-**Impact:** mauvais destinataire de reversement, commission incorrecte, double paiement marchand, reconciliation difficile, risque de melanger les transactions de plusieurs boutiques.
+**Statut:** implemente avec PVIT (paiement fractionne), a recetter en sandbox puis en production  
+**Risque:** un paiement structure autour d'une configuration plateforme globale, sans ledger de reversement, expose a un mauvais destinataire, une commission incorrecte, un double paiement marchand et une reconciliation difficile.  
+**Impact:** pertes financieres et litiges entre boutiques.
 
-**Decision d'ingenierie:** ne pas modifier partiellement le paiement dans ce lot. Documenter l'architecture cible SingPay avec wallet principal et reversements dynamiques, puis ouvrir un chantier paiement specifique couvrant schema, Edge Functions, callbacks, dashboard marchand, admin, settlement et tests.
+**Decision d'ingenierie:** le client paie sur le compte d'operation d'Ouyaboung; PVIT repartit le paiement dans la meme transaction (paiement fractionne): la boutique recoit un montant fixe (net), la commission reste sur le compte d'operation. Le ledger (`payment_transactions`, `payment_settlements`) trace chaque paiement et sa repartition. Voir `docs/PVIT_INTEGRATION.md`.
 
-**Criteres d'acceptation du futur chantier:**
-- Ouyaboung possede un wallet principal SingPay actif par environnement. **Socle fait via `platform_payment_wallets` + variables env.**
-- Chaque boutique possede un ou plusieurs numeros payout Airtel/Moov verifies. **Schema/RLS faits, UI dediee a finaliser.**
-- L'admin peut aussi configurer des numeros payout Airtel/Moov verifies. **Schema/RLS faits, UI dediee a finaliser.**
-- L'Edge Function resout le wallet principal, le marchand et le payout depuis `order -> food_item -> merchant`, jamais depuis le client. **Fait.**
-- Les callbacks confirment une transaction interne rattachee a la commande, a la boutique et au wallet principal. **Fait.**
-- Les settlements calculent commission plateforme et montant net marchand. **Fait avec `PLATFORM_COMMISSION_RATE`.**
-- Les reversements SingPay sont idempotents et traces avant/apres `POST /transfer`. **Socle fait, activation protegee par `SINGPAY_TRANSFERS_ENABLED=false`.**
-- Les comptes payout sont proteges par RLS et validation admin. **Fait cote schema.**
-- Les secrets SingPay restent serveur uniquement. **Fait cote variables serveur.**
-- Les statuts SingPay sont mappes vers les statuts internes sans confirmer une commande tant que le resultat provider n'est pas `Success`. **Fait.**
-
-**Documentation cible:** `docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md` et `docs/SINGPAY_SWAGGER_ANALYSIS.md`.
+**Criteres d'acceptation:**
+- Le beneficiaire, le montant et la commission sont resolus cote serveur depuis `order -> merchant -> compte de reversement verifie`, jamais depuis le client. **Fait, teste.**
+- Le net marchand et la commission sont decides a l'initiation et relus a la confirmation (pas de recalcul). **Fait, teste.**
+- Les comptes de reversement sont verifies par KYC aupres de l'operateur; le marchand ne peut pas se verifier lui-meme (RLS). **Fait (fonction `verify-payout-account`).**
+- Ledger de repartition idempotent (une ligne boutique et une ligne plateforme par paiement). **Fait, teste.**
+- Paiement confirme pour une commande annulee: ligne en `manual_review` et journal `REFUND_REQUIRED`. **Fait, teste.**
+- Resultat de repartition par beneficiaire: la documentation PVIT n'expose pas de statut par beneficiaire; la ligne boutique passe a `paid` sur la foi du statut global SUCCESS. **A verifier en sandbox et par le reporting PVIT.**
 
 ## R8 - Composants dupliques et divergents (Navbar, Footer, FoodCard, UserMenu)
 
@@ -132,7 +128,7 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 **Criteres d'acceptation:**
 - La CI execute `npm run test:coverage` et echoue sous le seuil. **Fait.**
 - `payout.service.ts` et `admin.service.ts` (dont `updateMerchantStatus`, miroir applicatif du trigger anti-escalade de privilege) et `payment-transactions.service.ts` ont des tests de chemin nominal et d'erreur. **Fait.**
-- `transaction.service.ts` (donnees mock en memoire, jamais appele en dehors du barrel `src/services/index.ts`) est identifie comme code mort plutot que teste inutilement. **Constate, suppression a decider separement.**
+- `transaction.service.ts` (donnees mock en memoire, jamais appele en dehors du barrel `src/services/index.ts`) est identifie comme code mort plutot que teste inutilement. **Supprime lors de l'assainissement R15.**
 
 ## R10 - Absence de transport d'erreur en production
 
@@ -193,3 +189,38 @@ Ce document suit les risques critiques identifies lors de l'audit du projet Ouya
 **Impact:** degradation progressive (bloat, index a maintenir) si le volume grossit fortement, mais aucune preuve actuelle que ce soit deja le cas.
 
 **Decision d'ingenierie:** ne pas partitionner sans donnees de volume reel - ce serait une optimisation prematuree et risquee (migration lourde, verrous). Surveiller `pg_stat_user_tables.n_live_tup` sur `user_events` via `docs/sql/performance_diagnostics.sql` et ne partitionner que lorsque le volume le justifie.
+
+## R15 - Code mort et dependances inutilisees
+
+**Statut:** corrige (assainissement du 21 novembre 2026)  
+**Risque:** fichiers, fonctions exportees, composants UI et dependances npm jamais utilises s'accumulaient (modules `lib/auth/{mfa,session,validation,errors,types}`, `src/mock/`, `transaction.service.ts`, `pricing.api.ts`, types Q-Gabon, composants shadcn non importes, 21 paquets npm).  
+**Impact:** surface de maintenance et d'audit inutile, bundle et installation plus lourds, documentation divergente du code reel, fausse impression de fonctionnalites existantes (MFA, gestion de sessions).
+
+**Decision d'ingenierie:** supprimer tout symbole sans aucune reference (graphe d'imports TypeScript, y compris imports dynamiques), puis verifier par `tsc`, `eslint`, `vitest` et `next build`. Le code seulement reference par des tests est conserve tant que sa suppression n'est pas decidee explicitement.
+
+**Criteres d'acceptation:**
+- Aucun fichier orphelin hors `tailwind.config.ts` (config), `src/types/supabase.ts` (types generes) et `src/lib/logger.ts` (voir ci-dessous). **Fait.**
+- Les barrels `src/api/index.ts` et `src/services/index.ts` n'exportent que des symboles existants et utilises. **Fait.**
+- Les dependances npm sans reference ont ete retirees de `package.json`. **Fait.**
+- Les guides `docs/auth-migration-guide.md` et `docs/INSTALL_DEPENDENCIES.md`, qui decrivaient le module d'authentification supprime, ont ete retires. **Fait.**
+
+**Reste ouvert:**
+- `src/lib/logger.ts` n'est appele nulle part: le branchement Sentry decrit en R10 n'est donc pas effectif tant que le code applicatif n'utilise pas `logger.error`/`logger.warn`.
+- Fonctions couvertes par des tests mais jamais appelees en production (`order.service`, `notification.service`, `phone-validation`, `payment-fees`): suppression a decider avec leurs tests.
+- Erreur ignoree dans `updateUserPreferences` (`src/api/users.api.ts`) et etats `loading` jamais affiches dans plusieurs pages admin/marchand: a traiter comme defauts, pas comme code mort.
+
+## R16 - Commandes modifiables directement par les clients API (contournement du paiement)
+
+**Statut:** corrige par migration `20261121100000_orders_client_update_guard.sql`, a deployer  
+**Risque:** les politiques RLS d'origine sur `orders` permettaient a un client authentifie, via l'API REST Supabase et sans passer par l'application, (1) d'inserer une commande avec prix et statut libres, (2) de passer sa commande en `confirmed` sans payer (le QR de retrait accepte les commandes `confirmed`), (3) d'abaisser `total_price` avant le paiement (le montant debite est `orders.total_price`). Un marchand pouvait aussi modifier le prix ou le marchand d'une commande de sa boutique.  
+**Impact:** retrait de produits sans paiement, paiement d'un montant arbitraire, detournement du reversement vers une autre boutique.
+
+**Decision d'ingenierie:** la table `orders` n'est plus ecrivable librement par les clients API. La creation passe uniquement par `create_order_atomic` (plus de politique d'insertion). Un trigger `BEFORE UPDATE` verrouille les colonnes de prix et de propriete et n'autorise que les transitions legitimes: annulation d'une commande non payee, cycle de retrait cote marchand (`confirmed -> ready -> completed/picked_up/no_show`). Le passage a `confirmed` est reserve au paiement (service_role). Les chemins serveur (service_role, fonctions `SECURITY DEFINER`) ne sont pas concernes. L'annulation, par RPC ou par API, est refusee tant qu'un paiement est en cours ou confirme.
+
+**Criteres d'acceptation:**
+- Un client ne peut ni inserer une commande, ni modifier prix/marchand/produit/quantite/code de retrait, ni passer une commande en `confirmed`. **Verifie sur un Postgres jetable (schema minimal reproduisant les politiques d'origine).**
+- Le cycle marchand (`ready`, `completed`) et l'annulation d'une commande non payee continuent de fonctionner. **Verifie.**
+- L'annulation d'une commande payee ou en cours de paiement est refusee (`PAYMENT_LOCKED` cote RPC). **Verifie.**
+- Migration a appliquer sur Supabase puis a recetter avec les parcours e2e (reservation, annulation, scan QR). **A faire.**
+
+**Reste ouvert:** annuler une commande deja payee exige une intervention admin tant qu'aucun flux de remboursement n'existe; le delai de 10 minutes de la fenetre de paiement en cours est fixe dans `order_has_active_payment`.

@@ -198,7 +198,7 @@ export const getAdminPaymentTransactions = async (
   return { data: (data || []) as PaymentTransactionRecord[], error: null, success: true };
 };
 
-export const syncSingPayTransactionStatus = async (
+export const syncPaymentTransactionStatus = async (
   params: { reference?: string; transactionId?: string }
 ): Promise<ApiResponse<unknown>> => {
   if (!isSupabaseConfigured()) {
@@ -209,7 +209,7 @@ export const syncSingPayTransactionStatus = async (
     };
   }
 
-  const functionUrl = getFunctionUrl('singpay-transaction-sync');
+  const functionUrl = getFunctionUrl('pvit-transaction-status');
   if (!functionUrl) {
     return {
       data: null,
@@ -242,8 +242,8 @@ export const syncSingPayTransactionStatus = async (
     return {
       data: null,
       error: {
-        code: payload?.error?.code || 'SINGPAY_SYNC_FAILED',
-        message: payload?.error?.message || payload?.error || 'Synchronisation SingPay impossible',
+        code: payload?.error?.code || 'PAYMENT_SYNC_FAILED',
+        message: payload?.error?.message || payload?.error || 'Synchronisation du paiement impossible',
         details: payload,
       },
       success: false,

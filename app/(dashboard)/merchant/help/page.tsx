@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 
 import { Mail, Phone, MessageCircle, FileText } from "lucide-react";
 
+import { SUPPORT_EMAIL } from "@/lib/config";
 const MerchantHelpPage = () => {
     const faqs = [
         {
@@ -101,7 +102,7 @@ const MerchantHelpPage = () => {
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium">Email</p>
-                                    <p className="text-sm text-muted-foreground">support@ouyaboung.ga</p>
+                                    <p className="text-sm text-muted-foreground">{SUPPORT_EMAIL}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">

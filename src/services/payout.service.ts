@@ -1,4 +1,5 @@
 import { requireSupabaseClient } from '@/api/supabaseClient';
+import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 import type { ApiResponse } from '@/types';
 import {
   getAirtelPhoneError,
@@ -11,7 +12,7 @@ export type PayoutOperator = 'airtel' | 'moov';
 export interface MerchantPayoutAccount {
   id: string;
   merchant_id: string;
-  provider: 'singpay';
+  provider: 'pvit';
   operator: PayoutOperator;
   label: string;
   msisdn: string;
@@ -47,7 +48,7 @@ export const getMerchantPayoutAccounts = async (
     .from('merchant_payout_accounts')
     .select('*')
     .eq('merchant_id', merchantId)
-    .eq('provider', 'singpay')
+    .eq('provider', 'pvit')
     .order('is_default', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -92,7 +93,7 @@ export const createMerchantPayoutAccount = async (
     .from('merchant_payout_accounts')
     .insert({
       merchant_id: input.merchantId,
-      provider: 'singpay',
+      provider: 'pvit',
       operator: input.operator,
       label: input.label.trim() || (input.operator === 'airtel' ? 'Airtel Money' : 'Libertis/Moov Money'),
       msisdn: input.msisdn.trim(),
@@ -117,4 +118,64 @@ export const createMerchantPayoutAccount = async (
     error: null,
     success: true,
   };
+};
+
+/**
+ * Verifie le numero d'un compte de reversement aupres de l'operateur (KYC).
+ *
+ * Seule l'Edge Function peut passer un compte a "verified": la RLS interdit au
+ * marchand de modifier lui-meme ce statut.
+ */
+export const verifyMerchantPayoutAccount = async (
+  accountId: string
+): Promise<ApiResponse<{ status: string }>> => {
+  const { url } = getSupabasePublicEnv();
+  if (!url) {
+    return {
+      data: null,
+      error: { code: 'NOT_CONFIGURED', message: "URL d'Edge Function non configuree" },
+      success: false,
+    };
+  }
+
+  const client = requireSupabaseClient();
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) {
+    return {
+      data: null,
+      error: { code: 'UNAUTHORIZED', message: 'Non authentifie' },
+      success: false,
+    };
+  }
+
+  try {
+    const response = await fetch(`${url.replace(/\/$/, '')}/functions/v1/verify-payout-account`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ accountId }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.success) {
+      return {
+        data: null,
+        error: {
+          code: payload?.error?.code || 'VERIFICATION_FAILED',
+          message: payload?.error?.message || 'Verification du numero impossible',
+        },
+        success: false,
+      };
+    }
+
+    return { data: payload.data, error: null, success: true };
+  } catch {
+    return {
+      data: null,
+      error: { code: 'NETWORK_ERROR', message: 'Verification du numero impossible' },
+      success: false,
+    };
+  }
 };

@@ -93,7 +93,7 @@ const formatLocationDate = (value?: string): string => {
 export default function SettingsPage() {
     const { toast } = useToast();
     const router = useRouter();
-    const { theme, resolvedTheme, setTheme } = useTheme();
+    const { resolvedTheme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {

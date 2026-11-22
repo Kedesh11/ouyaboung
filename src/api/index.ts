@@ -12,8 +12,7 @@ export {
 } from './supabaseClient';
 
 // Routes & Tables
-export { API_ROUTES, DB_TABLES } from './routes';
-export type { TableName } from './routes';
+export { DB_TABLES } from './routes';
 
 // Auth API
 export {
@@ -24,7 +23,6 @@ export {
   getCurrentUser,
   resetPassword,
   updatePassword,
-  onAuthStateChange,
   signInWithOtp,
   verifyOtp,
   updateUser,
@@ -37,9 +35,7 @@ export {
   getUserPreferences,
   updateUserPreferences,
   getUserFavorites,
-  addToFavorites,
   removeFromFavorites,
-  getUserImpact as getUserImpactApi,
   getUserProfileByUserId,
 } from './users.api';
 
@@ -73,22 +69,17 @@ export {
 // Farmers API
 export {
   getFarmers,
-  getFarmerById,
   getFarmerByUserId,
   getFarmerBySlug,
   createFarmer,
   updateFarmer,
-  searchFarmers,
 } from './farmers.api';
 
 // Farm Products API
 export {
-  getFarmProductById,
-  getFarmProductBySlug,
   getFarmProductsByFarmer,
   createFarmProduct,
   updateFarmProduct,
-  deleteFarmProduct,
 } from './farm-products.api';
 
 // Farm Orders API
@@ -103,7 +94,6 @@ export {
 
 // Drivers API
 export {
-  getDriverById,
   getDriverByUserId,
   createDriver,
   updateDriver,
@@ -133,29 +123,16 @@ export {
   completeOrder,
   addOrderReview,
   getActiveOrders,
-  getOrderByTrackingCode,
 } from './orders.api';
 
 // Orders RPC (bypasses RLS)
 export { cancelOrderViaRPC } from './orders-rpc.api';
 
 // Pricing API
-export {
-  getPricingRecommendation,
-  calculateTimeBasedDiscount,
-  getPricingHistory,
-  savePricingRecommendation,
-  getAverageDiscountByCategory,
-} from './pricing.api';
 
 // Impact API
 export {
-  getGlobalImpact,
   getUserImpact,
   getMerchantImpact,
-  calculateCO2Impact,
-  getImpactLeaderboard,
-  logImpact,
-  generateImpactReport,
   getUserMonthlyImpact,
 } from './impact.api';

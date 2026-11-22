@@ -4,13 +4,6 @@ const DEFAULT_BROWSER_TIMEOUT_MS = 15000;
 const DEFAULT_BROWSER_MAX_AGE_MS = 300000;
 const LOW_ACCURACY_RETRY_TIMEOUT_MS = 7000;
 
-export const GABON_DEFAULT_LOCATION = {
-  latitude: 0.4162,
-  longitude: 9.4673,
-  city: 'Libreville',
-  country: 'GA',
-} as const;
-
 export const GABON_LOCATION_BOUNDS = {
   minLatitude: -4.2,
   maxLatitude: 2.6,

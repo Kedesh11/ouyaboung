@@ -3,8 +3,16 @@
 # Production Performance Testing Script
 # Tests all critical routes with Lighthouse CI
 
+# URL du site a auditer: LIGHTHOUSE_URL, sinon NEXT_PUBLIC_APP_URL (aucune URL en dur)
+BASE_URL="${LIGHTHOUSE_URL:-${NEXT_PUBLIC_APP_URL:-}}"
+if [ -z "$BASE_URL" ]; then
+  echo "Definissez LIGHTHOUSE_URL ou NEXT_PUBLIC_APP_URL (ex: LIGHTHOUSE_URL=https://mon-site.example)" >&2
+  exit 1
+fi
+BASE_URL="${BASE_URL%/}"
+
 echo "🚀 Starting Lighthouse Performance Audits..."
-echo "Production URL: https://ouyaboung-eight.vercel.app"
+echo "Production URL: $BASE_URL"
 echo ""
 
 # Critical routes to test
@@ -24,7 +32,7 @@ echo "Running audits on ${#ROUTES[@]} routes..."
 echo ""
 
 for route in "${ROUTES[@]}"; do
-  URL="https://ouyaboung-eight.vercel.app${route}"
+  URL="${BASE_URL}${route}"
   FILENAME="lighthouse-results/lighthouse_${TIMESTAMP}_$(echo $route | tr '/' '_').json"
   
   echo "🔍 Testing: $URL"

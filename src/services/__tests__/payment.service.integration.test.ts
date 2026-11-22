@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetSession } = vi.hoisted(() => ({
-  mockGetSession: vi.fn(),
-}));
+const { mockGetSession } = vi.hoisted(() => {
+  // The payment flow is off by default; these tests exercise the enabled flow.
+  process.env.NEXT_PUBLIC_PAYMENT_FLOW_ENABLED = "true";
+  return { mockGetSession: vi.fn() };
+});
 
 vi.mock("@/api/supabaseClient", () => ({
   supabaseClient: {
@@ -87,7 +89,7 @@ describe("payment.service integration", () => {
     expect(result.success).toBe(true);
     expect(result.data?.transactionId).toBe("tx-1");
     expect(fetch).toHaveBeenCalledWith(
-      "https://demo.supabase.co/functions/v1/initiate-airtel",
+      "https://demo.supabase.co/functions/v1/initiate-payment",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -95,6 +97,9 @@ describe("payment.service integration", () => {
         }),
       })
     );
+    // The amount is never sent: the server reads it from the order.
+    const body = JSON.parse(String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body));
+    expect(body).toEqual({ phone: "074123456", orderId: "order-3", operator: "airtel" });
   });
 
   it("returns PAYMENT_FAILED when edge returns success false", async () => {
@@ -188,9 +193,11 @@ describe("payment.service integration", () => {
 
     expect(result.success).toBe(true);
     expect(fetch).toHaveBeenCalledWith(
-      "https://demo.supabase.co/functions/v1/initiate-moov",
+      "https://demo.supabase.co/functions/v1/initiate-payment",
       expect.any(Object)
     );
+    const body = JSON.parse(String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body));
+    expect(body).toEqual({ phone: "066123456", orderId: "order-5", operator: "moov" });
   });
 
   it("fails moov on invalid phone", async () => {

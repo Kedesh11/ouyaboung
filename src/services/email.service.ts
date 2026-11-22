@@ -6,7 +6,6 @@
 import {
   APP_URL,
   buildMerchantActionUrl,
-  buildFarmerActionUrl,
   type MerchantEmailType,
   type FarmerEmailType,
   type DriverEmailType,

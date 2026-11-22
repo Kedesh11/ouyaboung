@@ -4,19 +4,11 @@
 // ============================================
 
 import {
-  getDriverById,
   getDriverByUserId,
   createDriver,
   updateDriver,
 } from '@/api';
 import type { ApiResponse, Driver, VehicleType, GabonCity } from '@/types';
-
-/**
- * Get driver by ID
- */
-export const getDriver = async (driverId: string): Promise<ApiResponse<Driver>> => {
-  return getDriverById(driverId);
-};
 
 /**
  * Get driver profile for current user
@@ -63,32 +55,6 @@ export const registerDriver = async (data: {
     email: data.email,
     city: data.city,
     delivery_zone: data.deliveryZone,
-    is_verified: false,
-    is_active: false,
-    is_refused: false,
-  });
-};
-
-/**
- * Create a default driver profile for an authenticated user (pending validation).
- */
-export const createDefaultDriverProfile = async (input: {
-  userId: string;
-  fullName: string;
-  vehicleType?: VehicleType;
-  phone?: string;
-  email?: string;
-  city?: GabonCity;
-  photoUrl?: string | null;
-}): Promise<ApiResponse<Driver>> => {
-  return createDriver({
-    user_id: input.userId,
-    full_name: input.fullName,
-    vehicle_type: input.vehicleType || 'other',
-    phone: input.phone || 'À compléter',
-    email: input.email || '',
-    city: input.city || 'Libreville',
-    photo_url: input.photoUrl ?? undefined,
     is_verified: false,
     is_active: false,
     is_refused: false,

@@ -1,6 +1,4 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 
 /**
@@ -17,29 +15,3 @@ export const createPublicSupabaseClient = (): SupabaseClient | null => {
   });
 };
 
-/**
- * Client Supabase SSR avec cookies pour les routes serveur authentifiées.
- */
-export const createServerSupabaseClient = async (): Promise<SupabaseClient | null> => {
-  const { url, anonKey } = getSupabasePublicEnv();
-  if (!url || !anonKey) return null;
-
-  const cookieStore = await cookies();
-
-  return createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        } catch {
-          // Ignored in Server Components where cookies are read-only.
-        }
-      },
-    },
-  });
-};

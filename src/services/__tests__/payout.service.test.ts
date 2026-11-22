@@ -1,7 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireSupabaseClient: vi.fn(),
+  getSupabasePublicEnv: vi.fn(),
+}));
+
+vi.mock("@/lib/supabase/public-env", () => ({
+  getSupabasePublicEnv: mocks.getSupabasePublicEnv,
 }));
 
 vi.mock("@/api/supabaseClient", () => ({
@@ -11,6 +16,7 @@ vi.mock("@/api/supabaseClient", () => ({
 import {
   createMerchantPayoutAccount,
   getMerchantPayoutAccounts,
+  verifyMerchantPayoutAccount,
 } from "@/services/payout.service";
 
 const AIRTEL_NUMBER = "074123456"; // prefix 74
@@ -51,7 +57,7 @@ describe("payout.service", () => {
       const insertedRow = {
         id: "payout-1",
         merchant_id: "m1",
-        provider: "singpay",
+        provider: "pvit",
         operator: "airtel",
         label: "Compte principal",
         msisdn: AIRTEL_NUMBER,
@@ -84,7 +90,7 @@ describe("payout.service", () => {
       expect(builder.insert).toHaveBeenCalledWith(
         expect.objectContaining({
           merchant_id: "m1",
-          provider: "singpay",
+          provider: "pvit",
           operator: "airtel",
           verification_status: "pending",
           is_active: true,
@@ -147,7 +153,7 @@ describe("payout.service", () => {
       return builder;
     };
 
-    it("returns the merchant's SingPay payout accounts", async () => {
+    it("returns the merchant's PVIT payout accounts", async () => {
       const rows = [{ id: "payout-1" }];
       const builder = createThenableBuilder({ data: rows, error: null });
       mocks.requireSupabaseClient.mockReturnValue({ from: vi.fn(() => builder) });
@@ -167,6 +173,74 @@ describe("payout.service", () => {
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("500");
+    });
+  });
+
+  describe("verifyMerchantPayoutAccount", () => {
+    const originalFetch = global.fetch;
+    const withSession = (session: unknown) =>
+      mocks.requireSupabaseClient.mockReturnValue({
+        auth: { getSession: vi.fn().mockResolvedValue({ data: { session } }) },
+      });
+
+    beforeEach(() => {
+      mocks.getSupabasePublicEnv.mockReturnValue({ url: "https://proj.supabase.co", anonKey: "anon" });
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it("fails fast when the Supabase URL is missing", async () => {
+      mocks.getSupabasePublicEnv.mockReturnValue({ url: "", anonKey: "" });
+      const result = await verifyMerchantPayoutAccount("pa-1");
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("NOT_CONFIGURED");
+    });
+
+    it("requires a session", async () => {
+      withSession(null);
+      const result = await verifyMerchantPayoutAccount("pa-1");
+      expect(result.error?.code).toBe("UNAUTHORIZED");
+    });
+
+    it("calls the verify-payout-account function with the user's token", async () => {
+      withSession({ access_token: "tok" });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, data: { status: "verified" } }),
+      }) as unknown as typeof fetch;
+
+      const result = await verifyMerchantPayoutAccount("pa-1");
+
+      expect(result).toMatchObject({ success: true, data: { status: "verified" } });
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://proj.supabase.co/functions/v1/verify-payout-account",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({ Authorization: "Bearer tok" }),
+          body: JSON.stringify({ accountId: "pa-1" }),
+        })
+      );
+    });
+
+    it("surfaces the function's error code and message", async () => {
+      withSession({ access_token: "tok" });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ success: false, error: { code: "CUSTOMER_UNKNOWN", message: "Numero inconnu" } }),
+      }) as unknown as typeof fetch;
+
+      const result = await verifyMerchantPayoutAccount("pa-1");
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "CUSTOMER_UNKNOWN", message: "Numero inconnu" });
+    });
+
+    it("handles a network failure", async () => {
+      withSession({ access_token: "tok" });
+      global.fetch = vi.fn().mockRejectedValue(new Error("offline")) as unknown as typeof fetch;
+      const result = await verifyMerchantPayoutAccount("pa-1");
+      expect(result.error?.code).toBe("NETWORK_ERROR");
     });
   });
 });

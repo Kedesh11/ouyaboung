@@ -10,14 +10,10 @@ export {
   logout,
   getAuthSession,
   getAuthUser,
-  getCurrentUser,
   requestPasswordReset,
   changePassword,
-  subscribeToAuthChanges,
   loginWithOtp,
   verifyOtpCode,
-  isAuthenticated,
-  getUserRole,
 } from './auth.service';
 
 // User Service
@@ -27,11 +23,7 @@ export {
   getNotificationPreferences,
   updateNotificationPreferences,
   getFavorites,
-  addFavorite,
   removeFavorite,
-  toggleFavorite,
-  getImpactStats,
-  formatImpactForDisplay,
   // profile by auth user id fallback
   // exported via getProfile which now handles both id and user_id
 } from './user.service';
@@ -75,12 +67,10 @@ export {
 // Farmer Service
 export {
   listFarmers,
-  getFarmer,
   getMyFarmerProfile,
   getFarmerBySlugName,
   registerFarmer,
   updateFarmerProfile,
-  search as searchFarmers,
   createDefaultFarmerProfile,
   updateFarmerLogoByUserId,
   getFarmerTypeName,
@@ -88,21 +78,16 @@ export {
 
 // Farm Product Service
 export {
-  getItem as getFarmProductItem,
-  getItemBySlug as getFarmProductItemBySlug,
   getFarmerItems,
   createListing as createFarmProductListing,
   updateListing as updateFarmProductListing,
-  deleteListing as deleteFarmProductListing,
   getCategoryName as getFarmProductCategoryName,
   formatPricePerUnit,
-  isAvailabilityExpired,
 } from './farm-product.service';
 
 // Farm Order Service
 export {
   createFarmOrder,
-  getFarmOrder,
   getMerchantFarmOrders,
   getFarmerFarmOrders,
   confirm as confirmFarmOrder,
@@ -119,11 +104,9 @@ export {
 
 // Driver Service
 export {
-  getDriver,
   getMyDriverProfile,
   registerDriver,
   updateDriverProfile,
-  createDefaultDriverProfile,
   updateDriverPhotoByUserId,
   getVehicleTypeName,
 } from './driver.service';
@@ -137,7 +120,6 @@ export {
   markPickedUp,
   markInTransit,
   markDelivered as markDeliveryDelivered,
-  markFailed as markDeliveryFailed,
   recordLocation,
   getLastKnownLocation,
   getStatusText as getDeliveryStatusText,
@@ -198,12 +180,13 @@ export {
   getUserPaymentTransactions,
   getMerchantPaymentTransactions,
   getAdminPaymentTransactions,
-  syncSingPayTransactionStatus,
+  syncPaymentTransactionStatus,
 } from './payment-transactions.service';
 
 export {
   getMerchantPayoutAccounts,
   createMerchantPayoutAccount,
+  verifyMerchantPayoutAccount,
 } from './payout.service';
 export type {
   MerchantPayoutAccount,
@@ -215,31 +198,12 @@ export { validatePickupCode } from './qr.service';
 
 // Impact Service
 export {
-  getGlobalStats,
   getUserStats,
   getMerchantStats as getMerchantImpactStats,
-  calculateCO2,
-  getLeaderboard,
   getUserMonthlyImpact,
-  generateReport,
-  formatGlobalImpact,
-  calculateEquivalents,
-  getImpactTier,
-  formatLargeNumber,
 } from './impact.service';
 
 // Transaction Service
-export {
-  createTransaction,
-  processPayment,
-  validateQRCode,
-  completeTransaction,
-  cancelTransaction,
-  getUserTransactions,
-  getTransaction,
-  getTransactionStatusText,
-  getTransactionStatusColor,
-} from './transaction.service';
 
 // Notification Service
 export {

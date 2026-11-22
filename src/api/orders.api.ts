@@ -3,7 +3,7 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES } from './routes';
 import {
   DEFAULT_OFFLINE_CACHE_TTL_MS,
@@ -28,18 +28,6 @@ const ORDER_LIST_COLUMNS =
   'id,user_id,merchant_id,food_item_id,quantity,total_price,original_total,savings,status,pickup_code,tracking_code,pickup_time,confirmed_at,picked_up_at,cancelled_at,cancellation_reason,rating,review,consumed_at,consumed_by,created_at,updated_at';
 const toOne = <T>(value: T | T[] | null | undefined): T | null =>
   Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
-
-/**
- * Generate a unique pickup code
- */
-const generatePickupCode = (): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-};
 
 const normalizePickupCode = (value: string): string =>
   value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -117,40 +105,6 @@ export const getOrderById = async (
     .from(DB_TABLES.ORDERS)
     .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
     .eq('id', orderId)
-    .maybeSingle();
-
-  if (error) {
-    return {
-      data: null,
-      error: { code: error.code, message: error.message },
-      success: false,
-    };
-  }
-
-  const order = data ? {
-    ...data,
-    food_item: toOne(data.food_items) ?? undefined,
-    merchant: toOne(data.merchants) ?? undefined,
-  } as Order : null;
-
-  return {
-    data: order,
-    error: null,
-    success: true,
-  };
-};
-
-/**
- * Get order by tracking code (for public/guest access with verification)
- */
-export const getOrderByTrackingCode = async (
-  trackingCode: string
-): Promise<ApiResponse<Order>> => {
-  const client = requireSupabaseClient();
-  const { data, error } = await client
-    .from(DB_TABLES.ORDERS)
-    .select(`${ORDER_LIST_COLUMNS}, food_items(${FOOD_ITEM_LIST_COLUMNS}), merchants(${MERCHANT_LIST_COLUMNS})`)
-    .eq('tracking_code', trackingCode)
     .maybeSingle();
 
   if (error) {

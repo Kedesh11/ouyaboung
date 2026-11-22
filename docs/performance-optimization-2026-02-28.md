@@ -52,9 +52,6 @@
   - `src/api/users.api.ts`
   - `src/services/admin.service.ts`
   - `src/services/notification.service.ts`
-  - `src/lib/auth/mfa.ts`
-  - `src/lib/auth/session.ts`
-  - `src/api/pricing.api.ts`
   - `supabase/functions/payment-callback/index.ts`
   - `supabase/functions/airtel-callback/index.ts`
   - `supabase/functions/moov-callback/index.ts`

@@ -3,7 +3,7 @@
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
 
-import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES } from './routes';
 import {
   DEFAULT_OFFLINE_CACHE_TTL_MS,

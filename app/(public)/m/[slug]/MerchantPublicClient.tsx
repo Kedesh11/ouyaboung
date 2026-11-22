@@ -12,6 +12,7 @@ import * as merchantService from "@/services/merchant.service";
 import type { Merchant, FoodItem } from "@/types";
 import { generateLocalBusinessSchema } from "@/lib/seo/schemas";
 
+import { APP_BASE_URL } from "@/lib/config";
 interface MerchantPublicClientProps {
   merchant: Merchant;
   items: FoodItem[];
@@ -23,7 +24,7 @@ export default function MerchantPublicClient({ merchant, items }: MerchantPublic
   const businessSchema = generateLocalBusinessSchema({
     name: merchant.business_name,
     description: merchant.description || "",
-    url: `https://ouyaboung-eight.vercel.app/m/${merchant.slug}`,
+    url: `${APP_BASE_URL}/m/${merchant.slug}`,
     logo: merchant.logo_url || "",
     telephone: merchant.phone,
     priceRange: "XAF 1000-20000",

@@ -409,3 +409,12 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# --- Edge Functions ---
+# Le callback PVIT est appele par les serveurs de PVIT, qui n'envoient pas de
+# JWT Supabase: sans ce reglage la passerelle le refuserait (401) avant meme
+# d'atteindre le code. Il est protege par le filtrage IP de PVIT et par la
+# verification du statut aupres de l'API PVIT (voir _shared/pvit.ts).
+# Les autres fonctions de paiement exigent le JWT de l'utilisateur (defaut).
+[functions.pvit-callback]
+verify_jwt = false

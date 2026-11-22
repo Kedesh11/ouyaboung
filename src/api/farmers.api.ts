@@ -3,7 +3,7 @@
 // ouyaboung Platform - Répertoire des agriculteurs
 // ============================================
 
-import { supabaseClient, requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { requireSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { DB_TABLES } from './routes';
 import {
   DEFAULT_OFFLINE_CACHE_TTL_MS,
@@ -97,34 +97,6 @@ export const getFarmers = async (filters?: {
 
   return {
     data: responseData,
-    error: null,
-    success: true,
-  };
-};
-
-/**
- * Get farmer by ID
- */
-export const getFarmerById = async (
-  farmerId: string
-): Promise<ApiResponse<Farmer>> => {
-  const client = requireSupabaseClient();
-  const { data, error } = await client
-    .from(DB_TABLES.FARMERS)
-    .select(FARMER_LIST_COLUMNS)
-    .eq('id', farmerId)
-    .maybeSingle();
-
-  if (error) {
-    return {
-      data: null,
-      error: { code: error.code, message: error.message },
-      success: false,
-    };
-  }
-
-  return {
-    data: data as Farmer,
     error: null,
     success: true,
   };
@@ -298,65 +270,3 @@ export const updateFarmer = async (
   };
 };
 
-/**
- * Search farmers by name or location
- */
-export const searchFarmers = async (
-  query: string,
-  city?: GabonCity
-): Promise<ApiResponse<Farmer[]>> => {
-  const cacheKey = `farmers:search:query:${query}:city:${city || 'all'}`;
-  const cached = await getOfflineCacheAsync<Farmer[]>(cacheKey, DEFAULT_OFFLINE_CACHE_TTL_MS);
-
-  if (isBrowserOffline()) {
-    if (cached) {
-      return { data: cached, error: null, success: true };
-    }
-    return {
-      data: null,
-      error: { code: 'OFFLINE_NO_CACHE', message: 'Recherche agriculteurs indisponible hors ligne (pas de cache).' },
-      success: false,
-    };
-  }
-
-  if (!isSupabaseConfigured()) {
-    return {
-      data: null,
-      error: { code: 'NOT_CONFIGURED', message: 'Supabase is not configured' },
-      success: false,
-    };
-  }
-
-  const client = requireSupabaseClient();
-  let dbQuery = client
-    .from(DB_TABLES.FARMERS)
-    .select(FARMER_LIST_COLUMNS)
-    .or(`farm_name.ilike.%${query}%,quartier.ilike.%${query}%`)
-    .eq('is_active', true)
-    .eq('is_verified', true);
-
-  if (city) {
-    dbQuery = dbQuery.eq('city', city);
-  }
-
-  const { data, error } = await dbQuery.limit(20);
-
-  if (error) {
-    if (cached) {
-      return { data: cached, error: null, success: true };
-    }
-    return {
-      data: null,
-      error: { code: error.code, message: error.message },
-      success: false,
-    };
-  }
-
-  await setOfflineCacheAsync(cacheKey, data as Farmer[]);
-
-  return {
-    data: data as Farmer[],
-    error: null,
-    success: true,
-  };
-};

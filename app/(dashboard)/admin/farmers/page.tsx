@@ -34,13 +34,12 @@ import { FarmerRegistration } from "@/types/admin.types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useAdminFarmers, useInvalidateAdminFarmers } from "@/hooks/useAdminData";
+import { useAdminFarmers } from "@/hooks/useAdminData";
 
 const ITEMS_PER_PAGE = 3;
 
 const AdminFarmersPage = () => {
   const { data: farmers = [], isLoading, error } = useAdminFarmers();
-  const invalidateFarmers = useInvalidateAdminFarmers();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedFarmer, setSelectedFarmer] = useState<FarmerRegistration | null>(null);

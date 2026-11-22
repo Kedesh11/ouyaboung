@@ -35,44 +35,48 @@ Ajoutez les variables suivantes dans **Settings > Environment Variables** sur Ve
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique anonyme | `eyJxh...` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé privée (si utilisée côté serveur) | `eyJ...` |
 | `NEXT_PUBLIC_APP_URL` | URL de production de votre app | `https://oyaboug.vercel.app` |
-| `ACCOUNT_CODE` | Code compte Q-Gabon Airtel | `...` |
-| `ACCOUNT_CODE_MOOV` | Code compte Q-Gabon Moov, si distinct | `...` |
-| `AGENT` | Identifiant agent Q-Gabon | `AG001` |
-| `BEAR_TOKEN` | Token API Q-Gabon | `...` |
-| `QGABON_WEBHOOK_SECRET` | Secret obligatoire pour authentifier les callbacks paiement | `...` |
-| `SINGPAY_BASE_URL` | URL API SingPay cible pour le futur paiement marketplace | `https://gateway.singpay.ga/v1` |
-| `SINGPAY_PLATFORM_WALLET_ID` | Wallet ID du portefeuille principal Ouyaboung | `68887e...` |
-| `SINGPAY_CLIENT_ID` | Client ID SingPay du portefeuille principal | `...` |
-| `SINGPAY_CLIENT_SECRET` | Secret SingPay du portefeuille principal | `...` |
-| `SINGPAY_CALLBACK_SECRET` | Secret serveur a definir si SingPay fournit un mecanisme de signature callback | `...` |
-| `SINGPAY_TRANSFERS_ENABLED` | Garde-fou pour activer les reversements `POST /transfer` apres validation | `false` |
-| `SINGPAY_REQUIRE_VERIFIED_PAYOUT` | Bloque le paiement si la boutique n'a pas de payout verifie | `true` |
-| `SINGPAY_PAYMENT_DISBURSEMENT_MODE` | Mode d'envoi du champ `disbursement` au paiement initial | `deferred` |
-| `PLATFORM_COMMISSION_RATE` | Taux de commission plateforme retenu dans le settlement | `0.10` |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | Adresse de support affichee (aide, mentions legales, parametres plateforme) | `support@ouyaboung.ga` |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | Adresse de contact general (pied de page, maintenance, emails) | `oyaboug@gmail.com` |
+| `NEXT_PUBLIC_PAYMENT_FLOW_ENABLED` | Active le paiement mobile dans l'application (`false` tant que PVIT n'est pas deploye) | `false` |
+| `PVIT_BASE_URL` | URL de l'API PVIT (**obligatoire**, aucune valeur par defaut dans le code) | `https://api.mypvit.pro` |
+| `PVIT_OPERATION_ACCOUNT_CODE` | Compte d'operation Ouyaboung qui encaisse et repartit | `ACC_...` |
+| `PVIT_SECRET_PASSWORD` | Mot de passe de renouvellement du secret (espace marchand PVIT, menu APIs) | `...` |
+| `PVIT_CODE_URL_SECRET` / `_PAYMENT` / `_STATUS` / `_KYC` | « Code URL » de chaque API PVIT | `...` |
+| `PVIT_CALLBACK_URL_CODE` | Code de l'URL de callback enregistree chez PVIT | `...` |
+| `PVIT_OWNER_CHARGE` | Qui supporte les frais PVIT: `MERCHANT` (plateforme, defaut) ou `CUSTOMER` | `MERCHANT` |
+| `PVIT_CALLBACK_IP_MODE` | Controle de la source du callback: `report` (journalise, defaut), `enforce` (refuse), `off` | `report` |
+| `PVIT_CALLBACK_ALLOWED_IPS` | Adresses depuis lesquelles PVIT appelle le webhook (separees par des virgules). Liste vide + mode `enforce` = tout refuser | `176.31.65.18,...` |
+| `PLATFORM_COMMISSION_RATE` | Taux de commission plateforme (**obligatoire**: sans valeur valide, les paiements sont refuses) | `0.10` |
+| `PAYMENT_MAX_INITIATIONS_PER_WINDOW` | Tentatives de paiement max par utilisateur et par fenetre (defaut 5) | `5` |
+| `PAYMENT_INITIATION_WINDOW_MINUTES` | Fenetre des tentatives, en minutes (defaut 10) | `10` |
+| `PAYMENT_IN_FLIGHT_WINDOW_MINUTES` | Duree pendant laquelle un paiement en attente bloque un nouvel essai sur la meme commande (defaut 5) | `5` |
+| `ALLOWED_ORIGINS` | Origines autorisees (CORS) pour les fonctions de paiement appelees par le navigateur; non defini = toutes (developpement uniquement) | `https://oyaboug.vercel.app` |
 | `SUPABASE_URL` | Alias serveur requis par les Edge Functions Supabase | `https://xyz.supabase.co` |
 | `SUPABASE_ANON_KEY` | Alias serveur de la cle anonyme Supabase | `eyJ...` |
 
 > [!IMPORTANT]
-> Ne jamais commiter vos clés secrètes (`service_role`, `BEAR_TOKEN`, `QGABON_WEBHOOK_SECRET`, `SINGPAY_CLIENT_SECRET`, secrets SingPay) dans le code. Utilisez toujours les variables d'environnement ou un stockage de secrets serveur.
-
-> [!WARNING]
-> `ALLOW_INSECURE_WEBHOOKS=true` est reserve au developpement local. En production, laissez cette variable absente ou a `false` et configurez toujours `QGABON_WEBHOOK_SECRET`.
+> Ne jamais commiter vos clés secrètes (`service_role`, `PVIT_SECRET_PASSWORD`, secrets du fournisseur de paiement) dans le code. Utilisez toujours les variables d'environnement ou un stockage de secrets serveur.
 
 > [!NOTE]
-> Le paiement actuel reste base sur une configuration Q-Gabon plateforme globale. Le modele cible SingPay utilise un wallet principal Ouyaboung, puis des reversements dynamiques vers les numeros Airtel/Moov verifies des boutiques et de l'admin. Voir `docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md` et `docs/SINGPAY_SWAGGER_ANALYSIS.md` avant toute evolution du paiement.
+> Le fournisseur de paiement est PVIT. Le paiement mobile est desactive cote application tant que `NEXT_PUBLIC_PAYMENT_FLOW_ENABLED` n'est pas a `true`. Le guide complet (comptes, callback, secrets, recette sandbox, mise en production) est dans `docs/PVIT_INTEGRATION.md`.
 
 > [!CAUTION]
-> Les futurs `x-client-id`, `x-client-secret`, `x-wallet` et `Disbursement ID` SingPay ne doivent pas etre transmis par le frontend. Ils devront etre resolus cote serveur depuis le wallet principal, la commande, la boutique et les comptes payout verifies.
+> Les identifiants et secrets PVIT ne doivent jamais etre transmis par le frontend: ce sont des secrets des Edge Functions (`supabase secrets set`). Le montant, la boutique, le beneficiaire et la commission sont toujours resolus cote serveur depuis la commande.
 
-Edge Functions paiement a deployer:
+### Edge Functions de paiement
 
-- `initiate-airtel`
-- `initiate-moov`
-- `initiate-payment`
-- `payment-callback`
-- `airtel-callback`
-- `moov-callback`
-- `singpay-transaction-sync`
+| Fonction | Role | JWT |
+|----------|------|-----|
+| `initiate-payment` | Initie le paiement fractionne (Airtel / Moov) | requis |
+| `pvit-callback` | Webhook de statut appele par PVIT | **non** (`verify_jwt = false` dans `supabase/config.toml`) |
+| `pvit-transaction-status` | Resynchronise un paiement via l'API de statut PVIT | requis |
+| `verify-payout-account` | Verifie un numero de reversement par KYC | requis |
+
+```bash
+supabase functions deploy initiate-payment pvit-callback pvit-transaction-status verify-payout-account
+```
+
+`pvit-callback` doit rester deploye sans verification JWT (reglage lu dans `supabase/config.toml`); les serveurs de PVIT n'envoient pas de JWT Supabase.
 
 ## 5. CI/CD (GitHub Actions)
 

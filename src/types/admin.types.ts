@@ -173,13 +173,6 @@ export interface MerchantValidationAction {
 }
 
 // Admin User
-export interface AdminUser {
-  id: string;
-  email: string;
-  name: string;
-  role: 'super_admin' | 'admin';
-  createdAt: Date;
-}
 
 // Sales Statistics
 export interface SalesStats {

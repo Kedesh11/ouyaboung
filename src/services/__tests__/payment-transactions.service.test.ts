@@ -16,10 +16,10 @@ vi.mock("@/lib/supabase/public-env", () => ({
 }));
 
 import {
+  syncPaymentTransactionStatus,
   getAdminPaymentTransactions,
   getMerchantPaymentTransactions,
   getUserPaymentTransactions,
-  syncSingPayTransactionStatus,
 } from "@/services/payment-transactions.service";
 
 // supabase-js query builders are thenable: chained methods return the same
@@ -143,7 +143,7 @@ describe("payment-transactions.service", () => {
     });
   });
 
-  describe("syncSingPayTransactionStatus", () => {
+  describe("syncPaymentTransactionStatus", () => {
     const originalFetch = global.fetch;
 
     afterEach(() => {
@@ -153,7 +153,7 @@ describe("payment-transactions.service", () => {
     it("fails fast when Supabase is not configured", async () => {
       mocks.isSupabaseConfigured.mockReturnValue(false);
 
-      const result = await syncSingPayTransactionStatus({ reference: "ref-1" });
+      const result = await syncPaymentTransactionStatus({ reference: "ref-1" });
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("NOT_CONFIGURED");
@@ -162,7 +162,7 @@ describe("payment-transactions.service", () => {
     it("fails when the Edge Function URL cannot be resolved", async () => {
       mocks.getSupabasePublicEnv.mockReturnValue({ url: "", anonKey: "" });
 
-      const result = await syncSingPayTransactionStatus({ reference: "ref-1" });
+      const result = await syncPaymentTransactionStatus({ reference: "ref-1" });
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("NOT_CONFIGURED");
@@ -174,7 +174,7 @@ describe("payment-transactions.service", () => {
         auth: { getSession: vi.fn(async () => ({ data: { session: null } })) },
       });
 
-      const result = await syncSingPayTransactionStatus({ reference: "ref-1" });
+      const result = await syncPaymentTransactionStatus({ reference: "ref-1" });
 
       expect(result.success).toBe(false);
       expect(result.error?.code).toBe("UNAUTHORIZED");
@@ -192,12 +192,12 @@ describe("payment-transactions.service", () => {
         json: async () => ({ success: true, data: { status: "confirmed" } }),
       })) as unknown as typeof fetch;
 
-      const result = await syncSingPayTransactionStatus({ reference: "ref-1" });
+      const result = await syncPaymentTransactionStatus({ reference: "ref-1" });
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual({ status: "confirmed" });
       expect(global.fetch).toHaveBeenCalledWith(
-        "https://proj.supabase.co/functions/v1/singpay-transaction-sync",
+        "https://proj.supabase.co/functions/v1/pvit-transaction-status",
         expect.objectContaining({
           method: "POST",
           headers: expect.objectContaining({ Authorization: "Bearer token-123" }),
@@ -214,13 +214,13 @@ describe("payment-transactions.service", () => {
       });
       global.fetch = vi.fn(async () => ({
         ok: false,
-        json: async () => ({ error: { code: "SINGPAY_DOWN", message: "Provider unreachable" } }),
+        json: async () => ({ error: { code: "PROVIDER_DOWN", message: "Provider unreachable" } }),
       })) as unknown as typeof fetch;
 
-      const result = await syncSingPayTransactionStatus({ reference: "ref-1" });
+      const result = await syncPaymentTransactionStatus({ reference: "ref-1" });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("SINGPAY_DOWN");
+      expect(result.error?.code).toBe("PROVIDER_DOWN");
     });
   });
 });

@@ -24,7 +24,7 @@ Les principaux axes traites sont:
 - filtrage des boutiques dans un rayon de 2 km, 5 km ou 10 km, avec 10 km par defaut;
 - affichage d'un marqueur par boutique ayant des produits disponibles;
 - documentation des risques prioritaires;
-- cadrage du futur paiement SingPay marketplace: wallet principal Ouyaboung + reversements dynamiques vers boutiques/admin;
+- cadrage du futur paiement marketplace: wallet principal Ouyaboung + reversements dynamiques vers boutiques/admin;
 - durcissement CI, lint et tests.
 
 Les verifications globales ont ete executees a plusieurs etapes:
@@ -961,7 +961,7 @@ Recommandation:
 
 Statut repo:
 
-- le paiement SingPay cible est documente dans `docs/PAYMENT_MULTI_TENANT_ARCHITECTURE.md`;
+- le paiement marketplace cible (wallet principal + reversements) etait documente dans un document d'architecture depuis retire; le fournisseur retenu est desormais PVIT;
 - la decision la plus recente est: encaissement sur wallet principal Ouyaboung, puis reversements dynamiques vers numeros Airtel/Moov verifies des boutiques et de l'admin;
 - les secrets globaux restent requis tant que le chantier multi-tenant n'est pas implemente;
 - la verification effective reste dependante de l'environnement de deploiement.
@@ -1003,23 +1003,23 @@ A la fin de ce chantier:
 - le lint utilise ESLint CLI;
 - les risques prioritaires sont documentes.
 
-## 16.1 Paiement SingPay marketplace
+## 16.1 Paiement marketplace
 
-Le socle SingPay est maintenant implemente:
+Le socle de paiement marketplace etait implemente (le code du fournisseur initial a ete retire depuis, le schema est conserve):
 
 - migration `20260620190000_singpay_marketplace_payments.sql`;
 - wallet principal via `platform_payment_wallets`;
 - comptes payout boutiques/admin via `merchant_payout_accounts` et `admin_payout_accounts`;
 - ledger provider via `payment_transactions`;
 - ledger de reversement via `payment_settlements`;
-- Edge Functions `initiate-airtel`, `initiate-moov`, `initiate-payment`, `payment-callback`, `airtel-callback` et `moov-callback` raccordees a SingPay;
+- Edge Functions `initiate-airtel`, `initiate-moov`, `initiate-payment`, `payment-callback`, `airtel-callback` et `moov-callback` raccordees au fournisseur initial (retirees depuis);
 - ancien affichage de frais client remplace par un total sans surcharge Q-Gabon;
 - commission plateforme geree cote settlement avec `PLATFORM_COMMISSION_RATE`.
 
 Garde-fous:
 
-- `SINGPAY_REQUIRE_VERIFIED_PAYOUT=true` bloque un paiement si la boutique n'a pas de payout verifie;
-- `SINGPAY_TRANSFERS_ENABLED=false` empeche les reversements reels tant que les tests SingPay ne sont pas valides;
+- un paiement etait bloque si la boutique n'avait pas de payout verifie;
+- les reversements reels etaient desactives tant que les tests du fournisseur n'etaient pas valides;
 
 ## 17. Checklist de reprise pour un autre developpeur
 

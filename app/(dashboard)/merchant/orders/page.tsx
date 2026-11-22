@@ -8,7 +8,7 @@
 import { useState, useEffect, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,6 @@ import {
   formatPrice,
   formatOrderForDisplay,
   getMyMerchantProfile,
-  confirmOrder,
   markOrderReady,
   cancelOrder as cancelOrderService,
 } from "@/services";
@@ -146,18 +145,6 @@ const MerchantOrdersPage = () => {
       return false;
     } finally {
       setActiveActionKey(null);
-    }
-  };
-
-  const handleConfirm = async (order: Order) => {
-    const done = await withAction(
-      order,
-      "confirm",
-      () => confirmOrder(order.id),
-      `Reservation ${order.pickup_code} confirmee`
-    );
-    if (done) {
-      setIsDialogOpen(false);
     }
   };
 

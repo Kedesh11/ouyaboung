@@ -175,7 +175,6 @@ export default function ProfilePage() {
 
             let uploadBlob: Blob = file;
             let uploadExt = file.name.split('.').pop();
-            let uploadMime = file.type || 'image/jpeg';
 
             if (file.size > 2 * 1024 * 1024) {
                 const base64 = await compressImage(file, { maxWidth: 1024, maxHeight: 1024, quality: 0.8, mimeType: 'image/jpeg' });
@@ -190,7 +189,6 @@ export default function ProfilePage() {
                 const u8arr = new Uint8Array(bstr.length);
                 for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
                 uploadBlob = new Blob([u8arr], { type: mime });
-                uploadMime = mime;
                 uploadExt = 'jpg';
             }
 
