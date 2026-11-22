@@ -113,7 +113,31 @@ const PrivacyPolicy = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>4. Duree de conservation</CardTitle>
+            <CardTitle>4. Position des chauffeurs</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-muted-foreground">
+            <p>
+              Un chauffeur valide est visible des agriculteurs verifies, par defaut, tant qu'il est
+              disponible et que l'application est ouverte; il en est informe dans son espace. Ils voient son prenom,
+              l'initiale de son nom, son vehicule, sa note, son numero de telephone (pour pouvoir l'appeler) et sa position, jamais sa plaque.
+            </p>
+            <p>
+              Le chauffeur peut desactiver ce partage a tout moment avec l'interrupteur de disponibilite: sa derniere position est alors effacee.
+              Seule la derniere position est conservee; aucun historique de deplacements n'est garde en dehors
+              des livraisons en cours.
+            </p>
+            <p>
+              Quand un agriculteur commande un transport, le chauffeur propose voit le point de ramassage,
+              la marchandise et l'adresse de livraison. Le nom de la ferme, son telephone et son adresse ne
+              lui sont communiques qu'apres avoir accepte la course; l'agriculteur voit alors la position du
+              chauffeur jusqu'a la livraison. La position de l'agriculteur n'est jamais suivie.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>5. Duree de conservation</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-muted-foreground">
             <p>
@@ -125,7 +149,7 @@ const PrivacyPolicy = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>5. Vos droits et contact</CardTitle>
+            <CardTitle>6. Vos droits et contact</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-muted-foreground">
             <p>
