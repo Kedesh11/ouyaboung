@@ -25,7 +25,6 @@ import {
   beneficiaryCodeFor,
   buildAck,
   buildSplitPayload,
-  computeSplit,
   evaluateCallbackIp,
   generateReference,
   hasOperatorPrefix,
@@ -46,6 +45,7 @@ import {
   fail,
   getEnv,
   getOrCreatePlatformWallet,
+  computeFeeBreakdown,
   getServiceClient,
   getUserClient,
   json,
@@ -166,12 +166,17 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
 
     const wallet = await getOrCreatePlatformWallet(serviceClient, cfg)
     const reference = generateReference(order.id)
-    const { feeAmount, merchantNetAmount } = computeSplit(amount, cfg.commissionRate)
+    // The shop receives its price IN FULL; the customer pays the price plus the platform
+    // commission, the PVIT fee and the operator fee (admin-set rates, one shared calculation).
+    const baseAmount = amount
+    const breakdown = await computeFeeBreakdown(serviceClient, 'order', baseAmount, operator)
+    const charged = breakdown.total_amount
+    const platformTake = charged - baseAmount
     const payoutOperator: Operator = payout.operator === 'moov' ? 'moov' : 'airtel'
     const beneficiaryCode = beneficiaryCodeFor(payout.id)
 
     const pvitPayload = buildSplitPayload({
-      amount,
+      amount: charged,
       reference,
       customerPhone: phone,
       operatorCode: toPvitOperator(operator),
@@ -179,7 +184,7 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
       callbackUrlCode: cfg.callbackUrlCode,
       ownerCharge: cfg.ownerCharge,
       orderId: order.id,
-      merchantNetAmount,
+      merchantNetAmount: baseAmount,
       beneficiary: {
         msisdn: payout.normalized_msisdn,
         operatorCode: toPvitOperator(payoutOperator),
@@ -196,14 +201,16 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
           merchant_id: order.merchant_id,
           user_id: user.id,
           phone,
-          amount,
+          // What the shop is owed, then the customer-side fees (legacy column names:
+          // airtel_fees = operator fee, app_fees = platform commission) and the total charged.
+          amount: baseAmount,
           account_code: cfg.operationAccountCode,
           product: 'pvit',
           agent: 'PVIT',
-          airtel_fees: 0,
-          pvit_fees: 0,
-          app_fees: 0,
-          total_amount: amount,
+          airtel_fees: breakdown.operator_fee,
+          pvit_fees: breakdown.pvit_fee,
+          app_fees: breakdown.platform_fee,
+          total_amount: charged,
           operator: toPvitOperator(operator),
           status: 'PENDING',
           provider: 'pvit',
@@ -228,12 +235,13 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
           operator,
           internal_reference: reference,
           status: 'initiated',
-          amount,
+          amount: charged,
+          fee_breakdown: breakdown,
           // What we sent to PVIT, plus the split decided at initiation (the
-          // confirmation reads it back instead of recomputing the commission).
+          // confirmation reads it back instead of recomputing anything).
           raw_request: {
             ...pvitPayload,
-            ouyaboung: { payoutAccountId: payout.id, beneficiaryCode, feeAmount, merchantNetAmount },
+            ouyaboung: { payoutAccountId: payout.id, beneficiaryCode, feeAmount: platformTake, merchantNetAmount: baseAmount },
           },
         })
         .select()
@@ -325,8 +333,14 @@ const initiatePvitPaymentImpl = async ({ req }: InitInput) => {
           transactionId: legacy.id,
           paymentTransactionId: payment.id,
           qGabonReference: reference,
-          totalAmount: amount,
-          fees: { airtel: 0, pvit: 0, app: 0, total: 0 },
+          totalAmount: charged,
+          fees: {
+            airtel: breakdown.operator_fee,
+            pvit: breakdown.pvit_fee,
+            app: breakdown.platform_fee,
+            total: breakdown.operator_fee + breakdown.pvit_fee + breakdown.platform_fee,
+          },
+          breakdown,
           status: legacyStatus,
           message,
         },
@@ -385,6 +399,8 @@ const applyConfirmation = async (client: any, payment: any, provider: { provider
 
   const split = payment.raw_request?.ouyaboung || {}
   const amount = Number(payment.amount)
+  // The shop is paid its full price; everything above it is the platform's (commission plus
+  // the amounts that cover PVIT and the operator).
   const merchantNet = Number.isFinite(Number(split.merchantNetAmount)) ? Number(split.merchantNetAmount) : amount
   const fee = Number.isFinite(Number(split.feeAmount)) ? Number(split.feeAmount) : amount - merchantNet
   const status = orderCancelled ? 'manual_review' : 'paid'
@@ -394,8 +410,8 @@ const applyConfirmation = async (client: any, payment: any, provider: { provider
       recipient_type: 'merchant',
       merchant_payout_account_id: split.payoutAccountId || null,
       disbursement_id: split.beneficiaryCode || null,
-      gross_amount: amount,
-      fee_amount: fee,
+      gross_amount: merchantNet,
+      fee_amount: 0,
       net_amount: merchantNet,
     },
     {

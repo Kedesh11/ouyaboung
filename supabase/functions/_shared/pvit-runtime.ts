@@ -11,7 +11,6 @@ import {
 } from './payment-guards.ts'
 import {
   mapPvitStatus,
-  parseCommissionRate,
   parseCsv,
   parsePositiveInt,
   parseStatusResponse,
@@ -65,7 +64,6 @@ export const ensure = (label: string, res: any) => {
 
 export type PvitConfig = {
   baseUrl: string
-  commissionRate: number
   maxInitiations: number
   initiationWindowMs: number
   inFlightWindowMs: number
@@ -82,10 +80,8 @@ export type PvitConfig = {
 // Everything comes from the environment: no URL, rate or limit is hard-coded.
 // Returns null (=> 503 "not configured") when a required value is missing.
 export const readConfig = (): PvitConfig | null => {
-  const commissionRate = parseCommissionRate(getEnv('PLATFORM_COMMISSION_RATE'))
   const cfg = {
     baseUrl: getEnv('PVIT_BASE_URL').replace(/\/$/, ''),
-    commissionRate,
     maxInitiations: parsePositiveInt(getEnv('PAYMENT_MAX_INITIATIONS_PER_WINDOW'), DEFAULT_MAX_INITIATIONS_PER_WINDOW),
     initiationWindowMs:
       parsePositiveInt(getEnv('PAYMENT_INITIATION_WINDOW_MINUTES'), DEFAULT_INITIATION_WINDOW_MS / 60_000) * 60_000,
@@ -101,7 +97,7 @@ export const readConfig = (): PvitConfig | null => {
     ownerCharge: getEnv('PVIT_OWNER_CHARGE') === 'CUSTOMER' ? 'CUSTOMER' : 'MERCHANT',
   } as PvitConfig
   const required: Array<keyof PvitConfig> = ['baseUrl', 'operationAccountCode', 'codeUrlSecret', 'secretPassword']
-  if (cfg.commissionRate === null || !required.every((k) => cfg[k])) return null
+  if (!required.every((k) => cfg[k])) return null
   return cfg
 }
 
@@ -242,3 +238,40 @@ export const verifyWithProvider = async (client: any, cfg: PvitConfig, payment: 
   }
 }
 
+
+// ------------------------------------------------------------- fee breakdown
+
+export type FeeBreakdown = {
+  flow: 'order' | 'transport'
+  operator: 'airtel' | 'moov'
+  base_amount: number
+  recipient_amount: number
+  platform_fee: number
+  pvit_fee: number
+  operator_fee: number
+  total_amount: number
+  rates: { platform: number; pvit: number; operator: number }
+  fees_estimated: boolean
+  currency: string
+}
+
+// The customer pays the shop's / driver's price PLUS the platform commission, the PVIT fee and
+// the operator fee. The rates are admin settings in the database: the single calculation
+// (compute_fee_breakdown) is shared with the screens, never duplicated here.
+export const computeFeeBreakdown = async (
+  client: any,
+  flow: 'order' | 'transport',
+  baseAmount: number,
+  operator: 'airtel' | 'moov',
+): Promise<FeeBreakdown> => {
+  const { data, error } = await client.rpc('compute_fee_breakdown', {
+    p_flow: flow,
+    p_base_amount: baseAmount,
+    p_operator: operator,
+  })
+  if (error) throw new Error(`fee breakdown: ${error.message || error.code || 'rpc error'}`)
+  if (!data?.success) throw new Error(`fee breakdown refused: ${data?.code || 'unknown'}`)
+  const total = Number(data.total_amount)
+  if (!Number.isInteger(total) || total < baseAmount) throw new Error('fee breakdown: invalid total')
+  return data as FeeBreakdown
+}

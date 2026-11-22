@@ -5,7 +5,7 @@
  * and a routed fake of the PVIT HTTP API.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FakeDb, Query, type AnyRow } from "./helpers/supabase-edge-fake";
+import { DEFAULT_FEE_RATES, FakeDb, Query, makeFakeRpc, type AnyRow, type FeeRates } from "./helpers/supabase-edge-fake";
 
 const state = vi.hoisted(() => ({
   edgeCreateClient: null as null | ((url: string, key: string, opts?: Record<string, any>) => unknown),
@@ -28,8 +28,7 @@ const ENV: Record<string, string> = {
   PVIT_CODE_URL_KYC: "KYC",
   PVIT_CALLBACK_URL_CODE: "CB1",
   PVIT_CALLBACK_IP_MODE: "off",
-  // The order commission must NOT be what a transport is charged: the frozen fare decides.
-  PLATFORM_COMMISSION_RATE: "0.5",
+  // Rates are admin settings in the database (fake RPC), not environment variables.
 };
 
 const USERS: Record<string, { id: string }> = {
@@ -46,6 +45,7 @@ describe("PVIT transport payment handlers", () => {
   let db: FakeDb;
   let fetchMock: ReturnType<typeof vi.fn>;
   let env: Record<string, string>;
+  let feeRates: FeeRates;
   let route: { rest: () => Response; status: (id: string) => Response; kyc: () => Response };
 
   let pvit: {
@@ -62,7 +62,7 @@ describe("PVIT transport payment handlers", () => {
     db.add("transport_requests", {
       id: "req-1", farmer_id: "farmer-1", driver_id: "driver-1", status: "accepted", payment_status: "unpaid",
       payment_deadline: new Date(Date.now() + 10 * 60_000).toISOString(),
-      fare_amount: 10000, platform_fee: 1500, driver_net: 8500, ...over,
+      fare_amount: 10000, platform_fee: 1000, driver_net: 10000, ...over,
     });
 
   const seedPayout = (over: AnyRow = {}) =>
@@ -76,7 +76,7 @@ describe("PVIT transport payment handlers", () => {
     return db.add("transport_payments", {
       transport_request_id: "req-1", user_id: "farmer-user", driver_id: "driver-1", driver_payout_account_id: "dpa-1",
       platform_wallet_id: wallet.id, provider: "pvit", operator: "airtel", internal_reference: "OYBTRANS1",
-      provider_transaction_id: "PAY-1", status: "pending", amount: 10000, platform_fee: 1500, driver_net: 8500,
+      provider_transaction_id: "PAY-1", status: "pending", amount: 11385, platform_fee: 1385, driver_net: 10000,
       settlement_status: "pending", ...over,
     });
   };
@@ -96,7 +96,7 @@ describe("PVIT transport payment handlers", () => {
     });
 
   const cbBody = (over: AnyRow = {}) => ({
-    transactionId: "PAY-1", merchantReferenceId: "OYBTRANS1", status: "SUCCESS", amount: 10000, code: 200,
+    transactionId: "PAY-1", merchantReferenceId: "OYBTRANS1", status: "SUCCESS", amount: 11385, code: 200,
     transactionOperation: "PAYMENT", ...over,
   });
 
@@ -106,13 +106,14 @@ describe("PVIT transport payment handlers", () => {
   beforeEach(async () => {
     db = new FakeDb();
     env = { ...ENV };
+    feeRates = { ...DEFAULT_FEE_RATES };
     (globalThis as AnyRow).Deno = { env: { get: (k: string) => env[k] } };
 
     route = {
       rest: () => json({ status: "PENDING", status_code: "200", operator: "AIRTEL_MONEY", reference_id: "PAY-1", message: "ok" }),
       status: (id) =>
         id === "OYBTRANS1"
-          ? json({ status: "SUCCESS", amount: 10000, merchant_reference_id: "OYBTRANS1" })
+          ? json({ status: "SUCCESS", amount: 11385, merchant_reference_id: "OYBTRANS1" })
           : json({ status_code: 4006, error: "TRANSACTION_NOT_FOUND" }, 404),
       kyc: () => json({ data: { firstname: "John" } }),
     };
@@ -141,7 +142,7 @@ describe("PVIT transport payment handlers", () => {
           },
         };
       }
-      return { from: (t: string) => new Query(db, t) };
+      return { from: (t: string) => new Query(db, t), rpc: makeFakeRpc(() => feeRates) };
     };
 
     db.add("farmers", { id: "farmer-1", user_id: "farmer-user" });
@@ -240,21 +241,49 @@ describe("PVIT transport payment handlers", () => {
     it.each([
       ["no fare", { fare_amount: null }],
       ["a zero fare", { fare_amount: 0 }],
-      ["a split that does not add up", { platform_fee: 2000 }],
     ])("refuses %s", async (_label, over) => {
       Object.assign(request(), over);
       expect((await init()).status).toBe(400);
       expect(calls("/rest")).toHaveLength(0);
     });
 
-    it("charges the FROZEN fare and split, not the current commission rate", async () => {
+    it("charges the farmer the fare PLUS the fees, and pays the driver the fare in full", async () => {
       const res = await init();
       expect(res.status).toBe(200);
       const body = restBody();
-      expect(body.amount).toBe(10000);
-      // Env commission is 50 %, but the request froze 15 %: the driver gets 8 500.
-      expect(body.beneficiaries[0].value).toBe(8500);
-      expect(payment()).toMatchObject({ amount: 10000, platform_fee: 1500, driver_net: 8500, status: "pending", user_id: "farmer-user" });
+      // 10000 fare + 1000 commission + ceil(11000 x 2.5 %) 275 + ceil(11000 x 1 %) 110.
+      expect(body.amount).toBe(11385);
+      expect(body.beneficiaries[0].value).toBe(10000);
+      expect(payment()).toMatchObject({ amount: 11385, platform_fee: 1385, driver_net: 10000, status: "pending", user_id: "farmer-user" });
+      expect(payment().fee_breakdown).toMatchObject({ flow: "transport", platform_fee: 1000, pvit_fee: 275, operator_fee: 110, recipient_amount: 10000 });
+    });
+
+    it("applies the admin's current transport commission and the payer's operator rate", async () => {
+      feeRates.transport = 0.08;
+      feeRates.moov = 0.015;
+      feeRates.pvit = 0.03;
+      await init({ requestId: "req-1", phone: "062123456", operator: "moov" });
+      // 10000 + 800 + ceil(10800 x 3 %) 324 + ceil(10800 x 1.5 %) 162
+      expect(restBody().amount).toBe(11286);
+      expect(restBody().beneficiaries[0].value).toBe(10000);
+      expect(payment().fee_breakdown).toMatchObject({ operator: "moov", operator_fee: 162, platform_fee: 800 });
+    });
+
+    it("ignores any stale commission stored on the request at order time", async () => {
+      request().platform_fee = 99999;
+      request().driver_net = 1;
+      await init();
+      expect(restBody().beneficiaries[0].value).toBe(10000);
+    });
+
+    it("never calls PVIT when the fee calculation is unavailable", async () => {
+      state.edgeCreateClient = ((previous) => (url: string, key: string, opts?: Record<string, any>) => {
+        const client = previous(url, key, opts) as AnyRow;
+        return key === "anon" ? client : { ...client, rpc: async () => ({ data: null, error: { message: "db down" } }) };
+      })(state.edgeCreateClient!);
+      expect((await init()).status).toBe(500);
+      expect(calls("/rest")).toHaveLength(0);
+      expect(db.rows("transport_payments")).toHaveLength(0);
     });
 
     it("sends the driver's number in the local format, a short alphanumeric reference and a safe free_info", async () => {
@@ -271,7 +300,7 @@ describe("PVIT transport payment handlers", () => {
     it("marks the course payment as pending and answers with the amounts", async () => {
       const res = await init();
       const json = await res.json();
-      expect(json).toMatchObject({ success: true, data: { totalAmount: 10000, driverAmount: 8500, platformFee: 1500, status: "pending" } });
+      expect(json).toMatchObject({ success: true, data: { totalAmount: 11385, driverAmount: 10000, platformFee: 1385, status: "pending" } });
       expect(request().payment_status).toBe("pending");
     });
 
@@ -363,7 +392,7 @@ describe("PVIT transport payment handlers", () => {
     });
 
     it("does not trust the webhook alone: a SUCCESS claim the status API denies pays nothing", async () => {
-      route.status = () => json({ status: "FAILED", amount: 10000, merchant_reference_id: "OYBTRANS1" });
+      route.status = () => json({ status: "FAILED", amount: 11385, merchant_reference_id: "OYBTRANS1" });
       const res = await pvit.handlePvitCallback(cbReq(cbBody({ status: "SUCCESS" })));
       expect(res.status).toBe(200);
       expect(request().payment_status).toBe("unpaid");
@@ -371,7 +400,7 @@ describe("PVIT transport payment handlers", () => {
     });
 
     it("a failed payment returns the course to unpaid so the farmer can retry", async () => {
-      route.status = () => json({ status: "FAILED", amount: 10000, merchant_reference_id: "OYBTRANS1" });
+      route.status = () => json({ status: "FAILED", amount: 11385, merchant_reference_id: "OYBTRANS1" });
       await pvit.handlePvitCallback(cbReq(cbBody({ status: "FAILED", code: 2000 })));
       expect(request().payment_status).toBe("unpaid");
       expect(payment().status).toBe("failed");

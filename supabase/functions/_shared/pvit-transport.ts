@@ -36,6 +36,7 @@ import {
   type PvitCallback,
 } from './pvit-core.ts'
 import {
+  computeFeeBreakdown,
   ensure,
   fail,
   getOrCreatePlatformWallet,
@@ -94,7 +95,7 @@ const initiateTransportPaymentImpl = async ({ req }: InitInput) => {
 
     const { data: request, error: requestError } = await client
       .from('transport_requests')
-      .select('id,farmer_id,driver_id,status,payment_status,payment_deadline,fare_amount,platform_fee,driver_net')
+      .select('id,farmer_id,driver_id,status,payment_status,payment_deadline,fare_amount')
       .eq('id', requestId)
       .maybeSingle()
     if (requestError) throw new Error(`request lookup: ${requestError.message}`)
@@ -111,11 +112,10 @@ const initiateTransportPaymentImpl = async ({ req }: InitInput) => {
       return fail(409, 'Le delai de paiement est depasse.', 'PAYMENT_WINDOW_EXPIRED')
     }
 
-    const amount = Math.round(Number(request.fare_amount))
-    const platformFee = Math.round(Number(request.platform_fee))
-    const driverNet = Math.round(Number(request.driver_net))
-    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(platformFee) || !Number.isFinite(driverNet)
-      || platformFee < 0 || driverNet < 0 || platformFee + driverNet !== amount) {
+    // The driver's price, frozen at the order. The farmer pays it PLUS the platform commission,
+    // the PVIT fee and the operator fee (admin-set rates); the driver receives the price in full.
+    const driverNet = Math.round(Number(request.fare_amount))
+    if (!Number.isFinite(driverNet) || driverNet <= 0) {
       return fail(400, 'Invalid fare', 'INVALID_AMOUNT')
     }
 
@@ -158,6 +158,10 @@ const initiateTransportPaymentImpl = async ({ req }: InitInput) => {
       return fail(409, 'Le chauffeur n\'a pas de compte Mobile Money verifie pour recevoir le paiement.', 'DRIVER_PAYOUT_NOT_VERIFIED')
     }
 
+    const breakdown = await computeFeeBreakdown(client, 'transport', driverNet, operator)
+    const amount = breakdown.total_amount
+    const platformFee = amount - driverNet
+
     const wallet = await getOrCreatePlatformWallet(client, cfg)
     const reference = generateReference(request.id)
     const payoutOperator: Operator = payout.operator === 'moov' ? 'moov' : 'airtel'
@@ -196,6 +200,7 @@ const initiateTransportPaymentImpl = async ({ req }: InitInput) => {
         amount,
         platform_fee: platformFee,
         driver_net: driverNet,
+        fee_breakdown: breakdown,
         raw_request: { ...pvitPayload, ouyaboung: { payoutAccountId: payout.id, beneficiaryCode, platformFee, driverNet } },
       })
       .select()
@@ -281,6 +286,7 @@ const initiateTransportPaymentImpl = async ({ req }: InitInput) => {
           totalAmount: amount,
           driverAmount: driverNet,
           platformFee,
+          breakdown,
           status: internalStatus,
           message,
         },

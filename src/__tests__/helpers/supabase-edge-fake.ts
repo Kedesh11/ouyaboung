@@ -96,3 +96,47 @@ export class Query {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Fake of the compute_fee_breakdown RPC. It mirrors the SQL function (same rounding) and is
+// pinned to the same worked examples as the SQL tests (see fee-breakdown.test.ts), so a drift
+// between the two is caught.
+// ---------------------------------------------------------------------------
+export type FeeRates = { order: number; transport: number; pvit: number; airtel: number; moov: number };
+
+export const DEFAULT_FEE_RATES: FeeRates = { order: 0.1, transport: 0.1, pvit: 0.025, airtel: 0.01, moov: 0.01 };
+
+export const computeFeeBreakdownFake = (rates: FeeRates, flow: string, base: number, operator: string) => {
+  if (flow !== "order" && flow !== "transport") return { success: false, code: "INVALID_FLOW" };
+  if (operator !== "airtel" && operator !== "moov") return { success: false, code: "INVALID_OPERATOR" };
+  if (!Number.isInteger(base) || base <= 0 || base > 100_000_000) return { success: false, code: "INVALID_AMOUNT" };
+  const platformRate = flow === "order" ? rates.order : rates.transport;
+  const operatorRate = operator === "airtel" ? rates.airtel : rates.moov;
+  const platform = Math.round(base * platformRate);
+  const subtotal = base + platform;
+  // Integer arithmetic on ten-thousandths avoids floating-point drift in the ceilings.
+  const ceilRate = (rate: number) => Math.ceil(Math.round(subtotal * Math.round(rate * 10_000)) / 10_000 - 1e-9);
+  const pvit = ceilRate(rates.pvit);
+  const op = ceilRate(operatorRate);
+  return {
+    success: true,
+    flow,
+    operator,
+    base_amount: base,
+    recipient_amount: base,
+    platform_fee: platform,
+    pvit_fee: pvit,
+    operator_fee: op,
+    total_amount: base + platform + pvit + op,
+    rates: { platform: platformRate, pvit: rates.pvit, operator: operatorRate },
+    fees_estimated: true,
+    currency: "XAF",
+  };
+};
+
+export const makeFakeRpc = (getRates: () => FeeRates) => async (name: string, args: Record<string, any>) => {
+  if (name === "compute_fee_breakdown") {
+    return { data: computeFeeBreakdownFake(getRates(), args.p_flow, args.p_base_amount, args.p_operator), error: null };
+  }
+  return { data: null, error: { message: `unknown rpc ${name}` } };
+};

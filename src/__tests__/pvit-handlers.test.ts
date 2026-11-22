@@ -4,6 +4,7 @@
  * client and a routed fake of the PVIT HTTP API.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_FEE_RATES, makeFakeRpc, type FeeRates } from "./helpers/supabase-edge-fake";
 
 type AnyRow = Record<string, any>;
 
@@ -126,7 +127,7 @@ const ENV: Record<string, string> = {
   PVIT_CALLBACK_URL_CODE: "CB1",
   PVIT_CALLBACK_IP_MODE: "off",
   PVIT_CALLBACK_ALLOWED_IPS: "176.31.65.18,176.31.65.20,176.31.65.21,13.59.249.167",
-  PLATFORM_COMMISSION_RATE: "0.1",
+  // PLATFORM_COMMISSION_RATE is obsolete: rates are admin settings in the database.
 };
 
 const USERS: Record<string, { id: string }> = {
@@ -143,6 +144,7 @@ describe("PVIT edge handlers", () => {
   let db: FakeDb;
   let fetchMock: ReturnType<typeof vi.fn>;
   let env: Record<string, string>;
+  let feeRates: FeeRates;
   let route: { rest: () => Response; status: (transactionId: string) => Response; kyc: () => Response };
 
   let pvit: {
@@ -202,6 +204,7 @@ describe("PVIT edge handlers", () => {
     db = new FakeDb();
     db.unique = { payment_settlements: [["payment_transaction_id", "recipient_type"]] };
     env = { ...ENV };
+    feeRates = { ...DEFAULT_FEE_RATES };
     (globalThis as AnyRow).Deno = { env: { get: (k: string) => env[k] } };
 
     route = {
@@ -238,7 +241,7 @@ describe("PVIT edge handlers", () => {
           },
         };
       }
-      return { from: (t: string) => new Query(db, t) };
+      return { from: (t: string) => new Query(db, t), rpc: makeFakeRpc(() => feeRates) };
     };
 
     db.add("merchants", { id: "m1", user_id: "shop-owner" });
@@ -286,9 +289,7 @@ describe("PVIT edge handlers", () => {
 
     it.each([
       ["PVIT_BASE_URL", undefined],
-      ["PLATFORM_COMMISSION_RATE", undefined],
-      ["PLATFORM_COMMISSION_RATE", "abc"],
-      ["PLATFORM_COMMISSION_RATE", "1.5"],
+      ["PVIT_OPERATION_ACCOUNT_CODE", undefined],
     ])("answers 503 when %s is missing or invalid (%s): no hidden default", async (key, value) => {
       if (value === undefined) delete env[key];
       else env[key] = value;
@@ -342,7 +343,8 @@ describe("PVIT edge handlers", () => {
 
       const sent = JSON.parse(String(rest[0][1].body));
       expect(sent).toMatchObject({
-        amount: 5000,
+        // 5000 price + 500 commission + 138 PVIT + 55 Airtel, all paid by the customer.
+        amount: 5693,
         service: "RESTFUL",
         transaction_type: "PAYMENT",
         operator_code: "AIRTEL_MONEY",
@@ -356,7 +358,8 @@ describe("PVIT edge handlers", () => {
       expect(sent.beneficiaries).toEqual([
         {
           destination: { kind: "MOBILE_MONEY", operator_code: "AIRTEL_MONEY", msisdn: "074111111", msisdn_type: "MERCHANT" },
-          value: 4500,
+          // The shop receives its price IN FULL: no commission is taken from it.
+          value: 5000,
           beneficiary_code: expect.stringMatching(/^BEN[A-Z0-9]+$/),
         },
       ]);
@@ -365,19 +368,53 @@ describe("PVIT edge handlers", () => {
     it("creates the ledger rows as pending and never confirms from the initiation answer", async () => {
       route.rest = () => json({ status: "SUCCESS", status_code: "200", reference_id: "PAY-9" });
       await init();
-      expect(payment()).toMatchObject({ provider: "pvit", status: "pending", amount: 5000, provider_transaction_id: "PAY-9", operator: "airtel" });
-      expect(payment().raw_request.ouyaboung).toMatchObject({ payoutAccountId: "pa-1", feeAmount: 500, merchantNetAmount: 4500 });
+      expect(payment()).toMatchObject({ provider: "pvit", status: "pending", amount: 5693, provider_transaction_id: "PAY-9", operator: "airtel" });
+      expect(payment().raw_request.ouyaboung).toMatchObject({ payoutAccountId: "pa-1", feeAmount: 693, merchantNetAmount: 5000 });
+      expect(payment().fee_breakdown).toMatchObject({ platform_fee: 500, pvit_fee: 138, operator_fee: 55, total_amount: 5693, recipient_amount: 5000 });
       expect(legacy()).toMatchObject({ status: "PENDING", provider: "pvit", payment_transaction_id: payment().id });
       expect(order().status).toBe("pending");
     });
 
-    it("uses the configured commission rate and owner charge", async () => {
-      env.PLATFORM_COMMISSION_RATE = "0.2";
+    it("applies the admin's current rates (order commission 20 %): the customer pays more, the shop still gets its price", async () => {
+      feeRates.order = 0.2;
       env.PVIT_OWNER_CHARGE = "CUSTOMER";
       await init();
       const sent = JSON.parse(String(calls("/rest")[0][1].body));
-      expect(sent.beneficiaries[0].value).toBe(4000);
+      // 5000 + 1000 + ceil(6000 x 2.5 %) 150 + ceil(6000 x 1 %) 60
+      expect(sent.amount).toBe(6210);
+      expect(sent.beneficiaries[0].value).toBe(5000);
       expect(sent.owner_charge).toBe("CUSTOMER");
+    });
+
+    it("charges the Moov rate to a Moov payer", async () => {
+      feeRates.moov = 0.02;
+      await init({ orderId: "order-1", phone: "062123456", operator: "moov" });
+      const sent = JSON.parse(String(calls("/rest")[0][1].body));
+      // 5000 + 500 + 138 + ceil(5500 x 2 %) 110
+      expect(sent.amount).toBe(5748);
+      expect(payment().fee_breakdown).toMatchObject({ operator: "moov", operator_fee: 110 });
+    });
+
+    it("stores the detail of the fees on the legacy transaction the customer sees", async () => {
+      await init();
+      expect(legacy()).toMatchObject({ amount: 5000, app_fees: 500, pvit_fees: 138, airtel_fees: 55, total_amount: 5693 });
+    });
+
+    it("answers the customer with the full breakdown", async () => {
+      const body = await (await init()).json();
+      expect(body.data.totalAmount).toBe(5693);
+      expect(body.data.fees).toEqual({ airtel: 55, pvit: 138, app: 500, total: 693 });
+      expect(body.data.breakdown).toMatchObject({ recipient_amount: 5000, fees_estimated: true });
+    });
+
+    it("never calls PVIT when the fee calculation is refused or unavailable", async () => {
+      state.edgeCreateClient = ((previous) => (url: string, key: string, opts?: AnyRow) => {
+        const client = previous(url, key, opts) as AnyRow;
+        return key === "anon" ? client : { ...client, rpc: async () => ({ data: null, error: { message: "db down" } }) };
+      })(state.edgeCreateClient!);
+      expect((await init()).status).toBe(500);
+      expect(calls("/rest")).toHaveLength(0);
+      expect(db.rows("payment_transactions")).toHaveLength(0);
     });
 
     it("renews the secret once and reuses it from the shared cache", async () => {
@@ -647,15 +684,17 @@ describe("PVIT edge handlers", () => {
         expect(payment().status).toBe("confirmed");
       });
 
-      it("writes the split ledger: shop net and platform commission", async () => {
+      it("writes the split ledger: the shop gets its full price, the platform keeps the rest", async () => {
+        // The payment was charged 5000: a 4300 price plus 700 of customer-side fees.
+        payment().raw_request.ouyaboung = { payoutAccountId: "pa-1", beneficiaryCode: "BENPA1", feeAmount: 700, merchantNetAmount: 4300 };
         await pvit.handlePvitCallback(cbReq(cbBody()));
         const [merchant, platform] = db.rows("payment_settlements");
         expect(db.rows("payment_settlements")).toHaveLength(2);
         expect(merchant).toMatchObject({
-          recipient_type: "merchant", gross_amount: 5000, fee_amount: 500, net_amount: 4500,
+          recipient_type: "merchant", gross_amount: 4300, fee_amount: 0, net_amount: 4300,
           status: "paid", merchant_payout_account_id: "pa-1", disbursement_id: "BENPA1",
         });
-        expect(platform).toMatchObject({ recipient_type: "platform", net_amount: 500, status: "paid" });
+        expect(platform).toMatchObject({ recipient_type: "platform", net_amount: 700, status: "paid" });
         expect(merchant.net_amount + platform.net_amount).toBe(5000);
       });
 
