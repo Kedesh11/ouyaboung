@@ -43,7 +43,23 @@ export const isReportedAmountValid = (
 
 // Window during which an initiated/pending payment for the same order is
 // considered still awaiting the customer's phone confirmation.
-export const IN_FLIGHT_PAYMENT_WINDOW_MS = 5 * 60 * 1000;
+// Defaults only: the Edge Functions pass the configured values
+// (PAYMENT_IN_FLIGHT_WINDOW_MINUTES).
+export const DEFAULT_IN_FLIGHT_WINDOW_MS = 5 * 60 * 1000;
 
-export const inFlightWindowStart = (now: number = Date.now()): string =>
-  new Date(now - IN_FLIGHT_PAYMENT_WINDOW_MS).toISOString();
+export const inFlightWindowStart = (
+  now: number = Date.now(),
+  windowMs: number = DEFAULT_IN_FLIGHT_WINDOW_MS,
+): string => new Date(now - windowMs).toISOString();
+
+// Initiation rate limit per user: caps the number of payment attempts in a
+// sliding window, on top of the per-order in-flight guard above.
+// Defaults only: PAYMENT_INITIATION_WINDOW_MINUTES and
+// PAYMENT_MAX_INITIATIONS_PER_WINDOW override them.
+export const DEFAULT_INITIATION_WINDOW_MS = 10 * 60 * 1000;
+export const DEFAULT_MAX_INITIATIONS_PER_WINDOW = 5;
+
+export const initiationWindowStart = (
+  now: number = Date.now(),
+  windowMs: number = DEFAULT_INITIATION_WINDOW_MS,
+): string => new Date(now - windowMs).toISOString();
