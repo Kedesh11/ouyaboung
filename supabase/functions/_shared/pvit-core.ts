@@ -90,6 +90,8 @@ export type SplitPaymentInput = {
   callbackUrlCode: string;
   ownerCharge: "CUSTOMER" | "MERCHANT";
   orderId: string;
+  /** Libelle court du free_info (defaut "order"; "transport" pour un transport). */
+  freeInfoLabel?: string;
   merchantNetAmount: number;
   beneficiary: { msisdn: string; operatorCode: PvitOperatorCode; code: string }; // msisdn: local
 };
@@ -114,7 +116,7 @@ export const buildSplitPayload = (i: SplitPaymentInput) => ({
   callback_url_code: i.callbackUrlCode,
   owner_charge: i.ownerCharge,
   owner_charge_operator: i.ownerCharge,
-  free_info: sanitizeFreeInfo(`order ${i.orderId.replace(/[^A-Za-z0-9]/g, "").slice(0, 8)}`),
+  free_info: sanitizeFreeInfo(`${i.freeInfoLabel ?? "order"} ${i.orderId.replace(/[^A-Za-z0-9]/g, "").slice(0, 8)}`),
   sharing_type: "FIXED",
   beneficiaries: [
     {
