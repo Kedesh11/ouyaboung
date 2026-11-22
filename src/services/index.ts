@@ -187,9 +187,13 @@ export {
   getMerchantPayoutAccounts,
   createMerchantPayoutAccount,
   verifyMerchantPayoutAccount,
+  getDriverPayoutAccounts,
+  createDriverPayoutAccount,
+  verifyDriverPayoutAccount,
 } from './payout.service';
 export type {
   MerchantPayoutAccount,
+  DriverPayoutAccount,
   PayoutOperator,
 } from './payout.service';
 
