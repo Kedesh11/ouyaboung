@@ -5,7 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Loader2, Phone, CheckCircle2, CreditCard, MapPin, ExternalLink, Info } from "lucide-react";
 import { initiateAirtelPayment, initiateMoovPayment, PAYMENT_FLOW_ENABLED } from '@/services/payment.service';
-import { calculatePaymentFees, type PaymentFees } from '@/lib/payment-fees';
+import { FeeBreakdownCard } from '@/components/payment/FeeBreakdownCard';
+import { useFeeBreakdown } from '@/hooks/useFeeBreakdown';
+import { formatXaf } from '@/lib/fees';
 import { detectOperator, getAirtelPhoneError, getMoovPhoneError } from '@/lib/phone-validation';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -32,7 +34,6 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
     const [operator, setOperator] = useState<Operator>('AIRTEL');
     const [isLoading, setIsLoading] = useState(false);
     const [success, setSuccess] = useState(false);
-    const [fees, setFees] = useState<PaymentFees | null>(null);
     const hasCoordinates = Number.isFinite(merchant?.latitude) && Number.isFinite(merchant?.longitude);
     const mapUrl = hasCoordinates
         ? `https://www.google.com/maps?q=${merchant?.latitude},${merchant?.longitude}`
@@ -46,11 +47,15 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
         }
     }, [phoneNumber]);
 
-    useEffect(() => {
-        if (amount) {
-            setFees(calculatePaymentFees(amount));
-        }
-    }, [amount]);
+    // Detail de ce que paie le client, calcule par le serveur avec les taux fixes par l'admin
+    // (commission plateforme, frais PVIT, frais de l'operateur choisi). Le marchand recoit le prix en entier.
+    const feeQuery = useFeeBreakdown({
+        flow: 'order',
+        baseAmount: amount,
+        operator: operator === 'AIRTEL' ? 'airtel' : 'moov',
+        enabled: isOpen && PAYMENT_FLOW_ENABLED,
+    });
+    const breakdown = feeQuery.data;
 
     const handlePayment = async () => {
         if (!PAYMENT_FLOW_ENABLED) {
@@ -163,23 +168,13 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                     </div>
                 ) : !success ? (
                     <div className="flex flex-col gap-6 py-4">
-                        {/* Summary & Fees */}
-                        {fees && (
-                            <div className="bg-muted p-4 rounded-lg space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Panier/Commande:</span>
-                                    <span>{fees.baseAmount.toLocaleString()} XAF</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Frais client:</span>
-                                    <span>{fees.totalFees.toLocaleString()} XAF</span>
-                                </div>
-                                <div className="border-t border-border mt-2 pt-2 flex justify-between font-bold text-lg">
-                                    <span>Total à payer:</span>
-                                    <span className="text-primary">{fees.finalAmount.toLocaleString()} XAF</span>
-                                </div>
-                            </div>
-                        )}
+                        {/* Detail des prelevements: marchand, plateforme, PVIT, operateur */}
+                        <FeeBreakdownCard
+                            breakdown={breakdown}
+                            recipientLabel={merchant?.name || 'le marchand'}
+                            loading={feeQuery.isPending && feeQuery.fetchStatus !== 'idle'}
+                            error={feeQuery.isError ? 'Impossible de calculer les frais pour le moment. Réessayez dans un instant.' : null}
+                        />
 
                         {/* Operator Selection */}
                         <div className="grid grid-cols-2 gap-2">
@@ -243,18 +238,18 @@ const PaymentModal = ({ isOpen, onClose, amount, orderId, onSuccess, merchant }:
                             J&apos;ai compris
                         </Button>
                     )}
-                    {PAYMENT_FLOW_ENABLED && !success && fees && (
+                    {PAYMENT_FLOW_ENABLED && !success && (
                         <Button
                             type="button"
                             onClick={handlePayment}
-                            disabled={isLoading}
+                            disabled={isLoading || !breakdown}
                             className={cn(
                                 "w-full text-white",
                                 operator === 'AIRTEL' ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
                             )}
                         >
                             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Payer {fees.finalAmount.toLocaleString()} XAF
+                            {breakdown ? `Payer ${formatXaf(breakdown.total_amount)}` : 'Calcul du total…'}
                         </Button>
                     )}
                 </DialogFooter>

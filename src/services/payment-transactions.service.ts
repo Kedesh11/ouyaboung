@@ -36,6 +36,7 @@ const USER_TRANSACTION_COLUMNS = [
   'merchant_name',
   'customer_phone',
   'order_status',
+  'fee_breakdown',
 ].join(',');
 
 const MERCHANT_TRANSACTION_COLUMNS = [
