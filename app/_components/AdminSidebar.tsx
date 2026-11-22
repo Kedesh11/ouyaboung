@@ -24,6 +24,7 @@ import {
     Users,
     Package,
     Receipt,
+    Truck,
     BarChart2,
     Map,
     Bell,
@@ -62,6 +63,11 @@ const adminMenuItems = [
         title: "Transactions",
         url: "/admin/transactions",
         icon: Receipt,
+    },
+    {
+        title: "Tarifs transport",
+        url: "/admin/transport-pricing",
+        icon: Truck,
     },
     {
         title: "Analytics",
