@@ -25,6 +25,7 @@ import {
     Package,
     Receipt,
     Truck,
+    Percent,
     BarChart2,
     Map,
     Bell,
@@ -63,6 +64,11 @@ const adminMenuItems = [
         title: "Transactions",
         url: "/admin/transactions",
         icon: Receipt,
+    },
+    {
+        title: "Frais & commissions",
+        url: "/admin/fees",
+        icon: Percent,
     },
     {
         title: "Tarifs transport",

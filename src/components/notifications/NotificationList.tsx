@@ -18,6 +18,7 @@ import {
   Check,
   Trash2,
   Loader2,
+  Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -37,6 +38,8 @@ const getNotificationIcon = (type: AppNotification["type"]) => {
       return QrCode;
     case "impact_milestone":
       return TrendingUp;
+    case "fee_update":
+      return Percent;
     case "new_food_nearby":
     case "promotion":
     case "flash_sale":
