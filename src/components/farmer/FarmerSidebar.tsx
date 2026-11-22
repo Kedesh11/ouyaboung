@@ -25,6 +25,7 @@ import {
   Package,
   ShoppingBag,
   Sprout,
+  Truck,
   LogOut,
 } from "lucide-react";
 import { logout } from "@/services";
@@ -48,6 +49,12 @@ const mainMenuItems = [
     title: "Commandes reçues",
     url: "/farmer/orders",
     icon: ShoppingBag,
+    badge: 0,
+  },
+  {
+    title: "Transport",
+    url: "/farmer/transport",
+    icon: Truck,
     badge: 0,
   },
 ];
