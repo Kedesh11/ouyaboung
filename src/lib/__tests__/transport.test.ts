@@ -50,17 +50,17 @@ describe("fare helpers", () => {
   const camionnette = { base_fee: 3000, price_per_km: 800, min_fare: 4000 };
 
   it("mirrors the database formula (same example as the SQL tests)", () => {
-    // 144.6 km -> 3000 + ceil(144.6 x 800) = 118 680 -> rounded up to 118 700, 10 % commission.
-    expect(estimateTransportFare(camionnette, 144.6, 0.1)).toEqual({ fare: 118700, platformFee: 11870, driverNet: 106830 });
+    // 144.6 km -> 3000 + ceil(144.6 x 800) = 118 680 -> rounded up to 118 700. The driver gets it in full.
+    expect(estimateTransportFare(camionnette, 144.6)).toBe(118700);
   });
 
   it("applies the minimum fare on a very short trip", () => {
-    expect(estimateTransportFare({ base_fee: 1000, price_per_km: 300, min_fare: 1500 }, 0, 0.1).fare).toBe(1500);
+    expect(estimateTransportFare({ base_fee: 1000, price_per_km: 300, min_fare: 1500 }, 0)).toBe(1500);
   });
 
-  it("always splits the fare exactly between the platform and the driver", () => {
-    const { fare, platformFee, driverNet } = estimateTransportFare(camionnette, 33.3, 0.15);
-    expect(platformFee + driverNet).toBe(fare);
+  it("rounds up to the next 50 FCFA", () => {
+    expect(estimateTransportFare({ base_fee: 1001, price_per_km: 0, min_fare: 0 }, 10)).toBe(1050);
+    expect(estimateTransportFare({ base_fee: 1000, price_per_km: 0, min_fare: 0 }, 10)).toBe(1000);
   });
 
   it("formats amounts in FCFA with spaces", () => {

@@ -93,13 +93,13 @@ describe("TransportJobsCard", () => {
     expect(screen.getByRole("timer").textContent).toMatch(/2 min 5\d s|2 min 4\d s/);
   });
 
-  it("shows the driver what they will earn: fare minus the platform commission", async () => {
-    mocks.getMyTransportJobs.mockResolvedValue(ok([job()]));
+  it("shows the driver their full earnings: no commission is deducted", async () => {
+    mocks.getMyTransportJobs.mockResolvedValue(ok([job({ fare_amount: 8650, driver_net: 8650, platform_fee: 865 })]));
     renderCard();
     const earnings = await screen.findByTestId("transport-earnings");
-    expect(earnings.textContent).toContain("7 785 FCFA");
-    expect(earnings.textContent).toContain("tarif 8 650 FCFA");
-    expect(earnings.textContent).toContain("commission 865 FCFA");
+    expect(earnings.textContent).toContain("8 650 FCFA");
+    expect(earnings.textContent).toContain("versé en intégralité");
+    expect(earnings.textContent).not.toContain("865 FCFA");
     expect(earnings.textContent).toContain("trajet 12.4 km");
   });
 

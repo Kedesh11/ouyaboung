@@ -25,12 +25,12 @@ describe("transport-pricing.api", () => {
 
   it("loads the tariffs and the settings", async () => {
     mocks.rpc.mockResolvedValue({
-      data: { success: true, tariffs: [{ vehicle_type: "moto" }], settings: { commission_rate: 0.1 } },
+      data: { success: true, tariffs: [{ vehicle_type: "moto" }], settings: { road_distance_factor: 1.3 } },
       error: null,
     });
     const res = await getTransportPricing();
     expect(mocks.rpc).toHaveBeenCalledWith("admin_get_transport_pricing", undefined);
-    expect(res.data).toEqual({ tariffs: [{ vehicle_type: "moto" }], settings: { commission_rate: 0.1 } });
+    expect(res.data).toEqual({ tariffs: [{ vehicle_type: "moto" }], settings: { road_distance_factor: 1.3 } });
   });
 
   it("reports FORBIDDEN to a non-admin", async () => {
@@ -52,20 +52,19 @@ describe("transport-pricing.api", () => {
   });
 
   it("updates the settings and surfaces a rejected value", async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: { success: true, settings: { commission_rate: 0.15 } }, error: null });
-    const ok = await updateTransportSettings({ commission_rate: 0.15, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15 });
-    expect(ok.data).toEqual({ commission_rate: 0.15 });
+    mocks.rpc.mockResolvedValueOnce({ data: { success: true, settings: { road_distance_factor: 1.3 } }, error: null });
+    const ok = await updateTransportSettings({ road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15 });
+    expect(ok.data).toEqual({ road_distance_factor: 1.3 });
     expect(mocks.rpc).toHaveBeenLastCalledWith("admin_update_transport_settings", {
-      p_commission_rate: 0.15,
       p_road_distance_factor: 1.3,
       p_max_distance_km: 500,
       p_payment_window_minutes: 15,
     });
 
-    mocks.rpc.mockResolvedValueOnce({ data: { success: false, code: "INVALID_VALUE", message: "Commission invalide" }, error: null });
-    expect(await updateTransportSettings({ commission_rate: 0.6, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15 })).toMatchObject({
+    mocks.rpc.mockResolvedValueOnce({ data: { success: false, code: "INVALID_VALUE", message: "Coefficient invalide" }, error: null });
+    expect(await updateTransportSettings({ road_distance_factor: 0.5, max_distance_km: 500, payment_window_minutes: 15 })).toMatchObject({
       success: false,
-      error: { code: "INVALID_VALUE", message: "Commission invalide" },
+      error: { code: "INVALID_VALUE", message: "Coefficient invalide" },
     });
   });
 });

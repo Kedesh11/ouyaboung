@@ -6,6 +6,7 @@
 import { callRpc } from './rpc';
 import type { ApiResponse } from '@/types';
 import type { VehicleType } from '@/lib/driver-presence';
+import type { FeeBreakdown } from '@/api/fees.api';
 
 export type TransportStatus = 'proposed' | 'accepted' | 'picked_up' | 'delivered' | 'cancelled' | 'no_driver';
 export type DispatchMode = 'auto' | 'manual';
@@ -48,6 +49,8 @@ export interface FarmerTransportRequest {
   paid_at: string | null;
   /** Reference du paiement en cours ou confirme (sert a resynchroniser le statut). */
   payment_reference: string | null;
+  /** Detail des frais figé sur le paiement en cours ou confirme (commission, PVIT, operateur). */
+  payment_breakdown: FeeBreakdown | null;
   proposal_expires_at: string | null;
   /** Secondes restantes pour que le chauffeur propose reponde (180 au depart). */
   seconds_left: number | null;
@@ -79,7 +82,7 @@ export interface DriverTransportJob {
   cargo_description: string;
   /** Distance du chauffeur au point de ramassage. */
   distance_km: number | null;
-  /** Distance du trajet et tarif fixe: le chauffeur recoit driver_net (tarif - commission). */
+  /** Distance du trajet et tarif du chauffeur, verse en entier (driver_net = tarif). La commission est payee en plus par l'agriculteur. */
   route_distance_km: number | null;
   fare_amount: number | null;
   platform_fee: number | null;

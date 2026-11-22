@@ -188,6 +188,11 @@ describe("TransportOrderDialog", () => {
     await waitFor(() => expect(screen.getByTestId("transport-quote").textContent).toContain("8 650 FCFA"));
     expect(mocks.quoteTransport).toHaveBeenCalledWith({ vehicleType: "camionnette", dropoff: { latitude: 0.3, longitude: 9.4 }, pickup: null });
     expect(screen.getByTestId("transport-quote").textContent).toContain("Camionnette");
+    // The driver is paid the whole fare; the commission is paid on top by the farmer.
+    expect(screen.getByTestId("transport-quote").textContent).toContain("Tarif du chauffeur");
+    expect(screen.getByTestId("transport-quote-fees").textContent).toContain("Le chauffeur reçoit ce tarif en entier");
+    expect(screen.getByTestId("transport-quote-fees").textContent).toContain("865 FCFA");
+    expect(screen.getByTestId("transport-quote-fees").textContent).toContain("frais PVIT et opérateur");
   });
 
   it("cannot be submitted without cargo, address, destination and a quote", async () => {

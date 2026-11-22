@@ -25,7 +25,7 @@ const pricing = (over: Record<string, unknown> = {}) => ({
     { vehicle_type: "moto", base_fee: 1000, price_per_km: 300, min_fare: 1500, is_active: true, updated_at: "2026-11-22T10:00:00Z" },
     { vehicle_type: "camionnette", base_fee: 3000, price_per_km: 800, min_fare: 4000, is_active: true, updated_at: "2026-11-22T10:00:00Z" },
   ],
-  settings: { commission_rate: 0.1, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15, updated_at: "2026-11-22T10:00:00Z" },
+  settings: { road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15, updated_at: "2026-11-22T10:00:00Z" },
   ...over,
 });
 
@@ -55,7 +55,8 @@ describe("AdminTransportPricingPage", () => {
     expect(input("camionnette-price_per_km").value).toBe("800");
     // 25 km moto: 1000 + 25 x 300 = 8 500
     expect(screen.getByTestId("preview-moto").textContent).toContain("25 km → 8 500 FCFA");
-    expect(input("commission").value).toBe("10");
+    // The commission now lives in the dedicated "Frais & commissions" page.
+    expect(document.getElementById("commission")).toBeNull();
     expect(input("road-factor").value).toBe("1.3");
     expect(input("max-km").value).toBe("500");
     expect(input("pay-window").value).toBe("15");
@@ -114,26 +115,32 @@ describe("AdminTransportPricingPage", () => {
     expect(await screen.findByText("Montants invalides")).toBeTruthy();
   });
 
-  it("saves the commission as a rate (15 % -> 0.15)", async () => {
+  it("saves the distance factor and limits", async () => {
     mocks.updateTransportSettings.mockResolvedValue(ok({}));
     renderPage();
     await screen.findByTestId("tariff-moto");
-    fireEvent.change(input("commission"), { target: { value: "15" } });
+    fireEvent.change(input("road-factor"), { target: { value: "1.5" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Enregistrer" }).pop() as HTMLElement);
     await waitFor(() =>
-      expect(mocks.updateTransportSettings).toHaveBeenCalledWith({ commission_rate: 0.15, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15 }),
+      expect(mocks.updateTransportSettings).toHaveBeenCalledWith({ road_distance_factor: 1.5, max_distance_km: 500, payment_window_minutes: 15 }),
     );
   });
 
   it("rejects out-of-range settings locally", async () => {
     renderPage();
     await screen.findByTestId("tariff-moto");
-    fireEvent.change(input("commission"), { target: { value: "60" } });
-    expect(screen.getByText(/Valeurs hors limites/)).toBeTruthy();
-    expect((screen.getAllByRole("button", { name: "Enregistrer" }).pop() as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(input("commission"), { target: { value: "10" } });
     fireEvent.change(input("road-factor"), { target: { value: "0.8" } });
     expect(screen.getByText(/Valeurs hors limites/)).toBeTruthy();
+    expect((screen.getAllByRole("button", { name: "Enregistrer" }).pop() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(input("road-factor"), { target: { value: "1.3" } });
+    fireEvent.change(input("max-km"), { target: { value: "5000" } });
+    expect(screen.getByText(/Valeurs hors limites/)).toBeTruthy();
+  });
+
+  it("points the admin to the fees page for the commission", async () => {
+    renderPage();
+    await screen.findByTestId("tariff-moto");
+    expect(screen.getByRole("link", { name: /Frais & commissions/ }).getAttribute("href")).toBe("/admin/fees");
   });
 
   it("saves the payment window and refuses values outside 5-180 minutes", async () => {
@@ -147,7 +154,7 @@ describe("AdminTransportPricingPage", () => {
     fireEvent.change(input("pay-window"), { target: { value: "30" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Enregistrer" }).pop() as HTMLElement);
     await waitFor(() =>
-      expect(mocks.updateTransportSettings).toHaveBeenCalledWith({ commission_rate: 0.1, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 30 }),
+      expect(mocks.updateTransportSettings).toHaveBeenCalledWith({ road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 30 }),
     );
   });
 

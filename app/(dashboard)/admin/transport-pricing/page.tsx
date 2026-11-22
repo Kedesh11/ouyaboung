@@ -54,13 +54,7 @@ const toDraft = (tariff: TransportTariff): TariffDraft => ({
   is_active: tariff.is_active,
 });
 
-function TariffRow({
-  tariff,
-  commissionRate,
-}: {
-  tariff: TransportTariff;
-  commissionRate: number;
-}) {
+function TariffRow({ tariff }: { tariff: TransportTariff }) {
   const client = useQueryClient();
   const [draft, setDraft] = useState<TariffDraft>(() => toDraft(tariff));
   const [saved, setSaved] = useState(false);
@@ -105,18 +99,11 @@ function TariffRow({
   const preview = useMemo(
     () =>
       valid
-        ? PREVIEW_DISTANCES.map(
-            (km) =>
-              estimateTransportFare({ ...values }, km, commissionRate).fare,
+        ? PREVIEW_DISTANCES.map((km) =>
+            estimateTransportFare({ ...values }, km),
           )
         : [],
-    [
-      valid,
-      values.base_fee,
-      values.price_per_km,
-      values.min_fare,
-      commissionRate,
-    ],
+    [valid, values.base_fee, values.price_per_km, values.min_fare],
   );
 
   const field = (
@@ -227,9 +214,6 @@ function TariffRow({
 
 function SettingsCard({ settings }: { settings: TransportSettings }) {
   const client = useQueryClient();
-  const [commission, setCommission] = useState(
-    String(Math.round(settings.commission_rate * 1000) / 10),
-  );
   const [factor, setFactor] = useState(String(settings.road_distance_factor));
   const [maxKm, setMaxKm] = useState(String(settings.max_distance_km));
   const [payWindow, setPayWindow] = useState(
@@ -238,20 +222,15 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setCommission(String(Math.round(settings.commission_rate * 1000) / 10));
     setFactor(String(settings.road_distance_factor));
     setMaxKm(String(settings.max_distance_km));
     setPayWindow(String(settings.payment_window_minutes));
   }, [settings]);
 
-  const rate = Number(commission.replace(",", ".")) / 100;
   const factorNumber = Number(factor.replace(",", "."));
   const maxKmNumber = toInt(maxKm);
   const payWindowNumber = toInt(payWindow);
   const valid =
-    commission.trim() !== "" &&
-    rate >= 0 &&
-    rate <= 0.5 &&
     factor.trim() !== "" &&
     factorNumber >= 1 &&
     factorNumber <= 3 &&
@@ -262,7 +241,6 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
     payWindowNumber >= 5 &&
     payWindowNumber <= 180;
   const dirty =
-    Math.abs(rate - settings.commission_rate) > 1e-9 ||
     factorNumber !== settings.road_distance_factor ||
     maxKmNumber !== settings.max_distance_km ||
     payWindowNumber !== settings.payment_window_minutes;
@@ -270,7 +248,6 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
   const save = useMutation<TransportSettings, PricingError>({
     mutationFn: async () => {
       const result = await updateTransportSettings({
-        commission_rate: Math.round(rate * 1000) / 1000,
         road_distance_factor: factorNumber,
         max_distance_km: maxKmNumber,
         payment_window_minutes: payWindowNumber,
@@ -298,27 +275,18 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Commission et calcul de distance</CardTitle>
+        <CardTitle>Calcul de distance et délai de paiement</CardTitle>
         <CardDescription>
           S&apos;appliquent aux nouvelles demandes. Les courses déjà commandées
-          gardent leur tarif.
+          gardent leur tarif. La commission et les frais se règlent dans{" "}
+          <a href="/admin/fees" className="underline underline-offset-2">
+            Frais &amp; commissions
+          </a>
+          .
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="commission">Commission plateforme (%)</Label>
-            <Input
-              id="commission"
-              inputMode="decimal"
-              value={commission}
-              onChange={bind(setCommission)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Entre 0 et 50 %. Retenue sur le tarif, le reste revient au
-              chauffeur.
-            </p>
-          </div>
+        <div className="grid sm:grid-cols-3 gap-3">
           <div className="space-y-1">
             <Label htmlFor="road-factor">Coefficient de détour routier</Label>
             <Input
@@ -447,11 +415,7 @@ export default function AdminTransportPricingPage() {
         <>
           <div className="grid lg:grid-cols-2 gap-4">
             {query.data.tariffs.map((tariff) => (
-              <TariffRow
-                key={tariff.vehicle_type}
-                tariff={tariff}
-                commissionRate={query.data.settings.commission_rate}
-              />
+              <TariffRow key={tariff.vehicle_type} tariff={tariff} />
             ))}
           </div>
           <SettingsCard settings={query.data.settings} />

@@ -146,8 +146,8 @@ function JobCard({
               {formatFare(job.driver_net)}
             </p>
             <p className="text-xs text-muted-foreground">
-              Votre gain · tarif {formatFare(job.fare_amount)} − commission{" "}
-              {formatFare(job.platform_fee)}
+              Votre gain, versé en intégralité (la commission est payée par
+              l&apos;agriculteur)
               {job.route_distance_km != null &&
                 ` · trajet ${job.route_distance_km} km`}
             </p>

@@ -155,7 +155,7 @@ export function TransportRequestPanel({
             <dd className="inline">{request.dropoff_address}</dd>
           </div>
           <div>
-            <dt className="inline text-muted-foreground">Tarif fixe: </dt>
+            <dt className="inline text-muted-foreground">Tarif du chauffeur: </dt>
             <dd className="inline font-medium">
               {formatFare(request.fare_amount)}
               {request.distance_km != null && (

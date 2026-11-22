@@ -286,14 +286,25 @@ export function TransportOrderDialog({
                 )}
               </p>
             ) : (
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-muted-foreground">
-                  {vehicleLabel(quote.data.vehicle_type)} ·{" "}
-                  {formatDistance(quote.data.distance_km)} environ
-                </span>
-                <span className="text-lg font-semibold">
-                  {formatFare(quote.data.fare_amount)}
-                </span>
+              <div className="space-y-1">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    Tarif du chauffeur · {vehicleLabel(quote.data.vehicle_type)}{" "}
+                    · {formatDistance(quote.data.distance_km)} environ
+                  </span>
+                  <span className="text-lg font-semibold">
+                    {formatFare(quote.data.fare_amount)}
+                  </span>
+                </div>
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="transport-quote-fees"
+                >
+                  Le chauffeur reçoit ce tarif en entier. S&apos;ajoutent à
+                  votre charge: la commission Ouyaboung (environ{" "}
+                  {formatFare(quote.data.platform_fee)}) et les frais PVIT et
+                  opérateur, détaillés avant le paiement.
+                </p>
               </div>
             )}
           </div>

@@ -12,7 +12,10 @@ import { usePayTransport, useSyncTransportPayment } from "@/hooks/useTransportRe
 import { useNow } from "@/hooks/useNow";
 import { PAYMENT_FLOW_ENABLED } from "@/services/payment.service";
 import type { TransportPaymentOperator } from "@/services/transport-payment.service";
-import { formatCountdown, formatFare, remainingSeconds } from "@/lib/transport";
+import { formatCountdown, remainingSeconds } from "@/lib/transport";
+import { FeeBreakdownCard } from "@/components/payment/FeeBreakdownCard";
+import { useFeeBreakdown } from "@/hooks/useFeeBreakdown";
+import { formatXaf } from "@/lib/fees";
 
 export const PAYMENT_ERROR_MESSAGES: Record<string, string> = {
   PAYMENT_DISABLED: "Le paiement est temporairement indisponible.",
@@ -50,12 +53,25 @@ export function TransportPaymentSection({ request, receivedAt }: TransportPaymen
 
   const awaiting = request.status === "accepted" && request.payment_status !== "paid";
   const now = useNow(1000, awaiting);
+  // Detail calcule par le serveur avec les taux du moment (commission, PVIT, operateur choisi).
+  const feeQuery = useFeeBreakdown({
+    flow: "transport",
+    baseAmount: request.fare_amount,
+    operator,
+    enabled: request.status === "accepted" && request.payment_status === "unpaid",
+  });
+  const breakdown = feeQuery.data;
 
   if (request.payment_status === "paid") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800" data-testid="transport-paid">
-        <CheckCircle2 className="w-4 h-4 shrink-0" />
-        Course payée ({formatFare(request.fare_amount)}). Le chauffeur peut charger la marchandise.
+      <div className="space-y-3" data-testid="transport-paid">
+        <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Course payée{request.payment_breakdown ? ` (${formatXaf(request.payment_breakdown.total_amount)})` : ""}. Le chauffeur peut charger la marchandise.
+        </div>
+        {request.payment_breakdown && (
+          <FeeBreakdownCard breakdown={request.payment_breakdown} recipientLabel="le chauffeur" title="Détail de ce que vous avez payé" settled />
+        )}
       </div>
     );
   }
@@ -75,7 +91,7 @@ export function TransportPaymentSection({ request, receivedAt }: TransportPaymen
           Validez le paiement sur votre téléphone
         </div>
         <p className="text-xs text-muted-foreground">
-          Confirmez la demande Mobile Money de {formatFare(request.fare_amount)}. Cette page se met à jour dès que le paiement est reçu.
+          Confirmez la demande Mobile Money{request.payment_breakdown ? ` de ${formatXaf(request.payment_breakdown.total_amount)}` : ""}. Cette page se met à jour dès que le paiement est reçu.
         </p>
         {error && (
           <Alert variant="destructive">
@@ -101,7 +117,7 @@ export function TransportPaymentSection({ request, receivedAt }: TransportPaymen
       data-testid="transport-payment-form"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!phoneValid || expired || pay.isPending || !PAYMENT_FLOW_ENABLED) return;
+        if (!phoneValid || expired || pay.isPending || !PAYMENT_FLOW_ENABLED || !breakdown) return;
         pay.mutate({ requestId: request.id, phone, operator });
       }}
     >
@@ -112,6 +128,13 @@ export function TransportPaymentSection({ request, receivedAt }: TransportPaymen
           {expired ? "Délai dépassé" : formatCountdown(left)}
         </Badge>
       </div>
+
+      <FeeBreakdownCard
+        breakdown={breakdown}
+        recipientLabel="le chauffeur"
+        loading={feeQuery.isPending && feeQuery.fetchStatus !== "idle"}
+        error={feeQuery.isError ? "Impossible de calculer les frais pour le moment. Réessayez dans un instant." : null}
+      />
 
       <div className="flex gap-2" role="group" aria-label="Opérateur Mobile Money">
         <Button type="button" size="sm" variant={operator === "airtel" ? "default" : "outline"} aria-pressed={operator === "airtel"} onClick={() => setOperator("airtel")}>
@@ -144,9 +167,9 @@ export function TransportPaymentSection({ request, receivedAt }: TransportPaymen
         </Alert>
       )}
 
-      <Button type="submit" disabled={!phoneValid || expired || pay.isPending || !PAYMENT_FLOW_ENABLED}>
+      <Button type="submit" disabled={!phoneValid || expired || pay.isPending || !PAYMENT_FLOW_ENABLED || !breakdown}>
         {pay.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Payer {formatFare(request.fare_amount)}
+        {breakdown ? `Payer ${formatXaf(breakdown.total_amount)}` : "Calcul du total…"}
       </Button>
     </form>
   );
