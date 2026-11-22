@@ -14,7 +14,7 @@ import {
   useUpdateTransportJobStatus,
 } from "@/hooks/useTransportJobs";
 import { formatDistance } from "@/lib/driver-presence";
-import { formatCountdown, mapsDirectionsUrl, remainingSeconds } from "@/lib/transport";
+import { formatCountdown, formatFare, mapsDirectionsUrl, remainingSeconds } from "@/lib/transport";
 
 const TransportMap = dynamic(() => import("@/components/transport/TransportMap"), {
   ssr: false,
@@ -91,6 +91,16 @@ function JobCard({ job, receivedAt, now }: { job: DriverTransportJob; receivedAt
             </div>
           </div>
         </dl>
+
+        {job.driver_net != null && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm" data-testid="transport-earnings">
+            <p className="text-lg font-semibold">{formatFare(job.driver_net)}</p>
+            <p className="text-xs text-muted-foreground">
+              Votre gain · tarif {formatFare(job.fare_amount)} − commission {formatFare(job.platform_fee)}
+              {job.route_distance_km != null && ` · trajet ${job.route_distance_km} km`}
+            </p>
+          </div>
+        )}
 
         <TransportMap
           pickup={{ latitude: job.pickup_latitude, longitude: job.pickup_longitude }}

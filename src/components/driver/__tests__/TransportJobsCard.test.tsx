@@ -44,6 +44,10 @@ const job = (over: Record<string, unknown> = {}) => ({
   dropoff_longitude: null,
   cargo_description: "40 régimes de bananes",
   distance_km: 1.5,
+  route_distance_km: 12.4,
+  fare_amount: 8650,
+  platform_fee: 865,
+  driver_net: 7785,
   proposal_expires_at: "2026-11-22T12:03:00Z",
   seconds_left: 170,
   created_at: "2026-11-22T12:00:00Z",
@@ -83,6 +87,16 @@ describe("TransportJobsCard", () => {
     expect(screen.getByText("Marché de Mont-Bouët")).toBeTruthy();
     expect(screen.getByTestId("pickup-map")).toBeTruthy();
     expect(screen.getByRole("timer").textContent).toMatch(/2 min 5\d s|2 min 4\d s/);
+  });
+
+  it("shows the driver what they will earn: fare minus the platform commission", async () => {
+    mocks.getMyTransportJobs.mockResolvedValue(ok([job()]));
+    renderCard();
+    const earnings = await screen.findByTestId("transport-earnings");
+    expect(earnings.textContent).toContain("7 785 FCFA");
+    expect(earnings.textContent).toContain("tarif 8 650 FCFA");
+    expect(earnings.textContent).toContain("commission 865 FCFA");
+    expect(earnings.textContent).toContain("trajet 12.4 km");
   });
 
   it("hides the client's phone and name until the job is accepted", async () => {

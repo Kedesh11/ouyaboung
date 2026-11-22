@@ -43,3 +43,29 @@ describe("transport helpers", () => {
     expect(mapsDirectionsUrl(0.4162, 9.4673)).toBe("https://www.google.com/maps/dir/?api=1&destination=0.4162,9.4673");
   });
 });
+
+import { estimateTransportFare, formatFare } from "@/lib/transport";
+
+describe("fare helpers", () => {
+  const camionnette = { base_fee: 3000, price_per_km: 800, min_fare: 4000 };
+
+  it("mirrors the database formula (same example as the SQL tests)", () => {
+    // 144.6 km -> 3000 + ceil(144.6 x 800) = 118 680 -> rounded up to 118 700, 10 % commission.
+    expect(estimateTransportFare(camionnette, 144.6, 0.1)).toEqual({ fare: 118700, platformFee: 11870, driverNet: 106830 });
+  });
+
+  it("applies the minimum fare on a very short trip", () => {
+    expect(estimateTransportFare({ base_fee: 1000, price_per_km: 300, min_fare: 1500 }, 0, 0.1).fare).toBe(1500);
+  });
+
+  it("always splits the fare exactly between the platform and the driver", () => {
+    const { fare, platformFee, driverNet } = estimateTransportFare(camionnette, 33.3, 0.15);
+    expect(platformFee + driverNet).toBe(fare);
+  });
+
+  it("formats amounts in FCFA with spaces", () => {
+    expect(formatFare(118700)).toBe("118 700 FCFA");
+    expect(formatFare(850)).toBe("850 FCFA");
+    expect(formatFare(null)).toBe("—");
+  });
+});

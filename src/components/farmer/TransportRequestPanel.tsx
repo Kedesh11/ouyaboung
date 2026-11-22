@@ -14,6 +14,7 @@ import { formatAge, vehicleLabel } from "@/lib/driver-presence";
 import {
   closedReasonLabel,
   formatCountdown,
+  formatFare,
   isActiveTransport,
   remainingSeconds,
   TRANSPORT_STATUS_LABEL,
@@ -113,6 +114,13 @@ export function TransportRequestPanel({ request, receivedAt, onDismiss }: Transp
           <div>
             <dt className="inline text-muted-foreground">Livraison: </dt>
             <dd className="inline">{request.dropoff_address}</dd>
+          </div>
+          <div>
+            <dt className="inline text-muted-foreground">Tarif fixe: </dt>
+            <dd className="inline font-medium">
+              {formatFare(request.fare_amount)}
+              {request.distance_km != null && <span className="text-muted-foreground"> · {request.distance_km} km</span>}
+            </dd>
           </div>
         </dl>
 

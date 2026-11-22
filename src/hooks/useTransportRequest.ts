@@ -3,9 +3,13 @@ import {
   cancelTransportRequest,
   createTransportRequest,
   getMyTransportRequest,
+  quoteTransport,
   type CreateTransportRequestInput,
   type FarmerTransportRequest,
+  type TransportPoint,
+  type TransportQuote,
 } from '@/api/transport.api';
+import type { VehicleType } from '@/lib/driver-presence';
 import { isActiveTransport, TRANSPORT_POLL_MS } from '@/lib/transport';
 
 export const MY_TRANSPORT_REQUEST_KEY = ['farmer', 'transport-request'] as const;
@@ -68,5 +72,38 @@ export function useCancelTransportRequest() {
       client.setQueryData(MY_TRANSPORT_REQUEST_KEY, request);
       void client.invalidateQueries({ queryKey: ['farmer', 'available-drivers'] });
     },
+  });
+}
+
+export interface TransportQuoteParams {
+  vehicleType: VehicleType | null;
+  dropoff: TransportPoint | null;
+  pickup: TransportPoint | null;
+  enabled?: boolean;
+}
+
+// Au 1/10000e de degre (~11 m): evite de redemander un devis pour un micro-deplacement du marqueur.
+const round4 = (value: number): number => Math.round(value * 10_000) / 10_000;
+
+/** Tarif fixe du trajet, recalcule quand le vehicule ou la destination change. */
+export function useTransportQuote({ vehicleType, dropoff, pickup, enabled = true }: TransportQuoteParams) {
+  return useQuery<TransportQuote, TransportError>({
+    queryKey: [
+      'farmer',
+      'transport-quote',
+      vehicleType,
+      dropoff ? round4(dropoff.latitude) : null,
+      dropoff ? round4(dropoff.longitude) : null,
+      pickup ? round4(pickup.latitude) : null,
+      pickup ? round4(pickup.longitude) : null,
+    ],
+    queryFn: async () => {
+      const result = await quoteTransport({ vehicleType: vehicleType as VehicleType, dropoff: dropoff as TransportPoint, pickup });
+      if (!result.success || !result.data) throw new TransportError(result.error?.code || 'FAILED', result.error?.message);
+      return result.data;
+    },
+    enabled: enabled && !!vehicleType && !!dropoff,
+    staleTime: 60_000,
+    retry: (failureCount, error) => !['TOO_FAR', 'TARIFF_UNAVAILABLE', 'PICKUP_REQUIRED', 'INVALID_POSITION'].includes(error.code) && failureCount < 1,
   });
 }

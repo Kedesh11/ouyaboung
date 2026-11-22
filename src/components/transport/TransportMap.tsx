@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import MapGL, { Marker, NavigationControl, type MapRef } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { MapPin, Truck } from "lucide-react";
+import { Flag, MapPin, Truck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MAP_STYLE_URL } from "@/lib/map-style";
 
@@ -12,6 +12,10 @@ interface TransportMapProps {
   pickup: { latitude: number; longitude: number };
   /** Position en direct du chauffeur (agriculteur) ou du chauffeur lui-meme. */
   driver?: { latitude: number; longitude: number } | null;
+  /** Destination (marqueur drapeau). */
+  dropoff?: { latitude: number; longitude: number } | null;
+  /** Si fourni, un clic sur la carte choisit la destination. */
+  onPick?: (point: { latitude: number; longitude: number }) => void;
   pickupLabel?: string;
   driverLabel?: string;
   height?: number;
@@ -21,6 +25,8 @@ interface TransportMapProps {
 const TransportMap = ({
   pickup,
   driver = null,
+  dropoff = null,
+  onPick,
   pickupLabel = "Point de ramassage",
   driverLabel = "Chauffeur",
   height = 220,
@@ -59,6 +65,8 @@ const TransportMap = ({
         style={{ width: "100%", height }}
         mapStyle={MAP_STYLE_URL}
         attributionControl={false}
+        cursor={onPick ? "crosshair" : undefined}
+        onClick={onPick ? (event) => onPick({ latitude: event.lngLat.lat, longitude: event.lngLat.lng }) : undefined}
       >
         <NavigationControl position="top-right" showCompass={false} />
         <Marker longitude={pickup.longitude} latitude={pickup.latitude} anchor="bottom">
@@ -70,6 +78,17 @@ const TransportMap = ({
             <MapPin className="w-4 h-4 text-white" />
           </div>
         </Marker>
+        {dropoff && (
+          <Marker longitude={dropoff.longitude} latitude={dropoff.latitude} anchor="bottom">
+            <div
+              className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white"
+              title="Destination"
+              aria-label="Destination"
+            >
+              <Flag className="w-4 h-4 text-white" />
+            </div>
+          </Marker>
+        )}
         {driver && (
           <Marker longitude={driver.longitude} latitude={driver.latitude} anchor="center">
             <div

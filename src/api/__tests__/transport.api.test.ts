@@ -18,6 +18,7 @@ import {
   createTransportRequest,
   getMyTransportJobs,
   getMyTransportRequest,
+  quoteTransport,
   respondTransportRequest,
   updateTransportJobStatus,
 } from "@/api/transport.api";
@@ -36,6 +37,7 @@ describe("transport.api", () => {
       mode: "auto",
       driverId: "ignored",
       dropoffAddress: "Port-Gentil",
+      dropoff: { latitude: 0.3, longitude: 9.4 },
       cargoDescription: "Bananes",
       vehicleType: "camionnette",
       pickup: { latitude: 0.4, longitude: 9.45, address: "Ferme" },
@@ -46,18 +48,18 @@ describe("transport.api", () => {
       p_driver_id: null,
       p_dropoff_address: "Port-Gentil",
       p_cargo_description: "Bananes",
+      p_dropoff_latitude: 0.3,
+      p_dropoff_longitude: 9.4,
+      p_vehicle_type: "camionnette",
       p_pickup_latitude: 0.4,
       p_pickup_longitude: 9.45,
       p_pickup_address: "Ferme",
-      p_dropoff_latitude: null,
-      p_dropoff_longitude: null,
-      p_vehicle_type: "camionnette",
     });
   });
 
   it("creates a manual request for the chosen driver, leaving the pickup to the server", async () => {
     mocks.rpc.mockResolvedValue({ data: { success: true, request: { id: "r2" } }, error: null });
-    await createTransportRequest({ mode: "manual", driverId: "d1", dropoffAddress: "Marché", cargoDescription: "Manioc" });
+    await createTransportRequest({ mode: "manual", driverId: "d1", dropoffAddress: "Marché", dropoff: { latitude: 0.3, longitude: 9.4 }, cargoDescription: "Manioc" });
     expect(mocks.rpc.mock.calls[0][1]).toMatchObject({
       p_mode: "manual",
       p_driver_id: "d1",
@@ -69,8 +71,29 @@ describe("transport.api", () => {
 
   it("surfaces the server's code when no driver is available", async () => {
     mocks.rpc.mockResolvedValue({ data: { success: false, code: "NO_DRIVER_AVAILABLE", message: "Aucun" }, error: null });
-    const res = await createTransportRequest({ mode: "auto", dropoffAddress: "x", cargoDescription: "y" });
+    const res = await createTransportRequest({ mode: "auto", dropoffAddress: "x", dropoff: { latitude: 0.3, longitude: 9.4 }, cargoDescription: "y" });
     expect(res).toMatchObject({ success: false, error: { code: "NO_DRIVER_AVAILABLE" } });
+  });
+
+  it("asks for a fixed-price quote with the vehicle, destination and optional pickup", async () => {
+    mocks.rpc.mockResolvedValue({ data: { success: true, fare_amount: 118700, distance_km: 144.6 }, error: null });
+    const res = await quoteTransport({ vehicleType: "camionnette", dropoff: { latitude: 1, longitude: 9.4 } });
+    expect(res.data).toMatchObject({ fare_amount: 118700 });
+    expect(mocks.rpc).toHaveBeenCalledWith("quote_transport", {
+      p_vehicle_type: "camionnette",
+      p_dropoff_latitude: 1,
+      p_dropoff_longitude: 9.4,
+      p_pickup_latitude: null,
+      p_pickup_longitude: null,
+    });
+  });
+
+  it("surfaces a refused quote (too far)", async () => {
+    mocks.rpc.mockResolvedValue({ data: { success: false, code: "TOO_FAR", message: "x" }, error: null });
+    expect(await quoteTransport({ vehicleType: "moto", dropoff: { latitude: 1, longitude: 9.4 } })).toMatchObject({
+      success: false,
+      error: { code: "TOO_FAR" },
+    });
   });
 
   it("returns null when the farmer has no current request", async () => {

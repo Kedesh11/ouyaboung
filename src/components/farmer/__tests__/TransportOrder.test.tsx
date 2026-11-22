@@ -6,15 +6,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createTransportRequest: vi.fn(),
   cancelTransportRequest: vi.fn(),
+  quoteTransport: vi.fn(),
 }));
 
 vi.mock("@/api/transport.api", () => ({
   createTransportRequest: mocks.createTransportRequest,
   cancelTransportRequest: mocks.cancelTransportRequest,
   getMyTransportRequest: vi.fn(),
+  quoteTransport: mocks.quoteTransport,
 }));
 vi.mock("next/dynamic", () => ({
-  default: () => () => <div data-testid="transport-map" />,
+  // Carte factice: un bouton simule le clic de choix de la destination.
+  default: () =>
+    function FakeMap(props: { onPick?: (point: { latitude: number; longitude: number }) => void }) {
+      return (
+        <div data-testid="transport-map">
+          {props.onPick && (
+            <button type="button" onClick={() => props.onPick?.({ latitude: 0.3, longitude: 9.4 })}>
+              placer la destination
+            </button>
+          )}
+        </div>
+      );
+    },
 }));
 
 import { TransportOrderDialog } from "@/components/farmer/TransportOrderDialog";
@@ -40,6 +54,8 @@ const request = (over: Record<string, unknown> = {}) => ({
   dropoff_latitude: null,
   dropoff_longitude: null,
   cargo_description: "Bananes",
+  distance_km: 12.4,
+  fare_amount: 8650,
   proposal_expires_at: "2026-11-22T12:03:00Z",
   seconds_left: 175,
   closed_reason: null,
@@ -61,6 +77,8 @@ describe("TransportRequestPanel", () => {
   it("shows the waiting state with the 3 minute countdown and the proposed driver", () => {
     renderPanel(request());
     expect(screen.getByText("En attente du chauffeur")).toBeTruthy();
+    expect(screen.getByText(/8 650 FCFA/)).toBeTruthy();
+    expect(screen.getByText(/12\.4 km/)).toBeTruthy();
     expect(screen.getByRole("timer").textContent).toMatch(/2 min 5\d s|2 min 4\d s/);
     expect(screen.getByTestId("transport-driver").textContent).toContain("Jean D.");
     expect(screen.getByRole("link", { name: "Appeler Jean D." }).getAttribute("href")).toBe("tel:060000001");
@@ -114,7 +132,12 @@ describe("TransportRequestPanel", () => {
 });
 
 describe("TransportOrderDialog", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.quoteTransport.mockResolvedValue(
+      ok({ vehicle_type: "camionnette", distance_km: 14.3, fare_amount: 8650, platform_fee: 865, driver_net: 7785, commission_rate: 0.1, currency: "XAF" }),
+    );
+  });
   afterEach(cleanup);
 
   const renderDialog = (props: Partial<React.ComponentProps<typeof TransportOrderDialog>> = {}) => {
@@ -124,8 +147,9 @@ describe("TransportOrderDialog", () => {
         open
         onOpenChange={onOpenChange}
         mode="auto"
-        vehicleType={null}
+        vehicleType="camionnette"
         pickup={null}
+        mapCenter={{ latitude: 0.4, longitude: 9.45 }}
         farmAddress="Route Alpha"
         {...props}
       />,
@@ -137,6 +161,8 @@ describe("TransportOrderDialog", () => {
     fireEvent.change(screen.getByLabelText("Marchandise à transporter"), { target: { value: "40 régimes" } });
     fireEvent.change(screen.getByLabelText("Adresse de livraison"), { target: { value: "Mont-Bouët" } });
   };
+  const placeDropoff = () => fireEvent.click(screen.getByRole("button", { name: "placer la destination" }));
+  const submit = () => screen.getByRole("button", { name: "Envoyer la demande" }) as HTMLButtonElement;
 
   it("announces the 3 minute delay and the nearest-driver principle", () => {
     renderDialog();
@@ -144,24 +170,66 @@ describe("TransportOrderDialog", () => {
     expect(screen.getByText(/3 minutes pour répondre/)).toBeTruthy();
   });
 
-  it("cannot be submitted until cargo and delivery address are given", () => {
+  it("asks for the destination before showing any price", () => {
     renderDialog();
-    const submit = screen.getByRole("button", { name: "Envoyer la demande" }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
-    fill();
-    expect(submit.disabled).toBe(false);
+    expect(screen.getByTestId("transport-quote").textContent).toContain("Placez la destination");
+    expect(mocks.quoteTransport).not.toHaveBeenCalled();
   });
 
-  it("sends an automatic request using the farm pickup (no coordinates)", async () => {
-    mocks.createTransportRequest.mockResolvedValue(ok(request()));
-    const onOpenChange = renderDialog({ vehicleType: "camionnette" });
+  it("shows the fixed fare once the destination is placed on the map", async () => {
+    renderDialog();
+    placeDropoff();
+    await waitFor(() => expect(screen.getByTestId("transport-quote").textContent).toContain("8 650 FCFA"));
+    expect(mocks.quoteTransport).toHaveBeenCalledWith({ vehicleType: "camionnette", dropoff: { latitude: 0.3, longitude: 9.4 }, pickup: null });
+    expect(screen.getByTestId("transport-quote").textContent).toContain("Camionnette");
+  });
+
+  it("cannot be submitted without cargo, address, destination and a quote", async () => {
+    renderDialog();
+    expect(submit().disabled).toBe(true);
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Envoyer la demande" }));
+    expect(submit().disabled).toBe(true);
+    placeDropoff();
+    await waitFor(() => expect(submit().disabled).toBe(false));
+  });
+
+  it("lets the farmer pick the vehicle in automatic mode, which changes the quote", async () => {
+    renderDialog({ vehicleType: null });
+    expect(screen.getByTestId("transport-quote").textContent).toContain("Choisissez un type de véhicule");
+    placeDropoff();
+    fireEvent.click(screen.getByRole("button", { name: "Moto" }));
+    await waitFor(() => expect(mocks.quoteTransport).toHaveBeenCalledWith(expect.objectContaining({ vehicleType: "moto" })));
+  });
+
+  it("uses the chosen driver's vehicle for a manual order, with no vehicle picker", async () => {
+    renderDialog({ mode: "manual", vehicleType: null, driver: { driver_id: "d1", display_name: "Jean D.", vehicle_type: "tricycle" } });
+    expect(screen.queryByRole("group", { name: "Type de véhicule" })).toBeNull();
+    placeDropoff();
+    await waitFor(() => expect(mocks.quoteTransport).toHaveBeenCalledWith(expect.objectContaining({ vehicleType: "tricycle" })));
+  });
+
+  it("explains a refused quote and blocks sending", async () => {
+    mocks.quoteTransport.mockResolvedValue(fail("TOO_FAR"));
+    renderDialog();
+    fill();
+    placeDropoff();
+    expect(await screen.findByText(/destination est trop éloignée/)).toBeTruthy();
+    expect(submit().disabled).toBe(true);
+  });
+
+  it("sends an automatic request with destination, vehicle and the farm pickup (no coordinates)", async () => {
+    mocks.createTransportRequest.mockResolvedValue(ok(request()));
+    const onOpenChange = renderDialog();
+    fill();
+    placeDropoff();
+    await waitFor(() => expect(submit().disabled).toBe(false));
+    fireEvent.click(submit());
     await waitFor(() =>
       expect(mocks.createTransportRequest).toHaveBeenCalledWith({
         mode: "auto",
         driverId: null,
         dropoffAddress: "Mont-Bouët",
+        dropoff: { latitude: 0.3, longitude: 9.4 },
         cargoDescription: "40 régimes",
         vehicleType: "camionnette",
         pickup: null,
@@ -172,13 +240,24 @@ describe("TransportOrderDialog", () => {
 
   it("sends a manual request for the chosen driver with the device position as pickup", async () => {
     mocks.createTransportRequest.mockResolvedValue(ok(request({ dispatch_mode: "manual" })));
-    renderDialog({ mode: "manual", driver: { driver_id: "d1", display_name: "Jean D." }, pickup: { latitude: 0.41, longitude: 9.46 } });
+    renderDialog({
+      mode: "manual",
+      driver: { driver_id: "d1", display_name: "Jean D.", vehicle_type: "camionnette" },
+      pickup: { latitude: 0.41, longitude: 9.46 },
+    });
     expect(screen.getByText("Commander Jean D.")).toBeTruthy();
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Envoyer la demande" }));
+    placeDropoff();
+    await waitFor(() => expect(submit().disabled).toBe(false));
+    fireEvent.click(submit());
     await waitFor(() =>
       expect(mocks.createTransportRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ mode: "manual", driverId: "d1", pickup: { latitude: 0.41, longitude: 9.46, address: "Route Alpha" } }),
+        expect.objectContaining({
+          mode: "manual",
+          driverId: "d1",
+          vehicleType: "camionnette",
+          pickup: { latitude: 0.41, longitude: 9.46, address: "Route Alpha" },
+        }),
       ),
     );
   });
@@ -187,16 +266,20 @@ describe("TransportOrderDialog", () => {
     mocks.createTransportRequest.mockResolvedValue(fail("NO_DRIVER_AVAILABLE"));
     const onOpenChange = renderDialog();
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Envoyer la demande" }));
+    placeDropoff();
+    await waitFor(() => expect(submit().disabled).toBe(false));
+    fireEvent.click(submit());
     expect(await screen.findByText(/Aucun chauffeur libre pour le moment/)).toBeTruthy();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it("explains when the chosen driver was taken meanwhile", async () => {
     mocks.createTransportRequest.mockResolvedValue(fail("DRIVER_UNAVAILABLE"));
-    renderDialog({ mode: "manual", driver: { driver_id: "d1", display_name: "Jean D." } });
+    renderDialog({ mode: "manual", driver: { driver_id: "d1", display_name: "Jean D.", vehicle_type: "camionnette" } });
     fill();
-    fireEvent.click(screen.getByRole("button", { name: "Envoyer la demande" }));
+    placeDropoff();
+    await waitFor(() => expect(submit().disabled).toBe(false));
+    fireEvent.click(submit());
     expect(await screen.findByText(/n'est plus disponible\. Choisissez-en un autre/)).toBeTruthy();
   });
 });
