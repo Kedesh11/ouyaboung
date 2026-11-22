@@ -21,6 +21,8 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useDriverProfile, useDriverActiveDeliveries } from "@/hooks/useDriverData";
 import { getVehicleTypeName } from "@/services/driver.service";
+import { DriverAvailabilityCard } from "@/components/driver/DriverAvailabilityCard";
+import { TransportJobsCard } from "@/components/driver/TransportJobsCard";
 
 export default function DriverDashboardPage() {
   const { user } = useAuth();
@@ -67,6 +69,10 @@ export default function DriverDashboardPage() {
           {getVehicleTypeName(driver.vehicle_type)} · {driver.city}
         </p>
       </div>
+
+      <DriverAvailabilityCard />
+
+      {status === "approved" && <TransportJobsCard />}
 
       {status !== "approved" && (
         <Card className={status === "rejected" ? "border-destructive/50 bg-destructive/5" : "border-amber-300/60 bg-amber-50/40"}>

@@ -36,6 +36,9 @@ Ajoutez les variables suivantes dans **Settings > Environment Variables** sur Ve
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé privée (si utilisée côté serveur) | `eyJ...` |
 | `NEXT_PUBLIC_APP_URL` | URL de production de votre app | `https://oyaboug.vercel.app` |
 | `NEXT_PUBLIC_SUPPORT_EMAIL` | Adresse de support affichee (aide, mentions legales, parametres plateforme) | `support@ouyaboung.ga` |
+| `NEXT_PUBLIC_MAP_STYLE_URL` | Style du fond de carte de toutes les cartes (optionnel, defaut Carto Positron) | `https://basemaps.cartocdn.com/gl/positron-gl-style/style.json` |
+| `NEXT_PUBLIC_DRIVER_PUBLISH_INTERVAL_MS` / `_HEARTBEAT_MS` / `_MIN_MOVE_M` / `_MAP_POLL_MS` | Cadence du suivi des chauffeurs et de la carte agriculteur (optionnel; defauts 8000 / 30000 / 15 / 5000) | `8000` |
+| `NEXT_PUBLIC_TRANSPORT_POLL_MS` | Rafraichissement des demandes de transport et des courses (optionnel; defaut 5000). Le delai de reponse du chauffeur (180 s) est fixe en base (`transport_proposal_ttl()`) | `5000` |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | Adresse de contact general (pied de page, maintenance, emails) | `oyaboug@gmail.com` |
 | `NEXT_PUBLIC_PAYMENT_FLOW_ENABLED` | Active le paiement mobile dans l'application (`false` tant que PVIT n'est pas deploye) | `false` |
 | `PVIT_BASE_URL` | URL de l'API PVIT (**obligatoire**, aucune valeur par defaut dans le code) | `https://api.mypvit.pro` |

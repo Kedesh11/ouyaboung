@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { getAuthUser, getMyDriverProfile } from "@/services";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getVehicleTypeName } from "@/services/driver.service";
+import { DriverPresenceProvider } from "@/contexts/DriverPresenceContext";
 
 export default function DriverDashboardLayout({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState<{
@@ -38,6 +39,8 @@ export default function DriverDashboardLayout({ children }: { children: ReactNod
     }, []);
 
     return (
+        // La presence (partage de position) vit au niveau du layout: elle continue sur toutes les pages chauffeur.
+        <DriverPresenceProvider>
         <SidebarProvider>
             <div className="min-h-screen flex w-full">
                 <DriverSidebar
@@ -76,5 +79,6 @@ export default function DriverDashboardLayout({ children }: { children: ReactNod
                 </SidebarInset>
             </div>
         </SidebarProvider>
+        </DriverPresenceProvider>
     );
 }
