@@ -99,7 +99,7 @@
     "vitest": "^4.0.17"
   },
   "engines": {
-    "node": "20.x"
+    "node": "26.x"
   },
   "overrides": {
     "rimraf": "^4.0.0",

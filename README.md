@@ -211,7 +211,7 @@ Ouyaboung est une application web progressive (PWA) qui permet aux commerçants 
 
 ### Prérequis
 
-- Node.js 18+
+- Node.js 26 (voir `.nvmrc`)
 - npm 9+
 - Compte Supabase (gratuit)
 
