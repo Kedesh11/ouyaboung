@@ -53,16 +53,17 @@ describe("transport-pricing.api", () => {
 
   it("updates the settings and surfaces a rejected value", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: { success: true, settings: { commission_rate: 0.15 } }, error: null });
-    const ok = await updateTransportSettings({ commission_rate: 0.15, road_distance_factor: 1.3, max_distance_km: 500 });
+    const ok = await updateTransportSettings({ commission_rate: 0.15, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15 });
     expect(ok.data).toEqual({ commission_rate: 0.15 });
     expect(mocks.rpc).toHaveBeenLastCalledWith("admin_update_transport_settings", {
       p_commission_rate: 0.15,
       p_road_distance_factor: 1.3,
       p_max_distance_km: 500,
+      p_payment_window_minutes: 15,
     });
 
     mocks.rpc.mockResolvedValueOnce({ data: { success: false, code: "INVALID_VALUE", message: "Commission invalide" }, error: null });
-    expect(await updateTransportSettings({ commission_rate: 0.6, road_distance_factor: 1.3, max_distance_km: 500 })).toMatchObject({
+    expect(await updateTransportSettings({ commission_rate: 0.6, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15 })).toMatchObject({
       success: false,
       error: { code: "INVALID_VALUE", message: "Commission invalide" },
     });

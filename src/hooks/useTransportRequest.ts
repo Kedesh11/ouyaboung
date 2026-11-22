@@ -10,6 +10,12 @@ import {
   type TransportQuote,
 } from '@/api/transport.api';
 import type { VehicleType } from '@/lib/driver-presence';
+import {
+  payTransport,
+  type TransportPaymentInitiation,
+  type TransportPaymentOperator,
+} from '@/services/transport-payment.service';
+import { syncPaymentTransactionStatus } from '@/services/payment-transactions.service';
 import { isActiveTransport, TRANSPORT_POLL_MS } from '@/lib/transport';
 
 export const MY_TRANSPORT_REQUEST_KEY = ['farmer', 'transport-request'] as const;
@@ -105,5 +111,32 @@ export function useTransportQuote({ vehicleType, dropoff, pickup, enabled = true
     enabled: enabled && !!vehicleType && !!dropoff,
     staleTime: 60_000,
     retry: (failureCount, error) => !['TOO_FAR', 'TARIFF_UNAVAILABLE', 'PICKUP_REQUIRED', 'INVALID_POSITION'].includes(error.code) && failureCount < 1,
+  });
+}
+
+/** Paiement de la course (appele seulement au clic sur "Payer"). */
+export function usePayTransport() {
+  const client = useQueryClient();
+  return useMutation<TransportPaymentInitiation, TransportError, { requestId: string; phone: string; operator: TransportPaymentOperator }>({
+    mutationFn: async (input) => {
+      const result = await payTransport(input);
+      if (!result.success || !result.data) throw new TransportError(result.error?.code || 'FAILED', result.error?.message);
+      return result.data;
+    },
+    // Succes ou echec: l'etat reel (pending / unpaid / paid) vient du serveur.
+    onSettled: () => client.invalidateQueries({ queryKey: MY_TRANSPORT_REQUEST_KEY }),
+  });
+}
+
+/** Resynchronise le statut aupres de PVIT quand la confirmation tarde. */
+export function useSyncTransportPayment() {
+  const client = useQueryClient();
+  return useMutation<unknown, TransportError, string>({
+    mutationFn: async (reference) => {
+      const result = await syncPaymentTransactionStatus({ reference });
+      if (!result.success) throw new TransportError(result.error?.code || 'FAILED', result.error?.message);
+      return result.data;
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: MY_TRANSPORT_REQUEST_KEY }),
   });
 }

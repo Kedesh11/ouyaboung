@@ -71,12 +71,13 @@ Ajoutez les variables suivantes dans **Settings > Environment Variables** sur Ve
 | Fonction | Role | JWT |
 |----------|------|-----|
 | `initiate-payment` | Initie le paiement fractionne (Airtel / Moov) | requis |
+| `initiate-transport-payment` | Paiement d'un transport (agriculteur -> chauffeur), appele seulement au clic « Payer la course » | requis |
 | `pvit-callback` | Webhook de statut appele par PVIT | **non** (`verify_jwt = false` dans `supabase/config.toml`) |
 | `pvit-transaction-status` | Resynchronise un paiement via l'API de statut PVIT | requis |
 | `verify-payout-account` | Verifie un numero de reversement par KYC | requis |
 
 ```bash
-supabase functions deploy initiate-payment pvit-callback pvit-transaction-status verify-payout-account
+supabase functions deploy initiate-payment initiate-transport-payment pvit-callback pvit-transaction-status verify-payout-account
 ```
 
 `pvit-callback` doit rester deploye sans verification JWT (reglage lu dans `supabase/config.toml`); les serveurs de PVIT n'envoient pas de JWT Supabase.

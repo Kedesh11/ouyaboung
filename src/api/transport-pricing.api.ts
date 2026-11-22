@@ -25,6 +25,8 @@ export interface TransportSettings {
   /** Coefficient applique a la distance a vol d'oiseau pour estimer la route (1 a 3). */
   road_distance_factor: number;
   max_distance_km: number;
+  /** Delai (minutes) laisse a l'agriculteur pour payer apres l'acceptation du chauffeur. */
+  payment_window_minutes: number;
   updated_at: string;
 }
 
@@ -34,7 +36,7 @@ export interface TransportPricing {
 }
 
 export type TransportTariffInput = Pick<TransportTariff, 'vehicle_type' | 'base_fee' | 'price_per_km' | 'min_fare' | 'is_active'>;
-export type TransportSettingsInput = Pick<TransportSettings, 'commission_rate' | 'road_distance_factor' | 'max_distance_km'>;
+export type TransportSettingsInput = Pick<TransportSettings, 'commission_rate' | 'road_distance_factor' | 'max_distance_km' | 'payment_window_minutes'>;
 
 export const getTransportPricing = (): Promise<ApiResponse<TransportPricing>> =>
   callRpc('admin_get_transport_pricing', undefined, (p) => ({
@@ -62,6 +64,7 @@ export const updateTransportSettings = (input: TransportSettingsInput): Promise<
       p_commission_rate: input.commission_rate,
       p_road_distance_factor: input.road_distance_factor,
       p_max_distance_km: input.max_distance_km,
+      p_payment_window_minutes: input.payment_window_minutes,
     },
     (p) => p.settings as TransportSettings,
   );

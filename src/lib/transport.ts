@@ -46,6 +46,8 @@ export const closedReasonLabel = (reason: string | null): string => {
       return 'Aucun chauffeur libre n\'a pu être trouvé.';
     case 'cancelled_by_farmer':
       return 'Vous avez annulé la demande.';
+    case 'payment_timeout':
+      return 'Le paiement n\'a pas été effectué dans le délai: la course a été annulée.';
     default:
       return '';
   }

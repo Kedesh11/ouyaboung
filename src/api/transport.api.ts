@@ -9,6 +9,7 @@ import type { VehicleType } from '@/lib/driver-presence';
 
 export type TransportStatus = 'proposed' | 'accepted' | 'picked_up' | 'delivered' | 'cancelled' | 'no_driver';
 export type DispatchMode = 'auto' | 'manual';
+export type TransportPaymentStatus = 'unpaid' | 'pending' | 'paid';
 
 /** Chauffeur vu par l'agriculteur (telephone inclus; position en direct pendant la course seulement). */
 export interface TransportDriverInfo {
@@ -39,6 +40,14 @@ export interface FarmerTransportRequest {
   /** Distance routiere estimee (km) et tarif fixe (XAF), figes a la commande. */
   distance_km: number | null;
   fare_amount: number | null;
+  /** Paiement PVIT: unpaid -> pending (en cours) -> paid. */
+  payment_status: TransportPaymentStatus;
+  /** Date limite et secondes restantes pour payer apres l'acceptation du chauffeur. */
+  payment_deadline: string | null;
+  seconds_to_pay: number | null;
+  paid_at: string | null;
+  /** Reference du paiement en cours ou confirme (sert a resynchroniser le statut). */
+  payment_reference: string | null;
   proposal_expires_at: string | null;
   /** Secondes restantes pour que le chauffeur propose reponde (180 au depart). */
   seconds_left: number | null;
@@ -75,6 +84,10 @@ export interface DriverTransportJob {
   fare_amount: number | null;
   platform_fee: number | null;
   driver_net: number | null;
+  /** Le chargement n'est possible qu'une fois la course payee. */
+  payment_status: TransportPaymentStatus;
+  seconds_to_pay: number | null;
+  paid_at: string | null;
   proposal_expires_at: string | null;
   seconds_left: number | null;
   created_at: string;

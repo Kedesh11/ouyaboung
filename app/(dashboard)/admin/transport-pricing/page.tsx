@@ -232,17 +232,22 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
   );
   const [factor, setFactor] = useState(String(settings.road_distance_factor));
   const [maxKm, setMaxKm] = useState(String(settings.max_distance_km));
+  const [payWindow, setPayWindow] = useState(
+    String(settings.payment_window_minutes),
+  );
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setCommission(String(Math.round(settings.commission_rate * 1000) / 10));
     setFactor(String(settings.road_distance_factor));
     setMaxKm(String(settings.max_distance_km));
+    setPayWindow(String(settings.payment_window_minutes));
   }, [settings]);
 
   const rate = Number(commission.replace(",", ".")) / 100;
   const factorNumber = Number(factor.replace(",", "."));
   const maxKmNumber = toInt(maxKm);
+  const payWindowNumber = toInt(payWindow);
   const valid =
     commission.trim() !== "" &&
     rate >= 0 &&
@@ -252,11 +257,15 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
     factorNumber <= 3 &&
     Number.isInteger(maxKmNumber) &&
     maxKmNumber >= 1 &&
-    maxKmNumber <= 2000;
+    maxKmNumber <= 2000 &&
+    Number.isInteger(payWindowNumber) &&
+    payWindowNumber >= 5 &&
+    payWindowNumber <= 180;
   const dirty =
     Math.abs(rate - settings.commission_rate) > 1e-9 ||
     factorNumber !== settings.road_distance_factor ||
-    maxKmNumber !== settings.max_distance_km;
+    maxKmNumber !== settings.max_distance_km ||
+    payWindowNumber !== settings.payment_window_minutes;
 
   const save = useMutation<TransportSettings, PricingError>({
     mutationFn: async () => {
@@ -264,6 +273,7 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
         commission_rate: Math.round(rate * 1000) / 1000,
         road_distance_factor: factorNumber,
         max_distance_km: maxKmNumber,
+        payment_window_minutes: payWindowNumber,
       });
       if (!result.success || !result.data)
         throw new PricingError(
@@ -295,7 +305,7 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid sm:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label htmlFor="commission">Commission plateforme (%)</Label>
             <Input
@@ -331,6 +341,19 @@ function SettingsCard({ settings }: { settings: TransportSettings }) {
             />
             <p className="text-xs text-muted-foreground">
               Au-delà, la demande est refusée.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="pay-window">Délai de paiement (minutes)</Label>
+            <Input
+              id="pay-window"
+              inputMode="numeric"
+              value={payWindow}
+              onChange={bind(setPayWindow)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Entre 5 et 180. Passé ce délai sans paiement, la course est
+              annulée.
             </p>
           </div>
         </div>

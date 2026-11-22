@@ -76,6 +76,46 @@ documentation PVIT:
 | Remboursement | Non gere (`GIVE_CHANGE` independant de la transaction d'origine) | Faisabilite d'annuler un split |
 | Reference | `OYB` + 8 car. de la commande + 8 car. = 19 caracteres, alphanumerique | — (accepte par PVIT) |
 
+## 3bis. Paiement des transports (agriculteur -> chauffeur)
+
+Meme mecanique de paiement fractionne, mais **isolee** des commandes de produits: une
+fonction dediee (`initiate-transport-payment`, code dans `_shared/pvit-transport.ts`) appelee
+uniquement quand l'agriculteur clique sur « Payer la course ». Rien n'est declenche
+automatiquement. Les utilitaires communs (config, secret, appels PVIT, verification du statut)
+sont dans `_shared/pvit-runtime.ts`; le flux des commandes n'est pas modifie.
+
+```text
+agriculteur --(Airtel/Moov)--> compte d'operation Ouyaboung --split--> chauffeur (net)
+                                                              \-> reste: commission plateforme
+```
+
+1. Le chauffeur accepte une demande (il doit avoir un numero Mobile Money **verifie**, table
+   `driver_payout_accounts`, meme KYC que les boutiques via `verify-payout-account`).
+2. L'agriculteur dispose de `transport_settings.payment_window_minutes` (15 par defaut,
+   modifiable par l'admin) pour payer. Passe ce delai sans paiement, la course est annulee et
+   le chauffeur libere (traitement a la demande, sans tache planifiee).
+3. `initiate-transport-payment` n'accepte que `requestId`, `phone` et `operator`. **Le montant,
+   la commission et la part du chauffeur sont ceux figes sur la demande** (tarif admin au moment
+   de la commande), jamais `PLATFORM_COMMISSION_RATE` ni une valeur du client.
+4. Confirmation par le webhook `pvit-callback` (reference inconnue des commandes -> recherchee
+   dans `transport_payments`) ou par la synchronisation `pvit-transaction-status`: dans les deux
+   cas le statut est **toujours reverifie aupres de l'API PVIT**, avec controle du montant.
+5. Course payee -> le chauffeur peut marquer « marchandise chargee » (refuse avant).
+
+Garde-fous: un seul paiement actif par course (index unique), limitation des tentatives,
+paiement echoue -> la course repasse a `unpaid` (nouvel essai dans le delai), course payee non
+annulable par l'agriculteur (aucun remboursement automatique: le support traite ces cas), paiement
+confirme sur une course deja annulee -> `settlement_status = manual_review` (log `REFUND_REQUIRED`).
+Un chauffeur sans numero verifie n'est ni propose sur la carte, ni attribuable, ni capable
+d'accepter.
+
+Deploiement: `supabase functions deploy initiate-transport-payment pvit-callback pvit-transaction-status verify-payout-account`
+(les trois dernieres evoluent pour reconnaitre les transports) et la migration
+`20261122150000_transport_payments.sql`. Aucune variable d'environnement nouvelle.
+
+Pas encore recette contre l'API reelle: le comportement est valide par des tests (fausse API PVIT
+et base locale); un paiement sandbox transport reste a faire avant la production.
+
 ## 4. Securite
 
 - Secrets PVIT uniquement cote Edge Functions (`supabase secrets set`). Le secret `X-Secret`
@@ -135,6 +175,8 @@ etre payee).
 | Fichier | Role |
 |---------|------|
 | `supabase/functions/_shared/pvit-core.ts` | Logique pure: reference, split, statuts, parsing, ack, controle IP |
+| `supabase/functions/_shared/pvit-runtime.ts` | Utilitaires communs: config, secret X-Secret, appels PVIT, verification du statut |
+| `supabase/functions/_shared/pvit-transport.ts` | Paiement des transports (initiation, confirmation, synchronisation) |
 | `supabase/functions/_shared/pvit.ts` | Handlers: secret, initiation, callback, synchronisation, KYC |
 | `supabase/functions/_shared/payment-guards.ts` | Transitions de statut, controle du montant, fenetres de tentatives |
 | `supabase/functions/{initiate-payment,pvit-callback,pvit-transaction-status,verify-payout-account}` | Points d'entree |

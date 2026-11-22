@@ -56,6 +56,11 @@ const request = (over: Record<string, unknown> = {}) => ({
   cargo_description: "Bananes",
   distance_km: 12.4,
   fare_amount: 8650,
+  payment_status: "unpaid",
+  payment_deadline: null,
+  seconds_to_pay: null,
+  paid_at: null,
+  payment_reference: null,
   proposal_expires_at: "2026-11-22T12:03:00Z",
   seconds_left: 175,
   closed_reason: null,
@@ -106,6 +111,7 @@ describe("TransportRequestPanel", () => {
     renderPanel(
       request({
         status: "accepted",
+        payment_status: "paid",
         seconds_left: null,
         driver: { driver_id: "d1", display_name: "Jean D.", vehicle_type: "camionnette", rating: 0, total_reviews: 0, phone: "060000001", latitude: 0.41, longitude: 9.46, age_seconds: 25 },
       }),
@@ -117,7 +123,7 @@ describe("TransportRequestPanel", () => {
   });
 
   it("cannot cancel once the goods are loaded", () => {
-    renderPanel(request({ status: "picked_up", seconds_left: null }));
+    renderPanel(request({ status: "picked_up", payment_status: "paid", seconds_left: null }));
     expect(screen.queryByRole("button", { name: "Annuler la demande" })).toBeNull();
   });
 

@@ -25,7 +25,7 @@ const pricing = (over: Record<string, unknown> = {}) => ({
     { vehicle_type: "moto", base_fee: 1000, price_per_km: 300, min_fare: 1500, is_active: true, updated_at: "2026-11-22T10:00:00Z" },
     { vehicle_type: "camionnette", base_fee: 3000, price_per_km: 800, min_fare: 4000, is_active: true, updated_at: "2026-11-22T10:00:00Z" },
   ],
-  settings: { commission_rate: 0.1, road_distance_factor: 1.3, max_distance_km: 500, updated_at: "2026-11-22T10:00:00Z" },
+  settings: { commission_rate: 0.1, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15, updated_at: "2026-11-22T10:00:00Z" },
   ...over,
 });
 
@@ -58,6 +58,7 @@ describe("AdminTransportPricingPage", () => {
     expect(input("commission").value).toBe("10");
     expect(input("road-factor").value).toBe("1.3");
     expect(input("max-km").value).toBe("500");
+    expect(input("pay-window").value).toBe("15");
   });
 
   it("keeps Save disabled until something changes, then saves the new values", async () => {
@@ -120,7 +121,7 @@ describe("AdminTransportPricingPage", () => {
     fireEvent.change(input("commission"), { target: { value: "15" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Enregistrer" }).pop() as HTMLElement);
     await waitFor(() =>
-      expect(mocks.updateTransportSettings).toHaveBeenCalledWith({ commission_rate: 0.15, road_distance_factor: 1.3, max_distance_km: 500 }),
+      expect(mocks.updateTransportSettings).toHaveBeenCalledWith({ commission_rate: 0.15, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 15 }),
     );
   });
 
@@ -133,6 +134,21 @@ describe("AdminTransportPricingPage", () => {
     fireEvent.change(input("commission"), { target: { value: "10" } });
     fireEvent.change(input("road-factor"), { target: { value: "0.8" } });
     expect(screen.getByText(/Valeurs hors limites/)).toBeTruthy();
+  });
+
+  it("saves the payment window and refuses values outside 5-180 minutes", async () => {
+    mocks.updateTransportSettings.mockResolvedValue(ok({}));
+    renderPage();
+    await screen.findByTestId("tariff-moto");
+    fireEvent.change(input("pay-window"), { target: { value: "2" } });
+    expect(screen.getByText(/Valeurs hors limites/)).toBeTruthy();
+    fireEvent.change(input("pay-window"), { target: { value: "181" } });
+    expect(screen.getByText(/Valeurs hors limites/)).toBeTruthy();
+    fireEvent.change(input("pay-window"), { target: { value: "30" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Enregistrer" }).pop() as HTMLElement);
+    await waitFor(() =>
+      expect(mocks.updateTransportSettings).toHaveBeenCalledWith({ commission_rate: 0.1, road_distance_factor: 1.3, max_distance_km: 500, payment_window_minutes: 30 }),
+    );
   });
 
   it("tells a non-admin that access is reserved", async () => {
