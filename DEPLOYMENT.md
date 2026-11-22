@@ -35,12 +35,22 @@ Ajoutez les variables suivantes dans **Settings > Environment Variables** sur Ve
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique anonyme | `eyJxh...` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé privée (si utilisée côté serveur) | `eyJ...` |
 | `NEXT_PUBLIC_APP_URL` | URL de production de votre app | `https://oyaboug.vercel.app` |
-| `ACCOUNT_CODE` | Code compte Q-Gabon Airtel | `...` |
-| `ACCOUNT_CODE_MOOV` | Code compte Q-Gabon Moov, si distinct | `...` |
-| `AGENT` | Identifiant agent Q-Gabon | `AG001` |
-| `BEAR_TOKEN` | Token API Q-Gabon | `...` |
-| `QGABON_WEBHOOK_SECRET` | Secret obligatoire pour authentifier les callbacks paiement | `...` |
-| `PLATFORM_COMMISSION_RATE` | Taux de commission plateforme retenu dans le settlement | `0.10` |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | Adresse de support affichee (aide, mentions legales, parametres plateforme) | `support@ouyaboung.ga` |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | Adresse de contact general (pied de page, maintenance, emails) | `oyaboug@gmail.com` |
+| `NEXT_PUBLIC_PAYMENT_FLOW_ENABLED` | Active le paiement mobile dans l'application (`false` tant que PVIT n'est pas deploye) | `false` |
+| `PVIT_BASE_URL` | URL de l'API PVIT (**obligatoire**, aucune valeur par defaut dans le code) | `https://api.mypvit.pro` |
+| `PVIT_OPERATION_ACCOUNT_CODE` | Compte d'operation Ouyaboung qui encaisse et repartit | `ACC_...` |
+| `PVIT_SECRET_PASSWORD` | Mot de passe de renouvellement du secret (espace marchand PVIT, menu APIs) | `...` |
+| `PVIT_CODE_URL_SECRET` / `_PAYMENT` / `_STATUS` / `_KYC` | « Code URL » de chaque API PVIT | `...` |
+| `PVIT_CALLBACK_URL_CODE` | Code de l'URL de callback enregistree chez PVIT | `...` |
+| `PVIT_OWNER_CHARGE` | Qui supporte les frais PVIT: `MERCHANT` (plateforme, defaut) ou `CUSTOMER` | `MERCHANT` |
+| `PVIT_CALLBACK_IP_MODE` | Controle de la source du callback: `report` (journalise, defaut), `enforce` (refuse), `off` | `report` |
+| `PVIT_CALLBACK_ALLOWED_IPS` | Adresses depuis lesquelles PVIT appelle le webhook (separees par des virgules). Liste vide + mode `enforce` = tout refuser | `176.31.65.18,...` |
+| `PLATFORM_COMMISSION_RATE` | Taux de commission plateforme (**obligatoire**: sans valeur valide, les paiements sont refuses) | `0.10` |
+| `PAYMENT_MAX_INITIATIONS_PER_WINDOW` | Tentatives de paiement max par utilisateur et par fenetre (defaut 5) | `5` |
+| `PAYMENT_INITIATION_WINDOW_MINUTES` | Fenetre des tentatives, en minutes (defaut 10) | `10` |
+| `PAYMENT_IN_FLIGHT_WINDOW_MINUTES` | Duree pendant laquelle un paiement en attente bloque un nouvel essai sur la meme commande (defaut 5) | `5` |
+| `ALLOWED_ORIGINS` | Origines autorisees (CORS) pour les fonctions de paiement appelees par le navigateur; non defini = toutes (developpement uniquement) | `https://oyaboug.vercel.app` |
 | `SUPABASE_URL` | Alias serveur requis par les Edge Functions Supabase | `https://xyz.supabase.co` |
 | `SUPABASE_ANON_KEY` | Alias serveur de la cle anonyme Supabase | `eyJ...` |
 

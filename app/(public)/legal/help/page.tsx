@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
+import { SUPPORT_EMAIL } from "@/lib/config";
 const HelpCenter = () => {
   const faqs = [
     { q: "Comment réserver un panier ?", a: "Parcourez les offres disponibles, sélectionnez un panier et procédez au paiement. Un QR code vous sera envoyé pour la récupération." },
@@ -30,7 +31,7 @@ const HelpCenter = () => {
               <CardTitle className="text-lg">Email</CardTitle>
             </CardHeader>
             <CardContent className="text-center">
-              <p className="text-muted-foreground mb-3">support@ouyaboung.ga</p>
+              <p className="text-muted-foreground mb-3">{SUPPORT_EMAIL}</p>
               <Button variant="outline" size="sm">Envoyer un email</Button>
             </CardContent>
           </Card>

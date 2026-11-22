@@ -1,61 +1,61 @@
 import { MetadataRoute } from 'next';
 
+import { APP_BASE_URL } from "@/lib/config";
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ouyaboung-eight.vercel.app';
-  const now = new Date();
+    const now = new Date();
 
   // Static pages with high priority
   const staticPages: MetadataRoute.Sitemap = [
     {
-      url: baseUrl,
+      url: APP_BASE_URL,
       lastModified: now,
       changeFrequency: 'daily',
       priority: 1.0,
     },
     {
-      url: `${baseUrl}/search`,
+      url: `${APP_BASE_URL}/search`,
       lastModified: now,
       changeFrequency: 'hourly',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/about`,
+      url: `${APP_BASE_URL}/about`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
-      url: `${baseUrl}/concept`,
+      url: `${APP_BASE_URL}/concept`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
-      url: `${baseUrl}/auth`,
+      url: `${APP_BASE_URL}/auth`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.5,
     },
     {
-      url: `${baseUrl}/merchant/register`,
+      url: `${APP_BASE_URL}/merchant/register`,
       lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.6,
     },
     {
-      url: `${baseUrl}/legal/cgu`,
+      url: `${APP_BASE_URL}/legal/cgu`,
       lastModified: now,
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
-      url: `${baseUrl}/legal/privacy`,
+      url: `${APP_BASE_URL}/legal/privacy`,
       lastModified: now,
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
-      url: `${baseUrl}/legal/help`,
+      url: `${APP_BASE_URL}/legal/help`,
       lastModified: now,
       changeFrequency: 'monthly',
       priority: 0.4,
@@ -67,7 +67,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // Example:
   // const products = await getPublicProducts();
   // const productPages = products.map((product) => ({
-  //   url: `${baseUrl}/p/${product.slug}`,
+  //   url: `${APP_BASE_URL}/p/${product.slug}`,
   //   lastModified: product.updated_at,
   //   changeFrequency: 'daily' as const,
   //   priority: 0.8,

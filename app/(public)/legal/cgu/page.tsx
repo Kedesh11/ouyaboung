@@ -3,6 +3,7 @@ import { ArrowLeft, FileText, Shield, Handshake, Scale } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+import { SUPPORT_EMAIL } from "@/lib/config";
 const TermsOfService = () => {
   return (
     <main className="min-h-screen bg-background pt-24 pb-16 px-4">
@@ -155,7 +156,7 @@ const TermsOfService = () => {
             <CardTitle>7. Contact</CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground">
-            Pour toute question juridique ou operationnelle: support@ouyaboung.ga
+            Pour toute question juridique ou operationnelle: {SUPPORT_EMAIL}
           </CardContent>
         </Card>
       </div>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Wrench, Leaf } from "lucide-react";
 import MaintenanceTimer from "@/components/maintenance/MaintenanceTimer";
 
+import { CONTACT_EMAIL } from "@/lib/config";
 export const metadata: Metadata = {
   title: "Maintenance en cours",
   description:
@@ -45,7 +46,7 @@ export default function MaintenancePage() {
         <p className="text-sm text-muted-foreground">
           Des questions ?{" "}
           <a
-            href="mailto:oyaboug@gmail.com"
+            href={`mailto:${CONTACT_EMAIL}`}
             className="text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"
           >
             Contactez-nous

@@ -27,6 +27,7 @@ import type {
   BulkActionResponse
 } from '@/types/admin.types';
 
+import { SUPPORT_EMAIL } from '@/lib/config';
 const MERCHANT_LIST_COLUMNS =
   'id,user_id,business_name,business_type,description,logo_url,cover_image_url,address,city,quartier,latitude,longitude,phone,email,opening_hours,rating,total_reviews,is_verified,is_active,is_refused,validated_at,refused_at,refusal_reason,slug,created_at,updated_at';
 const FARMER_LIST_COLUMNS =
@@ -884,7 +885,7 @@ export const adminService = {
   getPlatformSettings: async (): Promise<PlatformSettings> => {
     if (!isSupabaseConfigured()) {
       return {
-        general: { platformName: 'ouyaboung Gabon', supportEmail: 'support@ouyaboung.ga' },
+        general: { platformName: 'ouyaboung Gabon', supportEmail: SUPPORT_EMAIL },
         registration: { isOpen: true, autoApprove: false },
         maintenance: { isEnabled: false, message: 'Plateforme en maintenance' },
       };
@@ -899,14 +900,14 @@ export const adminService = {
       console.error('Error fetching platform settings:', error);
       // Fallback to defaults
       return {
-        general: { platformName: 'ouyaboung Gabon', supportEmail: 'support@ouyaboung.ga' },
+        general: { platformName: 'ouyaboung Gabon', supportEmail: SUPPORT_EMAIL },
         registration: { isOpen: true, autoApprove: false },
         maintenance: { isEnabled: false, message: 'Plateforme en maintenance' },
       };
     }
 
     const settings: any = {
-      general: { platformName: 'ouyaboung Gabon', supportEmail: 'support@ouyaboung.ga' },
+      general: { platformName: 'ouyaboung Gabon', supportEmail: SUPPORT_EMAIL },
       registration: { isOpen: true, autoApprove: false },
       maintenance: { isEnabled: false, message: 'Plateforme en maintenance' },
     };

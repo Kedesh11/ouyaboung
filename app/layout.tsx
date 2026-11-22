@@ -12,7 +12,6 @@ import { SkipToContent } from "@/components/seo/AccessibilityHelpers";
 import { DeferredAppEnhancements } from "@/components/app/DeferredAppEnhancements";
 
 
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://ouyaboung-eight.vercel.app";
 const DEV_SW_RESET_SCRIPT = `
 (function () {
   if (typeof window === "undefined") return;
@@ -90,6 +89,7 @@ export const viewport: Viewport = {
 import QueryProvider from "@/providers/QueryProvider";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 
+import { APP_BASE_URL } from "@/lib/config";
 // ... existing imports
 
 export default function RootLayout({

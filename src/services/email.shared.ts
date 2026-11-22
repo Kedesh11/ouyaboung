@@ -1,4 +1,5 @@
-// ============================================
+
+import { APP_BASE_URL, CONTACT_EMAIL } from '@/lib/config';// ============================================
 // Email Shared - Templates and Common Helpers
 // ouyaboung Platform - Anti-gaspillage alimentaire
 // ============================================
@@ -37,10 +38,7 @@ export interface NewDriverAdminEmailPayload {
   adminUrl: string;
 }
 
-export const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ||
-  process.env.APP_URL ||
-  'http://localhost:3005';
+export const APP_URL = APP_BASE_URL;
 
 export const buildMerchantActionUrl = (email: string): string =>
   `${APP_URL}/auth?role=merchant&email=${encodeURIComponent(email)}`;
@@ -154,7 +152,7 @@ export const rejectionHtml = (businessName: string, reason?: string): string => 
       </p>
 
       <div style="text-align: center; margin: 45px 0;">
-        <a href="mailto:contact@oyaboug.com"
+        <a href="mailto:${CONTACT_EMAIL}"
            style="display: inline-block; background: #11b7280; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">
           Nous contacter
         </a>

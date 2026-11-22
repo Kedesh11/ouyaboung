@@ -235,7 +235,7 @@ export default function HelpPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <a
-                                href="mailto:support@oyaboug.com"
+                                href={`mailto:${SUPPORT_EMAIL}`}
                                 className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                             >
                                 <div className="p-2 rounded-full bg-primary/10">
@@ -243,7 +243,7 @@ export default function HelpPage() {
                                 </div>
                                 <div>
                                     <p className="font-medium text-sm">Email</p>
-                                    <p className="text-xs text-muted-foreground">support@oyaboug.com</p>
+                                    <p className="text-xs text-muted-foreground">{SUPPORT_EMAIL}</p>
                                 </div>
                             </a>
 
@@ -309,3 +309,5 @@ export default function HelpPage() {
 
 // Helper to fix Link import
 import Link from "next/link";
+
+import { SUPPORT_EMAIL } from "@/lib/config";
